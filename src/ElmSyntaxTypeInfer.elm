@@ -2215,9 +2215,8 @@ type Expression
     | ExpressionList (List (TypedNode Expression))
     | ExpressionRecordAccess
         { record : TypedNode Expression
-        , fieldName :
-            -- TODO split off Elm.Syntax.Range.Range field
-            Elm.Syntax.Node.Node String
+        , fieldNameRange : Elm.Syntax.Range.Range
+        , fieldName : String
         }
     | ExpressionRecordAccessFunction String
     | ExpressionRecordUpdate
@@ -2239,9 +2238,8 @@ type LetDeclaration
             { nameRange : Elm.Syntax.Range.Range
             , type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
             }
-        , name :
-            -- TODO split off Elm.Syntax.Range.Range field
-            Elm.Syntax.Node.Node String
+        , nameRange : Elm.Syntax.Range.Range
+        , name : String
         , arguments : List (TypedNode Pattern)
         , result : TypedNode Expression
         }
@@ -2709,7 +2707,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
         Elm.Syntax.Pattern.UnConsPattern _ _ ->
             Debug.todo ""
 
-        Elm.Syntax.Pattern.ListPattern _ ->
+        Elm.Syntax.Pattern.ListPattern elementNodes ->
             Debug.todo ""
 
         Elm.Syntax.Pattern.NamedPattern _ _ ->
@@ -3156,7 +3154,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                                 , value = recordTypedNodeAndSubstitutions.node.value
                                                                 , type_ = recordWithAccessedField.type_
                                                                 }
-                                                            , fieldName = fieldNameNode
+                                                            , fieldName = fieldName
+                                                            , fieldNameRange = fieldNameNode |> Elm.Syntax.Node.range
                                                             }
                                                     , type_ = fieldValueType
                                                     }
