@@ -1,0 +1,12 @@
+{
+    "elm-codegen-version": "0.6.0",
+    "codegen-helpers": {
+        "packages": {
+            "elm/core": "1.0.5",
+            "miniBill/elm-fast-dict": "1.2.1"
+        },
+        "local": [
+            "src"
+        ]
+    }
+}
