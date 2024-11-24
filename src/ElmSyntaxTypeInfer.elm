@@ -916,10 +916,7 @@ qualifiedToString reference =
 
 
 typeSubstituteVariableBy :
-    { importedTypes :
-        FastDict.Dict Elm.Syntax.ModuleName.ModuleName ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
         , type_ : Type TypeVariableFromContext
@@ -931,7 +928,7 @@ typeSubstituteVariableBy :
             { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeSubstituteVariableBy context replacement type_ =
+typeSubstituteVariableBy declarationTypes replacement type_ =
     case replacement.type_ of
         TypeVariable argumentVariable ->
             Ok
@@ -950,17 +947,14 @@ typeSubstituteVariableBy context replacement type_ =
 
         TypeNotVariable argumentNotVariable ->
             type_
-                |> typeSubstituteVariableByNotVariable context
+                |> typeSubstituteVariableByNotVariable declarationTypes
                     { variable = replacement.variable
                     , type_ = argumentNotVariable
                     }
 
 
 typeSubstituteVariableByNotVariable :
-    { importedTypes :
-        FastDict.Dict Elm.Syntax.ModuleName.ModuleName ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
@@ -972,7 +966,7 @@ typeSubstituteVariableByNotVariable :
             { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeSubstituteVariableByNotVariable context replacement type_ =
+typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
     -- IGNORE TCO
     case type_ of
         TypeVariable typeVariable ->
@@ -1034,7 +1028,7 @@ typeSubstituteVariableByNotVariable context replacement type_ =
 
         TypeNotVariable typeNotVariable ->
             typeNotVariable
-                |> typeNotVariableSubstituteVariable context
+                |> typeNotVariableSubstituteVariable declarationTypes
                     replacement
                 |> Result.map
                     (\typeAndSubstitutions ->
@@ -1045,10 +1039,7 @@ typeSubstituteVariableByNotVariable context replacement type_ =
 
 
 typeNotVariableSubstituteVariable :
-    { importedTypes :
-        FastDict.Dict Elm.Syntax.ModuleName.ModuleName ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
@@ -1060,7 +1051,7 @@ typeNotVariableSubstituteVariable :
             { type_ : TypeNotVariable TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeNotVariableSubstituteVariable context replacement typeNotVariable =
+typeNotVariableSubstituteVariable declarationTypes replacement typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
             Ok
@@ -1089,11 +1080,11 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                         }
                         (\argument soFar ->
                             argument
-                                |> typeSubstituteVariableByNotVariable context
+                                |> typeSubstituteVariableByNotVariable declarationTypes
                                     replacement
                                 |> Result.andThen
                                     (\argumentSubstituted ->
-                                        variableSubstitutionsMerge context
+                                        variableSubstitutionsMerge declarationTypes
                                             argumentSubstituted.substitutions
                                             soFar.substitutions
                                             |> Result.map
@@ -1111,7 +1102,7 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
         TypeTuple typeTuple ->
             Result.map2
                 (\part0Substituted part1Substituted ->
-                    variableSubstitutionsMerge context
+                    variableSubstitutionsMerge declarationTypes
                         part0Substituted.substitutions
                         part1Substituted.substitutions
                         |> Result.map
@@ -1126,11 +1117,11 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                             )
                 )
                 (typeTuple.part0
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 (typeTuple.part1
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 |> Result.andThen identity
@@ -1138,7 +1129,7 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
         TypeTriple typeTriple ->
             Result.map3
                 (\part0Substituted part1Substituted part2Substituted ->
-                    variableSubstitutionsMerge3 context
+                    variableSubstitutionsMerge3 declarationTypes
                         part0Substituted.substitutions
                         part1Substituted.substitutions
                         part2Substituted.substitutions
@@ -1155,15 +1146,15 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                             )
                 )
                 (typeTriple.part0
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 (typeTriple.part1
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 (typeTriple.part2
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 |> Result.andThen identity
@@ -1176,11 +1167,11 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                     }
                     (\fieldName fieldValue soFar ->
                         fieldValue
-                            |> typeSubstituteVariableByNotVariable context
+                            |> typeSubstituteVariableByNotVariable declarationTypes
                                 replacement
                             |> Result.andThen
                                 (\valueSubstituted ->
-                                    variableSubstitutionsMerge context
+                                    variableSubstitutionsMerge declarationTypes
                                         valueSubstituted.substitutions
                                         soFar.substitutions
                                         |> Result.map
@@ -1208,11 +1199,11 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                     }
                     (\fieldName fieldValue soFar ->
                         fieldValue
-                            |> typeSubstituteVariableByNotVariable context
+                            |> typeSubstituteVariableByNotVariable declarationTypes
                                 replacement
                             |> Result.andThen
                                 (\valueSubstituted ->
-                                    variableSubstitutionsMerge context
+                                    variableSubstitutionsMerge declarationTypes
                                         soFar.substitutions
                                         valueSubstituted.substitutions
                                         |> Result.map
@@ -1240,12 +1231,12 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                         else
                             case replacement.type_ of
                                 TypeRecord replacementFields ->
-                                    typeRecordUnify context
+                                    typeRecordUnify declarationTypes
                                         replacementFields
                                         fieldsSubstituted.types
                                         |> Result.andThen
                                             (\recordSubstitutedRecordUnified ->
-                                                variableSubstitutionsMerge context
+                                                variableSubstitutionsMerge declarationTypes
                                                     fieldsSubstituted.substitutions
                                                     recordSubstitutedRecordUnified.substitutions
                                                     |> Result.map
@@ -1257,14 +1248,14 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                                             )
 
                                 TypeRecordExtension replacementRecordExtension ->
-                                    typeRecordExtensionRecordUnify context
+                                    typeRecordExtensionRecordUnify declarationTypes
                                         { recordVariable = replacementRecordExtension.recordVariable
                                         , fields = replacementRecordExtension.fields
                                         }
                                         fieldsSubstituted.types
                                         |> Result.andThen
                                             (\recordSubstitutedRecordExtensionUnified ->
-                                                variableSubstitutionsMerge context
+                                                variableSubstitutionsMerge declarationTypes
                                                     fieldsSubstituted.substitutions
                                                     recordSubstitutedRecordExtensionUnified.substitutions
                                                     |> Result.map
@@ -1282,7 +1273,7 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
         TypeFunction typeFunction ->
             Result.map2
                 (\inputSubstituted outputSubstituted ->
-                    variableSubstitutionsMerge context
+                    variableSubstitutionsMerge declarationTypes
                         inputSubstituted.substitutions
                         outputSubstituted.substitutions
                         |> Result.map
@@ -1297,11 +1288,11 @@ typeNotVariableSubstituteVariable context replacement typeNotVariable =
                             )
                 )
                 (typeFunction.input
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 (typeFunction.output
-                    |> typeSubstituteVariableByNotVariable context
+                    |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
                 |> Result.andThen identity
@@ -1542,16 +1533,11 @@ variableSubstitutionsNone =
 
 
 variableSubstitutionsMerge :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     -> VariableSubstitutions
     -> VariableSubstitutions
     -> Result String VariableSubstitutions
-variableSubstitutionsMerge context a b =
+variableSubstitutionsMerge declarationTypes a b =
     -- IGNORE TCO
     FastDict.merge
         (\variable aType soFar ->
@@ -1570,12 +1556,12 @@ variableSubstitutionsMerge context a b =
             soFar
                 |> Result.andThen
                     (\soFarVariablesToTypeAndSubstitutions ->
-                        case typeNotVariableUnify context aType bType of
+                        case typeNotVariableUnify declarationTypes aType bType of
                             Err error ->
                                 Err error
 
                             Ok abTypesUnified ->
-                                variableSubstitutionsMerge context
+                                variableSubstitutionsMerge declarationTypes
                                     soFarVariablesToTypeAndSubstitutions
                                     abTypesUnified.substitutions
                                     |> Result.map
@@ -1626,25 +1612,20 @@ variableSubstitutionsMerge context a b =
 
 
 variableSubstitutionsMerge3 :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     -> VariableSubstitutions
     -> VariableSubstitutions
     -> VariableSubstitutions
     -> Result String VariableSubstitutions
-variableSubstitutionsMerge3 context a b c =
+variableSubstitutionsMerge3 declarationTypes a b c =
     variableSubstitutionsMerge
-        context
+        declarationTypes
         a
         b
         |> Result.andThen
             (\abSubstitutions ->
                 variableSubstitutionsMerge
-                    context
+                    declarationTypes
                     abSubstitutions
                     c
             )
@@ -1754,12 +1735,7 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
 
 
 typeUnify :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     -> Type TypeVariableFromContext
     -> Type TypeVariableFromContext
     ->
@@ -1768,7 +1744,7 @@ typeUnify :
             { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeUnify context a b =
+typeUnify declarationTypes a b =
     case a of
         TypeNotVariable aTypeNotVariable ->
             case b of
@@ -1784,7 +1760,7 @@ typeUnify context a b =
                         }
 
                 TypeNotVariable bTypeNotVariable ->
-                    case typeNotVariableUnify context aTypeNotVariable bTypeNotVariable of
+                    case typeNotVariableUnify declarationTypes aTypeNotVariable bTypeNotVariable of
                         Err error ->
                             Err error
 
@@ -1821,12 +1797,7 @@ typeUnify context a b =
 
 
 typeNotVariableUnify :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     -> TypeNotVariable TypeVariableFromContext
     -> TypeNotVariable TypeVariableFromContext
     ->
@@ -1835,7 +1806,7 @@ typeNotVariableUnify :
             { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeNotVariableUnify context a b =
+typeNotVariableUnify declarationTypes a b =
     -- (!!) TODO explicitly check for aliases on either side first
     case a of
         TypeUnit ->
@@ -1882,11 +1853,11 @@ typeNotVariableUnify context a b =
                             , substitutions = variableSubstitutionsNone
                             }
                             (\ab soFar ->
-                                typeUnify context ab.a ab.b
+                                typeUnify declarationTypes ab.a ab.b
                                     |> Result.andThen
                                         (\argumentTypeUnifiedAndSubstitutions ->
                                             variableSubstitutionsMerge
-                                                context
+                                                declarationTypes
                                                 argumentTypeUnifiedAndSubstitutions.substitutions
                                                 soFar.substitutions
                                                 |> Result.map
@@ -1920,7 +1891,7 @@ typeNotVariableUnify context a b =
                     -- TODO "expand alias left if possible and unify, then try right and unify.
                     -- if both are not in context, err
                     -- TODO also check locally declared
-                    case context.importedTypes |> FastDict.get aTypeConstruct.moduleOrigin of
+                    case declarationTypes |> FastDict.get aTypeConstruct.moduleOrigin of
                         Nothing ->
                             Err
                                 ("no choice type/type alias declaration found for "
@@ -1944,13 +1915,13 @@ typeNotVariableUnify context a b =
                                             }
                                             (\substitution soFar ->
                                                 soFar.type_
-                                                    |> typeSubstituteVariableBy context
+                                                    |> typeSubstituteVariableBy declarationTypes
                                                         { variable = substitution.variable
                                                         , type_ = substitution.type_
                                                         }
                                                     |> Result.andThen
                                                         (\substituted ->
-                                                            variableSubstitutionsMerge context
+                                                            variableSubstitutionsMerge declarationTypes
                                                                 substituted.substitutions
                                                                 soFar.substitutions
                                                                 |> Result.map
@@ -1972,7 +1943,7 @@ typeNotVariableUnify context a b =
                 TypeTuple bTuple ->
                     Result.map2
                         (\part0ABUnified part1ABUnified ->
-                            variableSubstitutionsMerge context
+                            variableSubstitutionsMerge declarationTypes
                                 part0ABUnified.substitutions
                                 part1ABUnified.substitutions
                                 |> Result.map
@@ -1988,8 +1959,8 @@ typeNotVariableUnify context a b =
                                         }
                                     )
                         )
-                        (typeUnify context aTuple.part0 bTuple.part0)
-                        (typeUnify context aTuple.part1 bTuple.part1)
+                        (typeUnify declarationTypes aTuple.part0 bTuple.part0)
+                        (typeUnify declarationTypes aTuple.part1 bTuple.part1)
                         |> Result.andThen identity
 
                 _ ->
@@ -2000,7 +1971,7 @@ typeNotVariableUnify context a b =
                 TypeTriple bTriple ->
                     Result.map3
                         (\part0ABUnified part1ABUnified part2ABUnified ->
-                            variableSubstitutionsMerge3 context
+                            variableSubstitutionsMerge3 declarationTypes
                                 part0ABUnified.substitutions
                                 part1ABUnified.substitutions
                                 part2ABUnified.substitutions
@@ -2018,9 +1989,9 @@ typeNotVariableUnify context a b =
                                         }
                                     )
                         )
-                        (typeUnify context aTriple.part0 bTriple.part0)
-                        (typeUnify context aTriple.part1 bTriple.part1)
-                        (typeUnify context aTriple.part1 bTriple.part1)
+                        (typeUnify declarationTypes aTriple.part0 bTriple.part0)
+                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
+                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
                         |> Result.andThen identity
 
                 _ ->
@@ -2029,7 +2000,7 @@ typeNotVariableUnify context a b =
         TypeRecord aRecord ->
             case b of
                 TypeRecord bRecord ->
-                    typeRecordUnify context aRecord bRecord
+                    typeRecordUnify declarationTypes aRecord bRecord
                         |> Result.map
                             (\typeAndSubstitutions ->
                                 { type_ = TypeNotVariable typeAndSubstitutions.type_
@@ -2038,7 +2009,7 @@ typeNotVariableUnify context a b =
                             )
 
                 TypeRecordExtension bRecordExtension ->
-                    typeRecordExtensionRecordUnify context
+                    typeRecordExtensionRecordUnify declarationTypes
                         bRecordExtension
                         aRecord
                         |> Result.map
@@ -2060,7 +2031,7 @@ typeNotVariableUnify context a b =
                 TypeFunction bFunction ->
                     Result.map2
                         (\inputABUnified outputABUnified ->
-                            variableSubstitutionsMerge context
+                            variableSubstitutionsMerge declarationTypes
                                 inputABUnified.substitutions
                                 outputABUnified.substitutions
                                 |> Result.map
@@ -2076,8 +2047,8 @@ typeNotVariableUnify context a b =
                                         }
                                     )
                         )
-                        (typeUnify context aFunction.input bFunction.input)
-                        (typeUnify context aFunction.output bFunction.output)
+                        (typeUnify declarationTypes aFunction.input bFunction.input)
+                        (typeUnify declarationTypes aFunction.output bFunction.output)
                         |> Result.andThen identity
 
                 _ ->
@@ -2085,12 +2056,7 @@ typeNotVariableUnify context a b =
 
 
 typeRecordUnify :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     -> FastDict.Dict String (Type variable)
     -> FastDict.Dict String (Type variable)
     ->
@@ -2099,7 +2065,7 @@ typeRecordUnify :
             { type_ : TypeNotVariable variable
             , substitutions : VariableSubstitutions
             }
-typeRecordUnify context aFields bFields =
+typeRecordUnify declarationTypes aFields bFields =
     -- TODO unify overlapping fialds
     Ok
         { type_ =
@@ -2113,12 +2079,7 @@ typeRecordUnify context aFields bFields =
 
 
 typeRecordExtensionRecordUnify :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
-    }
+    ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { recordVariable : variable
         , fields : FastDict.Dict String (Type variable)
@@ -2130,7 +2091,7 @@ typeRecordExtensionRecordUnify :
             { type_ : TypeNotVariable variable
             , substitutions : VariableSubstitutions
             }
-typeRecordExtensionRecordUnify context recordExtension record =
+typeRecordExtensionRecordUnify declarationTypes recordExtension record =
     -- TODO unify overlapping fialds
     Debug.todo ""
 
@@ -2406,37 +2367,24 @@ patternContextToInPath :
     ->
         { path : List String
         , moduleOriginLookup : ModuleOriginLookup
-        , importedTypes :
-            FastDict.Dict
-                Elm.Syntax.ModuleName.ModuleName
-                ModuleTypes
-        , moduleDeclaredTypes : ModuleTypes
+        , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
         }
     ->
         { path : List String
         , moduleOriginLookup : ModuleOriginLookup
-        , importedTypes :
-            FastDict.Dict
-                Elm.Syntax.ModuleName.ModuleName
-                ModuleTypes
-        , moduleDeclaredTypes : ModuleTypes
+        , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
         }
 patternContextToInPath innermostPathPart context =
     { path = innermostPathPart :: context.path
     , moduleOriginLookup = context.moduleOriginLookup
-    , importedTypes = context.importedTypes
-    , moduleDeclaredTypes = context.moduleDeclaredTypes
+    , declarationTypes = context.declarationTypes
     }
 
 
 patternTypeInfer :
     { path : List String
     , moduleOriginLookup : ModuleOriginLookup
-    , importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
+    , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern
     ->
@@ -2613,9 +2561,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     Result.map2
                         (\part0 part1 ->
                             variableSubstitutionsMerge
-                                { importedTypes = context.importedTypes
-                                , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                }
+                                context.declarationTypes
                                 part0.substitutions
                                 part1.substitutions
                                 |> Result.map
@@ -2645,9 +2591,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     Result.map3
                         (\part0 part1 part2 ->
                             variableSubstitutionsMerge3
-                                { importedTypes = context.importedTypes
-                                , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                }
+                                context.declarationTypes
                                 part0.substitutions
                                 part1.substitutions
                                 part2.substitutions
@@ -2736,17 +2680,13 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Result.map2
                 (\headInferred tailInferred ->
                     typeUnify
-                        { importedTypes = context.importedTypes
-                        , moduleDeclaredTypes = context.moduleDeclaredTypes
-                        }
+                        context.declarationTypes
                         headInferred.node.type_
                         tailInferred.node.type_
                         |> Result.andThen
                             (\fullListUnified ->
                                 variableSubstitutionsMerge3
-                                    { importedTypes = context.importedTypes
-                                    , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                    }
+                                    context.declarationTypes
                                     headInferred.substitutions
                                     tailInferred.substitutions
                                     fullListUnified.substitutions
@@ -2822,18 +2762,12 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 elementNode
                                                 |> Result.andThen
                                                     (\elementTypedNodeAndSubstitutions ->
-                                                        typeUnify
-                                                            { importedTypes = context.importedTypes
-                                                            , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                                            }
+                                                        typeUnify context.declarationTypes
                                                             elementTypedNodeAndSubstitutions.node.type_
                                                             soFar.elementType
                                                             |> Result.andThen
                                                                 (\elementTypeWithCurrent ->
-                                                                    variableSubstitutionsMerge3
-                                                                        { importedTypes = context.importedTypes
-                                                                        , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                                                        }
+                                                                    variableSubstitutionsMerge3 context.declarationTypes
                                                                         elementTypedNodeAndSubstitutions.substitutions
                                                                         elementTypeWithCurrent.substitutions
                                                                         soFar.substitutions
@@ -2884,11 +2818,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
 
 expressionTypeInfer :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
+    { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
     , locallyIntroducedVariableExpressions :
         FastDict.Dict String (Type TypeVariableFromContext)
     , path : List String
@@ -3031,10 +2961,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 [ part0, part1 ] ->
                     Result.map2
                         (\part0NodeAndSubstitutions part1NodeAndSubstitutions ->
-                            variableSubstitutionsMerge
-                                { importedTypes = context.importedTypes
-                                , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                }
+                            variableSubstitutionsMerge context.declarationTypes
                                 part0NodeAndSubstitutions.substitutions
                                 part1NodeAndSubstitutions.substitutions
                                 |> Result.map
@@ -3065,10 +2992,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 [ part0, part1, part2 ] ->
                     Result.map3
                         (\part0NodeAndSubstitutions part1NodeAndSubstitutions part2NodeAndSubstitutions ->
-                            variableSubstitutionsMerge3
-                                { importedTypes = context.importedTypes
-                                , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                }
+                            variableSubstitutionsMerge3 context.declarationTypes
                                 part0NodeAndSubstitutions.substitutions
                                 part1NodeAndSubstitutions.substitutions
                                 part2NodeAndSubstitutions.substitutions
@@ -3138,10 +3062,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 (context |> expressionContextToInPath fieldName)
                             |> Result.andThen
                                 (\fieldValueTypedNode ->
-                                    variableSubstitutionsMerge
-                                        { importedTypes = context.importedTypes
-                                        , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                        }
+                                    variableSubstitutionsMerge context.declarationTypes
                                         fieldValueTypedNode.substitutions
                                         soFar.substitutions
                                         |> Result.map
@@ -3220,18 +3141,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 elementNode
                                                 |> Result.andThen
                                                     (\elementTypedNodeAndSubstitutions ->
-                                                        typeUnify
-                                                            { importedTypes = context.importedTypes
-                                                            , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                                            }
+                                                        typeUnify context.declarationTypes
                                                             elementTypedNodeAndSubstitutions.node.type_
                                                             soFar.elementType
                                                             |> Result.andThen
                                                                 (\elementTypeWithCurrent ->
-                                                                    variableSubstitutionsMerge3
-                                                                        { importedTypes = context.importedTypes
-                                                                        , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                                                        }
+                                                                    variableSubstitutionsMerge3 context.declarationTypes
                                                                         elementTypedNodeAndSubstitutions.substitutions
                                                                         elementTypeWithCurrent.substitutions
                                                                         soFar.substitutions
@@ -3286,10 +3201,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             fieldValueType =
                                 TypeVariable ( context.path, fieldName )
                         in
-                        typeUnify
-                            { importedTypes = context.importedTypes
-                            , moduleDeclaredTypes = context.moduleDeclaredTypes
-                            }
+                        typeUnify context.declarationTypes
                             recordTypedNodeAndSubstitutions.node.type_
                             (TypeNotVariable
                                 (TypeRecordExtension
@@ -3306,10 +3218,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             )
                             |> Result.andThen
                                 (\recordWithAccessedField ->
-                                    variableSubstitutionsMerge
-                                        { importedTypes = context.importedTypes
-                                        , moduleDeclaredTypes = context.moduleDeclaredTypes
-                                        }
+                                    variableSubstitutionsMerge context.declarationTypes
                                         recordTypedNodeAndSubstitutions.substitutions
                                         recordWithAccessedField.substitutions
                                         |> Result.map
@@ -4088,30 +3997,21 @@ operatorFunctionType context operator =
 expressionContextToInPath :
     String
     ->
-        { importedTypes :
-            FastDict.Dict
-                Elm.Syntax.ModuleName.ModuleName
-                ModuleTypes
-        , moduleDeclaredTypes : ModuleTypes
+        { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
         , locallyIntroducedVariableExpressions :
             FastDict.Dict String (Type TypeVariableFromContext)
         , path : List String
         , moduleOriginLookup : ModuleOriginLookup
         }
     ->
-        { importedTypes :
-            FastDict.Dict
-                Elm.Syntax.ModuleName.ModuleName
-                ModuleTypes
-        , moduleDeclaredTypes : ModuleTypes
+        { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
         , locallyIntroducedVariableExpressions :
             FastDict.Dict String (Type TypeVariableFromContext)
         , path : List String
         , moduleOriginLookup : ModuleOriginLookup
         }
 expressionContextToInPath innermostPathDescription context =
-    { importedTypes = context.importedTypes
-    , moduleDeclaredTypes = context.moduleDeclaredTypes
+    { declarationTypes = context.declarationTypes
     , locallyIntroducedVariableExpressions = context.locallyIntroducedVariableExpressions
     , path = innermostPathDescription :: context.path
     , moduleOriginLookup = context.moduleOriginLookup
@@ -4139,6 +4039,13 @@ expressionDeclarations :
             }
 expressionDeclarations typesAndOriginLookup syntaxDeclarationExpression =
     Debug.todo ""
+
+
+type alias ModuleLevelDeclarationTypesInAvailableInModule =
+    FastDict.Dict
+        -- `[]` means declared in the same module
+        Elm.Syntax.ModuleName.ModuleName
+        ModuleTypes
 
 
 {-| Infer types of a
@@ -4170,14 +4077,34 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
     in
     implementation.arguments
         |> parameterPatternsTypeInfer
-            { importedTypes = typesAndOriginLookup.importedTypes
-            , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
-            , path = [ "implementation" ]
+            { declarationTypes =
+                typesAndOriginLookup.importedTypes
+                    |> FastDict.insert [] typesAndOriginLookup.otherModuleDeclaredTypes
+            , path = []
             , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
             }
         |> Result.andThen
             (\arguments ->
                 let
+                    declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+                    declarationTypes =
+                        typesAndOriginLookup.importedTypes
+                            |> FastDict.insert
+                                []
+                                (typesAndOriginLookup.otherModuleDeclaredTypes
+                                    |> (\r ->
+                                            { r
+                                                | signatures =
+                                                    r.signatures
+                                                        |> FastDict.insert name
+                                                            (type_
+                                                                |> typeVariablesMap
+                                                                    (\( _, variableName ) -> variableName)
+                                                            )
+                                            }
+                                       )
+                                )
+
                     name : String
                     name =
                         implementation.name |> Elm.Syntax.Node.value
@@ -4203,12 +4130,10 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                     locallyIntroducedVariableExpressions : FastDict.Dict String (Type TypeVariableFromContext)
                     locallyIntroducedVariableExpressions =
                         arguments.introducedExpressionVariables
-                            |> FastDict.insert name resultTypeVariable
                 in
                 implementation.expression
                     |> expressionTypeInfer
-                        { importedTypes = typesAndOriginLookup.importedTypes
-                        , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
+                        { declarationTypes = declarationTypes
                         , locallyIntroducedVariableExpressions = locallyIntroducedVariableExpressions
                         , path = [ "implementation" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
@@ -4239,18 +4164,14 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                             (\substitutionVariable substitutionType soFar ->
                                                 soFar.type_
                                                     |> typeSubstituteVariableByNotVariable
-                                                        { importedTypes = typesAndOriginLookup.importedTypes
-                                                        , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
-                                                        }
+                                                        declarationTypes
                                                         { variable = substitutionVariable
                                                         , type_ = substitutionType
                                                         }
                                                     |> Result.andThen
                                                         (\substituted ->
                                                             variableSubstitutionsMerge
-                                                                { importedTypes = typesAndOriginLookup.importedTypes
-                                                                , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
-                                                                }
+                                                                declarationTypes
                                                                 substituted.substitutions
                                                                 soFar.substitutions
                                                                 |> Result.map
@@ -4299,8 +4220,7 @@ fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
 
 parameterPatternsTypeInfer :
     { path : List String
-    , importedTypes : FastDict.Dict Elm.Syntax.ModuleName.ModuleName ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
+    , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
@@ -4313,19 +4233,6 @@ parameterPatternsTypeInfer :
             , nodesReverse : List (TypedNode Pattern)
             }
 parameterPatternsTypeInfer context parameterPatterns =
-    let
-        argumentSubstitutionsMergeContext :
-            { importedTypes :
-                FastDict.Dict
-                    Elm.Syntax.ModuleName.ModuleName
-                    ModuleTypes
-            , moduleDeclaredTypes : ModuleTypes
-            }
-        argumentSubstitutionsMergeContext =
-            { importedTypes = context.importedTypes
-            , moduleDeclaredTypes = context.moduleDeclaredTypes
-            }
-    in
     parameterPatterns
         |> listFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
@@ -4337,7 +4244,7 @@ parameterPatternsTypeInfer context parameterPatterns =
                     |> patternTypeInfer context
                     |> Result.andThen
                         (\patternInferred ->
-                            variableSubstitutionsMerge argumentSubstitutionsMergeContext
+                            variableSubstitutionsMerge context.declarationTypes
                                 soFar.substitutions
                                 patternInferred.substitutions
                                 |> Result.map
