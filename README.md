@@ -6,6 +6,7 @@ import Elm.Syntax.Node
 import Elm.Syntax.Expression
 import ElmSyntaxTypeInfer
 
+
 { declaration =
     Elm.Syntax.Node.empty
         { expression =
@@ -23,15 +24,11 @@ import ElmSyntaxTypeInfer
 }
     |> ElmSyntaxTypeInfer.declarationExpression
         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-        , moduleOriginLookup =
+        , moduleOriginLookup = exampleModuleOriginLookup
+        , otherModuleDeclaredTypes =
             []
-                |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
-                    ElmSyntaxTypeInfer.elmCoreTypes
-        , moduleDeclaredTypes =
-            { signatures = FastDict.empty
-            , typeAliases = FastDict.empty
-            , choiceTypes = FastDict.empty
-            }
+                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                    exampleModuleOriginLookup
         }
     |> Result.map
         (\typedDeclaration ->
@@ -42,9 +39,22 @@ import ElmSyntaxTypeInfer
         )
 -->
 Ok
-    (ElmSyntaxTypeInfer.TypeList
-        (ElmSyntaxTypeInfer.TypeNumberVariable "number")
+    (ElmSyntaxTypeInfer.TypeConstruct
+        { moduleOrigin = [ "List" ]
+        , name = "List"
+        , arguments =
+            [  ElmSyntaxTypeInfer.TypeNumberVariable
+                ( [ "0", "implementation" ], "number" )
+            ]
+        }
     )
+
+
+exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+exampleModuleOriginLookup =
+    []
+        |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+            ElmSyntaxTypeInfer.elmCoreTypes
 ```
 
 ## TODO

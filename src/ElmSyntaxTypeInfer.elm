@@ -4127,7 +4127,7 @@ expressionDeclarations :
         FastDict.Dict
             Elm.Syntax.ModuleName.ModuleName
             ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
+    , otherModuleDeclaredTypes : ModuleTypes
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> List Elm.Syntax.Expression.Function
@@ -4152,7 +4152,7 @@ expressionDeclaration :
         FastDict.Dict
             Elm.Syntax.ModuleName.ModuleName
             ModuleTypes
-    , moduleDeclaredTypes : ModuleTypes
+    , otherModuleDeclaredTypes : ModuleTypes
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> Elm.Syntax.Expression.Function
@@ -4171,7 +4171,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
     implementation.arguments
         |> parameterPatternsTypeInfer
             { importedTypes = typesAndOriginLookup.importedTypes
-            , moduleDeclaredTypes = typesAndOriginLookup.moduleDeclaredTypes
+            , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
             , path = [ "implementation" ]
             , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
             }
@@ -4208,7 +4208,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                 implementation.expression
                     |> expressionTypeInfer
                         { importedTypes = typesAndOriginLookup.importedTypes
-                        , moduleDeclaredTypes = typesAndOriginLookup.moduleDeclaredTypes
+                        , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
                         , locallyIntroducedVariableExpressions = locallyIntroducedVariableExpressions
                         , path = [ "implementation" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
@@ -4240,7 +4240,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                                 soFar.type_
                                                     |> typeSubstituteVariableByNotVariable
                                                         { importedTypes = typesAndOriginLookup.importedTypes
-                                                        , moduleDeclaredTypes = typesAndOriginLookup.moduleDeclaredTypes
+                                                        , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
                                                         }
                                                         { variable = substitutionVariable
                                                         , type_ = substitutionType
@@ -4249,7 +4249,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                                         (\substituted ->
                                                             variableSubstitutionsMerge
                                                                 { importedTypes = typesAndOriginLookup.importedTypes
-                                                                , moduleDeclaredTypes = typesAndOriginLookup.moduleDeclaredTypes
+                                                                , moduleDeclaredTypes = typesAndOriginLookup.otherModuleDeclaredTypes
                                                                 }
                                                                 substituted.substitutions
                                                                 soFar.substitutions
