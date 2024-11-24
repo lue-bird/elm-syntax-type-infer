@@ -22,11 +22,11 @@ import ElmSyntaxTypeInfer
 , documentation = Nothing
 }
     |> ElmSyntaxTypeInfer.declarationExpression
-        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypeContext
+        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
         , moduleOriginLookup =
             []
                 |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
-                    ElmSyntaxTypeInfer.elmCoreTypeContext
+                    ElmSyntaxTypeInfer.elmCoreTypes
         , moduleDeclaredTypes =
             { signatures = FastDict.empty
             , typeAliases = FastDict.empty
