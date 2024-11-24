@@ -1,0 +1,11 @@
+{
+  "tests": [
+    "Print",
+    "ElmSyntaxPrint",
+    "ElmSyntaxPrintDefunctionalized",
+    "ParserFast",
+    "Char.Extra",
+    "ElmSyntaxParserLenient",
+    "./README.md"
+  ]
+}
