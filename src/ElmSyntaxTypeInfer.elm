@@ -2732,8 +2732,57 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             FastDict.empty
                 }
 
-        Elm.Syntax.Pattern.UnConsPattern _ _ ->
-            Debug.todo ""
+        Elm.Syntax.Pattern.UnConsPattern headNode tailNode ->
+            Result.map2
+                (\headInferred tailInferred ->
+                    typeUnify
+                        { importedTypes = context.importedTypes
+                        , moduleDeclaredTypes = context.moduleDeclaredTypes
+                        }
+                        headInferred.node.type_
+                        tailInferred.node.type_
+                        |> Result.andThen
+                            (\fullListUnified ->
+                                variableSubstitutionsMerge3
+                                    { importedTypes = context.importedTypes
+                                    , moduleDeclaredTypes = context.moduleDeclaredTypes
+                                    }
+                                    headInferred.substitutions
+                                    tailInferred.substitutions
+                                    fullListUnified.substitutions
+                                    |> Result.map
+                                        (\substitutionsHeadTail ->
+                                            { substitutions = substitutionsHeadTail
+                                            , introducedExpressionVariables =
+                                                FastDict.union
+                                                    headInferred.introducedExpressionVariables
+                                                    tailInferred.introducedExpressionVariables
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    PatternListCons
+                                                        { head = headInferred.node
+                                                        , tail =
+                                                            { range = tailInferred.node.range
+                                                            , value = tailInferred.node.value
+                                                            , type_ = fullListUnified.type_
+                                                            }
+                                                        }
+                                                , type_ = fullListUnified.type_
+                                                }
+                                            }
+                                        )
+                            )
+                )
+                (patternTypeInfer
+                    (context |> patternContextToInPath "head")
+                    headNode
+                )
+                (patternTypeInfer
+                    (context |> patternContextToInPath "tail")
+                    tailNode
+                )
+                |> Result.andThen identity
 
         Elm.Syntax.Pattern.ListPattern elementNodes ->
             case elementNodes of
