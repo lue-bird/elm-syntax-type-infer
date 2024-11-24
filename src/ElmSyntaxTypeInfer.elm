@@ -2401,6 +2401,34 @@ typeUrlParserQueryParser a =
         )
 
 
+patternContextToInPath :
+    String
+    ->
+        { path : List String
+        , moduleOriginLookup : ModuleOriginLookup
+        , importedTypes :
+            FastDict.Dict
+                Elm.Syntax.ModuleName.ModuleName
+                ModuleTypes
+        , moduleDeclaredTypes : ModuleTypes
+        }
+    ->
+        { path : List String
+        , moduleOriginLookup : ModuleOriginLookup
+        , importedTypes :
+            FastDict.Dict
+                Elm.Syntax.ModuleName.ModuleName
+                ModuleTypes
+        , moduleDeclaredTypes : ModuleTypes
+        }
+patternContextToInPath innermostPathPart context =
+    { path = innermostPathPart :: context.path
+    , moduleOriginLookup = context.moduleOriginLookup
+    , importedTypes = context.importedTypes
+    , moduleDeclaredTypes = context.moduleDeclaredTypes
+    }
+
+
 patternTypeInfer :
     { path : List String
     , moduleOriginLookup : ModuleOriginLookup
@@ -2708,7 +2736,99 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Debug.todo ""
 
         Elm.Syntax.Pattern.ListPattern elementNodes ->
-            Debug.todo ""
+            case elementNodes of
+                [] ->
+                    Ok
+                        { substitutions = variableSubstitutionsNone
+                        , introducedExpressionVariables = FastDict.empty
+                        , node =
+                            { range = fullRange
+                            , value = PatternListExact []
+                            , type_ =
+                                typeListList
+                                    (TypeVariable ( context.path, "element" ))
+                            }
+                        }
+
+                head :: tail ->
+                    patternTypeInfer
+                        (context |> patternContextToInPath "0")
+                        head
+                        |> Result.andThen
+                            (\headTypedNodeAndSubstitutions ->
+                                tail
+                                    |> listFoldlWhileOkFrom
+                                        { substitutions = headTypedNodeAndSubstitutions.substitutions
+                                        , elementType = headTypedNodeAndSubstitutions.node.type_
+                                        , elementNodesReverse = []
+                                        , introducedExpressionVariables = FastDict.empty
+                                        , index = 1
+                                        }
+                                        (\elementNode soFar ->
+                                            patternTypeInfer
+                                                (context
+                                                    |> patternContextToInPath
+                                                        (soFar.index |> String.fromInt)
+                                                )
+                                                elementNode
+                                                |> Result.andThen
+                                                    (\elementTypedNodeAndSubstitutions ->
+                                                        typeUnify
+                                                            { importedTypes = context.importedTypes
+                                                            , moduleDeclaredTypes = context.moduleDeclaredTypes
+                                                            }
+                                                            elementTypedNodeAndSubstitutions.node.type_
+                                                            soFar.elementType
+                                                            |> Result.andThen
+                                                                (\elementTypeWithCurrent ->
+                                                                    variableSubstitutionsMerge3
+                                                                        { importedTypes = context.importedTypes
+                                                                        , moduleDeclaredTypes = context.moduleDeclaredTypes
+                                                                        }
+                                                                        elementTypedNodeAndSubstitutions.substitutions
+                                                                        elementTypeWithCurrent.substitutions
+                                                                        soFar.substitutions
+                                                                        |> Result.map
+                                                                            (\substitutionsWithElement ->
+                                                                                { index = soFar.index + 1
+                                                                                , elementNodesReverse =
+                                                                                    { range = elementTypedNodeAndSubstitutions.node.range
+                                                                                    , value = elementTypedNodeAndSubstitutions.node.value
+                                                                                    }
+                                                                                        :: soFar.elementNodesReverse
+                                                                                , elementType = elementTypeWithCurrent.type_
+                                                                                , substitutions = substitutionsWithElement
+                                                                                , introducedExpressionVariables =
+                                                                                    elementTypedNodeAndSubstitutions.introducedExpressionVariables
+                                                                                }
+                                                                            )
+                                                                )
+                                                    )
+                                        )
+                            )
+                        |> Result.map
+                            (\elementTypeAndSubstitutions ->
+                                { substitutions = elementTypeAndSubstitutions.substitutions
+                                , introducedExpressionVariables =
+                                    elementTypeAndSubstitutions.introducedExpressionVariables
+                                , node =
+                                    { range = fullRange
+                                    , value =
+                                        PatternListExact
+                                            (elementTypeAndSubstitutions.elementNodesReverse
+                                                |> listReverseAndMap
+                                                    (\elementNode ->
+                                                        { range = elementNode.range
+                                                        , value = elementNode.value
+                                                        , type_ = elementTypeAndSubstitutions.elementType
+                                                        }
+                                                    )
+                                            )
+                                    , type_ =
+                                        typeListList elementTypeAndSubstitutions.elementType
+                                    }
+                                }
+                            )
 
         Elm.Syntax.Pattern.NamedPattern _ _ ->
             Debug.todo ""
@@ -2889,8 +3009,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     )
                         )
-                        (part0 |> expressionTypeInfer (context |> contextToInPath "first"))
-                        (part1 |> expressionTypeInfer (context |> contextToInPath "second"))
+                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "first"))
+                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "second"))
                         |> Result.andThen identity
 
                 [ part0, part1, part2 ] ->
@@ -2926,9 +3046,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     )
                         )
-                        (part0 |> expressionTypeInfer (context |> contextToInPath "first"))
-                        (part1 |> expressionTypeInfer (context |> contextToInPath "second"))
-                        (part2 |> expressionTypeInfer (context |> contextToInPath "third"))
+                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "first"))
+                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "second"))
+                        (part2 |> expressionTypeInfer (context |> expressionContextToInPath "third"))
                         |> Result.andThen identity
 
                 _ :: _ :: _ :: _ :: _ ->
@@ -2966,7 +3086,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node fieldNameRange fieldName, fieldValueNode )) soFar ->
                         fieldValueNode
                             |> expressionTypeInfer
-                                (context |> contextToInPath fieldName)
+                                (context |> expressionContextToInPath fieldName)
                             |> Result.andThen
                                 (\fieldValueTypedNode ->
                                     variableSubstitutionsMerge
@@ -3025,13 +3145,13 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             , value = ExpressionList []
                             , type_ =
                                 typeListList
-                                    (TypeVariable ( [], "element" ))
+                                    (TypeVariable ( context.path, "element" ))
                             }
                         }
 
                 head :: tail ->
                     expressionTypeInfer
-                        (context |> contextToInPath "0")
+                        (context |> expressionContextToInPath "0")
                         head
                         |> Result.andThen
                             (\headTypedNodeAndSubstitutions ->
@@ -3045,7 +3165,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         (\elementNode soFar ->
                                             expressionTypeInfer
                                                 (context
-                                                    |> contextToInPath
+                                                    |> expressionContextToInPath
                                                         (soFar.index |> String.fromInt)
                                                 )
                                                 elementNode
@@ -3916,7 +4036,7 @@ operatorFunctionType context operator =
             Err ("unknown operator (" ++ unknownOperator ++ ")")
 
 
-contextToInPath :
+expressionContextToInPath :
     String
     ->
         { importedTypes :
@@ -3940,7 +4060,7 @@ contextToInPath :
         , path : List String
         , moduleOriginLookup : ModuleOriginLookup
         }
-contextToInPath innermostPathDescription context =
+expressionContextToInPath innermostPathDescription context =
     { importedTypes = context.importedTypes
     , moduleDeclaredTypes = context.moduleDeclaredTypes
     , locallyIntroducedVariableExpressions = context.locallyIntroducedVariableExpressions
