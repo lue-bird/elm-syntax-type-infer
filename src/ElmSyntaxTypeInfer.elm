@@ -183,7 +183,7 @@ typeVariableConstraintMerge a b =
                     Ok TypeVariableConstraintNumber
 
                 TypeVariableConstraintAppendable ->
-                    Err "number and apappendable variables cannot be unified"
+                    Err "number and appendable variables cannot be unified"
 
                 TypeVariableConstraintComparable ->
                     Ok TypeVariableConstraintNumber
@@ -194,7 +194,7 @@ typeVariableConstraintMerge a b =
         TypeVariableConstraintAppendable ->
             case b of
                 TypeVariableConstraintNumber ->
-                    Err "number and apappendable variables cannot be unified"
+                    Err "number and appendable variables cannot be unified"
 
                 TypeVariableConstraintAppendable ->
                     Ok TypeVariableConstraintAppendable
@@ -2066,7 +2066,7 @@ typeRecordUnify :
             , substitutions : VariableSubstitutions
             }
 typeRecordUnify declarationTypes aFields bFields =
-    -- TODO unify overlapping fialds
+    -- TODO unify overlapping fields
     Ok
         { type_ =
             TypeRecord
@@ -2092,7 +2092,7 @@ typeRecordExtensionRecordUnify :
             , substitutions : VariableSubstitutions
             }
 typeRecordExtensionRecordUnify declarationTypes recordExtension record =
-    -- TODO unify overlapping fialds
+    -- TODO unify overlapping fields
     Debug.todo ""
 
 
@@ -3308,6 +3308,16 @@ stringFirstCharToUpper string =
             String.cons (Char.toUpper headChar) tailString
 
 
+stringFirstCharToLower : String -> String
+stringFirstCharToLower string =
+    case string |> String.uncons of
+        Nothing ->
+            ""
+
+        Just ( headChar, tailString ) ->
+            String.cons (Char.toLower headChar) tailString
+
+
 operatorFunctionType :
     { path : List String, moduleOriginLookup : ModuleOriginLookup }
     -> String
@@ -4144,8 +4154,8 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                 resultTypeSubstituted :
                                     Result
                                         String
-                                        { type_ : Type TypeVariableFromContext
-                                        , substitutions : VariableSubstitutions
+                                        { node : TypedNode Expression
+                                        , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
                                         }
                                 resultTypeSubstituted =
                                     -- TODO how to proceed with equivalent variables:
@@ -4153,35 +4163,10 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                     --   and then combine their constraints
                                     --   and then replace all except the combined variable in the final ExpressionTypedNode (tree)
                                     --   TODO what do do with remaining equivalent variables?
-                                    --        repeat!
-                                    -- TODO also substitute into sub expression nodes
-                                    -- TODO also substitute into remaining variable to type substitutions
-                                    resultInferred.substitutions.variableToType
-                                        |> fastDictFoldlWhileOkFrom
-                                            { substitutions = variableSubstitutionsNone
-                                            , type_ = resultInferred.node.type_
-                                            }
-                                            (\substitutionVariable substitutionType soFar ->
-                                                soFar.type_
-                                                    |> typeSubstituteVariableByNotVariable
-                                                        declarationTypes
-                                                        { variable = substitutionVariable
-                                                        , type_ = substitutionType
-                                                        }
-                                                    |> Result.andThen
-                                                        (\substituted ->
-                                                            variableSubstitutionsMerge
-                                                                declarationTypes
-                                                                substituted.substitutions
-                                                                soFar.substitutions
-                                                                |> Result.map
-                                                                    (\substitutionsAfterSubstitution ->
-                                                                        { substitutions = substitutionsAfterSubstitution
-                                                                        , type_ = substituted.type_
-                                                                        }
-                                                                    )
-                                                        )
-                                            )
+                                    resultInferred.node
+                                        |> expressionTypedNodeSubstituteVariablesByNotVariables
+                                            declarationTypes
+                                            resultInferred.substitutions
                             in
                             case syntaxDeclarationExpression.signature of
                                 Nothing ->
@@ -4196,6 +4181,294 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                          through creating a function with argument types and result type"""
                         )
             )
+
+
+expressionTypedNodeSubstituteVariablesByNotVariables :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> VariableSubstitutions
+    -> TypedNode Expression
+    ->
+        Result
+            String
+            { equivalentVariables : List (FastSet.Set TypeVariableFromContext)
+            , node : TypedNode Expression
+            }
+expressionTypedNodeSubstituteVariablesByNotVariables declarationTypes variableSubstitutions expression =
+    case variableSubstitutions.variableToType |> FastDict.popMin of
+        Nothing ->
+            Ok
+                { equivalentVariables = variableSubstitutions.equivalentVariables
+                , node = expression
+                }
+
+        Just ( ( replacementVariable, replacementTypeNotVariable ), remainingReplacements ) ->
+            case
+                expression
+                    |> expressionTypedNodeSubstituteVariableByNotVariable
+                        declarationTypes
+                        { variable = replacementVariable
+                        , type_ = replacementTypeNotVariable
+                        }
+            of
+                Err error ->
+                    Err error
+
+                Ok substituted ->
+                    case
+                        variableSubstitutionsMerge
+                            declarationTypes
+                            substituted.substitutions
+                            { equivalentVariables = variableSubstitutions.equivalentVariables
+                            , variableToType = remainingReplacements
+                            }
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok substitutionsAfterSubstitution ->
+                            expressionTypedNodeSubstituteVariablesByNotVariables
+                                declarationTypes
+                                substitutionsAfterSubstitution
+                                substituted.node
+
+
+expressionTypedNodeSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> { variable : TypeVariableFromContext, type_ : TypeNotVariable TypeVariableFromContext }
+    -> TypedNode Expression
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , node : TypedNode Expression
+            }
+expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement expression =
+    case expression.value of
+        ExpressionUnit ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = expression
+                }
+
+        ExpressionFloat _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = expression
+                }
+
+        ExpressionChar _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = expression
+                }
+
+        ExpressionString _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = expression
+                }
+
+        ExpressionNumber _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionReference _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionOperatorFunction _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionNegation _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionParenthesized _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionRecordAccess _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionRecordAccessFunction _ ->
+            expression.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = expression.range
+                            , value = expression.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        ExpressionCall _ ->
+            Debug.todo ""
+
+        ExpressionInfixOperation _ ->
+            Debug.todo ""
+
+        ExpressionIfThenElse _ ->
+            Debug.todo ""
+
+        ExpressionTuple _ ->
+            Debug.todo ""
+
+        ExpressionTriple _ ->
+            Debug.todo ""
+
+        ExpressionLetIn _ ->
+            Debug.todo ""
+
+        ExpressionCaseOf _ ->
+            Debug.todo ""
+
+        ExpressionLambda _ ->
+            Debug.todo ""
+
+        ExpressionRecord _ ->
+            Debug.todo ""
+
+        ExpressionList _ ->
+            Debug.todo ""
+
+        ExpressionRecordUpdate _ ->
+            Debug.todo ""
+
+
+equivalentVariablesCreateUnifiedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
+equivalentVariablesCreateUnifiedVariable set =
+    case set |> FastSet.toList of
+        [] ->
+            Err "implementation bug: equivalent variables set is empty"
+
+        ( headVariableContext, headVariableName ) :: tailVariables ->
+            tailVariables
+                |> listFoldlWhileOkFrom
+                    (headVariableName |> typeVariableConstraint)
+                    (\variable soFar ->
+                        maybeTypeVariableConstraintMerge
+                            (variable |> typeContextVariableName |> typeVariableConstraint)
+                            soFar
+                    )
+                |> Result.map
+                    (\unifiedConstraint ->
+                        ( headVariableContext
+                        , headVariableName
+                            |> typeVariableNameReplaceMaybeConstraint unifiedConstraint
+                        )
+                    )
+
+
+typeVariableConstraintToString : TypeVariableConstraint -> String
+typeVariableConstraintToString constraint =
+    case constraint of
+        TypeVariableConstraintNumber ->
+            "number"
+
+        TypeVariableConstraintAppendable ->
+            "appendable"
+
+        TypeVariableConstraintComparable ->
+            "comparable"
+
+        TypeVariableConstraintCompappend ->
+            "compappend"
+
+
+typeVariableNameReplaceMaybeConstraint : Maybe TypeVariableConstraint -> String -> String
+typeVariableNameReplaceMaybeConstraint maybeConstraint typeVariableNameWithPotentialConstraint =
+    let
+        typeVariableNameStripConstraint : String
+        typeVariableNameStripConstraint =
+            case typeVariableNameWithPotentialConstraint |> typeVariableConstraint of
+                Nothing ->
+                    typeVariableNameWithPotentialConstraint
+
+                Just constraint ->
+                    String.dropLeft
+                        (constraint |> typeVariableConstraintToString |> String.length)
+                        typeVariableNameWithPotentialConstraint
+                        |> stringFirstCharToLower
+    in
+    case maybeConstraint of
+        Nothing ->
+            typeVariableNameStripConstraint
+
+        Just constraint ->
+            (constraint |> typeVariableConstraintToString)
+                ++ (typeVariableNameStripConstraint |> stringFirstCharToUpper)
 
 
 fastDictFoldlWhileOkFrom : ok -> (key -> value -> ok -> Result err ok) -> FastDict.Dict key value -> Result err ok
