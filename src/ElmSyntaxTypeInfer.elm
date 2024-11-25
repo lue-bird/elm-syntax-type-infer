@@ -4811,6 +4811,389 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             Debug.todo ""
 
 
+patternTypedNodeSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> { variable : TypeVariableFromContext, type_ : TypeNotVariable TypeVariableFromContext }
+    -> TypedNode Pattern
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , node : TypedNode Pattern
+            }
+patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement patternTypedNode =
+    -- IGNORE TCO
+    case patternTypedNode.value of
+        PatternUnit ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = patternTypedNode
+                }
+
+        PatternChar _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = patternTypedNode
+                }
+
+        PatternString _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = patternTypedNode
+                }
+
+        PatternInt _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = patternTypedNode
+                }
+
+        PatternIgnored ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node = patternTypedNode
+                }
+
+        PatternVariable _ ->
+            patternTypedNode.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\substituted ->
+                        { substitutions = substituted.substitutions
+                        , node =
+                            { range = patternTypedNode.range
+                            , value = patternTypedNode.value
+                            , type_ = substituted.type_
+                            }
+                        }
+                    )
+
+        PatternParenthesized inParens ->
+            inParens
+                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+                |> Result.map
+                    (\inParensSubstituted ->
+                        { substitutions = inParensSubstituted.substitutions
+                        , node =
+                            { range = patternTypedNode.range
+                            , value = PatternParenthesized inParensSubstituted.node
+                            , type_ = inParensSubstituted.node.type_
+                            }
+                        }
+                    )
+
+        PatternAs patternAs ->
+            Result.map
+                (\inParensSubstituted ->
+                    { substitutions = inParensSubstituted.substitutions
+                    , node =
+                        { range = patternTypedNode.range
+                        , value =
+                            PatternAs
+                                { pattern = inParensSubstituted.node
+                                , variable =
+                                    { range = patternAs.variable.range
+                                    , value = patternAs.variable.value
+                                    , type_ = inParensSubstituted.node.type_
+                                    }
+                                }
+                        , type_ = inParensSubstituted.node.type_
+                        }
+                    }
+                )
+                (patternAs.pattern
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+
+        PatternListCons patternListCons ->
+            Result.map3
+                (\headSubstituted tailSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        headSubstituted.substitutions
+                        tailSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternListCons
+                                            { head = headSubstituted.node
+                                            , tail = tailSubstituted.node
+                                            }
+                                    , type_ =
+                                        -- TODO take tail type?
+                                        typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternListCons.head
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternListCons.tail
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        PatternTuple patternTuple ->
+            Result.map3
+                (\part0Substituted part1Substituted typeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        part0Substituted.substitutions
+                        part1Substituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternTuple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            }
+                                    , type_ =
+                                        -- TODO TypeTuple derive from part types
+                                        typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternTuple.part0
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTuple.part1
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        PatternTriple patternTriple ->
+            Result.map4
+                (\part0Substituted part1Substituted part2Substituted typeSubstituted ->
+                    variableSubstitutionsMerge4 declarationTypes
+                        part0Substituted.substitutions
+                        part1Substituted.substitutions
+                        part2Substituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternTriple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            , part2 = part2Substituted.node
+                                            }
+                                    , type_ =
+                                        -- TODO TypeTriple derive from part types
+                                        typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternTriple.part0
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTriple.part1
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTriple.part2
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        PatternRecord patternRecordFields ->
+            Result.map2
+                (\fieldsSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        fieldsSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternRecord
+                                            (fieldsSubstituted.nodesReverse
+                                                |> List.reverse
+                                            )
+                                    , type_ =
+                                        -- TODO derive from field patterns
+                                        typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternRecordFields
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\fieldNode soFar ->
+                            fieldNode.type_
+                                |> typeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\fieldTypeSubstituted ->
+                                        variableSubstitutionsMerge declarationTypes
+                                            fieldTypeSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\substitutionsWithField ->
+                                                    { substitutions = substitutionsWithField
+                                                    , nodesReverse =
+                                                        { value = fieldNode.value
+                                                        , range = fieldNode.range
+                                                        , type_ = fieldTypeSubstituted.type_
+                                                        }
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        PatternListExact patternListElement ->
+            Result.map2
+                (\elementsSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        elementsSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternListExact
+                                            (elementsSubstituted.nodesReverse
+                                                |> List.reverse
+                                            )
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternListElement
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\elementNode soFar ->
+                            elementNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\fieldSubstituted ->
+                                        variableSubstitutionsMerge declarationTypes
+                                            fieldSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\substitutionsWithElement ->
+                                                    { substitutions = substitutionsWithElement
+                                                    , nodesReverse =
+                                                        fieldSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        PatternVariant patternVariant ->
+            Result.map2
+                (\elementsSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        elementsSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternVariant
+                                            { qualification = patternVariant.qualification
+                                            , name = patternVariant.name
+                                            , moduleOrigin = patternVariant.moduleOrigin
+                                            , arguments =
+                                                elementsSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (patternVariant.arguments
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\argumentNode soFar ->
+                            argumentNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\argumentSubstituted ->
+                                        variableSubstitutionsMerge declarationTypes
+                                            argumentSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\substitutionsWithElement ->
+                                                    { substitutions = substitutionsWithElement
+                                                    , nodesReverse =
+                                                        argumentSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+
 equivalentVariablesCreateUnifiedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
 equivalentVariablesCreateUnifiedVariable set =
     case set |> FastSet.toList of
