@@ -1631,6 +1631,28 @@ variableSubstitutionsMerge3 declarationTypes a b c =
             )
 
 
+variableSubstitutionsMerge4 :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> Result String VariableSubstitutions
+variableSubstitutionsMerge4 declarationTypes a b c d =
+    variableSubstitutionsMerge3
+        declarationTypes
+        a
+        b
+        c
+        |> Result.andThen
+            (\abcSubstitutions ->
+                variableSubstitutionsMerge
+                    declarationTypes
+                    abcSubstitutions
+                    d
+            )
+
+
 equivalentVariablesInsert :
     FastSet.Set comparable
     -> List (FastSet.Set comparable)
@@ -2114,7 +2136,11 @@ but all its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
 type Expression
     = ExpressionUnit
-    | ExpressionCall (List (TypedNode Expression))
+    | ExpressionCall
+        { called : TypedNode Expression
+        , argument0 : TypedNode Expression
+        , argument1Up : List (TypedNode Expression)
+        }
     | ExpressionInfixOperation
         { symbol : String
         , left : TypedNode Expression
@@ -2182,7 +2208,13 @@ type Expression
     | ExpressionRecordAccessFunction String
     | ExpressionRecordUpdate
         { recordVariable : TypedNode String
-        , fields : List { name : String, value : TypedNode Expression }
+        , fields :
+            List
+                { fieldRange : Elm.Syntax.Range.Range
+                , name : String
+                , nameRange : Elm.Syntax.Range.Range
+                , value : TypedNode Expression
+                }
         }
 
 
@@ -4243,6 +4275,7 @@ expressionTypedNodeSubstituteVariableByNotVariable :
             , node : TypedNode Expression
             }
 expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement expression =
+    -- IGNORE TCO
     case expression.value of
         ExpressionUnit ->
             Ok
@@ -4373,20 +4406,400 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         }
                     )
 
-        ExpressionCall _ ->
-            Debug.todo ""
+        ExpressionInfixOperation expressionInfixOperation ->
+            Result.map3
+                (\leftSubstituted rightSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        leftSubstituted.substitutions
+                        rightSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionInfixOperation
+                                            { symbol = expressionInfixOperation.symbol
+                                            , left = leftSubstituted.node
+                                            , right = rightSubstituted.node
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionInfixOperation.left
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionInfixOperation.right
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionInfixOperation _ ->
-            Debug.todo ""
+        ExpressionTuple expressionTuple ->
+            Result.map3
+                (\part0Substituted part1Substituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        part0Substituted.substitutions
+                        part1Substituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionTuple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionTuple.part0
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionTuple.part1
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionIfThenElse _ ->
-            Debug.todo ""
+        ExpressionTriple expressionTriple ->
+            Result.map4
+                (\part0Substituted part1Substituted part2Substituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge4 declarationTypes
+                        part0Substituted.substitutions
+                        part1Substituted.substitutions
+                        part2Substituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionTuple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionTriple.part0
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionTriple.part1
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionTriple.part2
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionTuple _ ->
-            Debug.todo ""
+        ExpressionIfThenElse expressionIfThenElse ->
+            Result.map4
+                (\conditionSubstituted onTrueSubstituted onFalseSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge4 declarationTypes
+                        conditionSubstituted.substitutions
+                        onTrueSubstituted.substitutions
+                        onFalseSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionTuple
+                                            { part0 = conditionSubstituted.node
+                                            , part1 = onTrueSubstituted.node
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionIfThenElse.condition
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionIfThenElse.onTrue
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionIfThenElse.onFalse
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionTriple _ ->
-            Debug.todo ""
+        ExpressionList expressionListElements ->
+            Result.map2
+                (\elementsSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        elementsSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionList
+                                            (elementsSubstituted.nodesReverse
+                                                |> List.reverse
+                                            )
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionListElements
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\elementNode soFar ->
+                            elementNode
+                                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\elementSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            elementSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions =
+                                                        fullSubstitutions
+                                                    , nodesReverse =
+                                                        elementSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        ExpressionCall expressionCall ->
+            Result.map4
+                (\calledSubstituted argument0Substituted argument1UpSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge4 declarationTypes
+                        calledSubstituted.substitutions
+                        argument0Substituted.substitutions
+                        argument1UpSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionCall
+                                            { called = calledSubstituted.node
+                                            , argument0 = argument0Substituted.node
+                                            , argument1Up =
+                                                argument1UpSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionCall.called
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionCall.argument0
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionCall.argument1Up
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\argumentNode soFar ->
+                            argumentNode
+                                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\elementSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            elementSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , nodesReverse =
+                                                        elementSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        ExpressionRecord expressionRecordFields ->
+            Result.map2
+                (\fieldsSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        fieldsSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionRecord
+                                            (fieldsSubstituted.nodesReverse
+                                                |> List.reverse
+                                            )
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionRecordFields
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\fieldNode soFar ->
+                            fieldNode.value
+                                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\fieldValueSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            fieldValueSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , nodesReverse =
+                                                        { fieldRange = fieldNode.fieldRange
+                                                        , name = fieldNode.name
+                                                        , nameRange = fieldNode.nameRange
+                                                        , value = fieldValueSubstituted.node
+                                                        }
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            Result.map2
+                (\fieldsSubstituted fullTypeSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        fieldsSubstituted.substitutions
+                        fullTypeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionRecordUpdate
+                                            { recordVariable =
+                                                { value = expressionRecordUpdate.recordVariable.value
+                                                , range = expressionRecordUpdate.recordVariable.range
+                                                , type_ = fullTypeSubstituted.type_
+                                                }
+                                            , fields =
+                                                fieldsSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            }
+                                    , type_ = fullTypeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionRecordUpdate.fields
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\fieldNode soFar ->
+                            fieldNode.value
+                                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\fieldValueSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            fieldValueSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , nodesReverse =
+                                                        { fieldRange = fieldNode.fieldRange
+                                                        , name = fieldNode.name
+                                                        , nameRange = fieldNode.nameRange
+                                                        , value = fieldValueSubstituted.node
+                                                        }
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
         ExpressionLetIn _ ->
             Debug.todo ""
@@ -4395,15 +4808,6 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             Debug.todo ""
 
         ExpressionLambda _ ->
-            Debug.todo ""
-
-        ExpressionRecord _ ->
-            Debug.todo ""
-
-        ExpressionList _ ->
-            Debug.todo ""
-
-        ExpressionRecordUpdate _ ->
             Debug.todo ""
 
 
