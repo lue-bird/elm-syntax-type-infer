@@ -276,11 +276,11 @@ type TypeNotVariable variable
         }
 
 
-typeVariablesMap :
+typeMapVariables :
     (variable -> variableMapped)
     -> Type variable
     -> Type variableMapped
-typeVariablesMap variableMap type_ =
+typeMapVariables variableMap type_ =
     -- IGNORE TCO
     case type_ of
         TypeVariable variable ->
@@ -308,20 +308,20 @@ typeNotVariableVariablesMap variableMap typeNotVariable =
                 , name = typeConstruct.name
                 , arguments =
                     typeConstruct.arguments
-                        |> List.map (\arg -> arg |> typeVariablesMap variableMap)
+                        |> List.map (\arg -> arg |> typeMapVariables variableMap)
                 }
 
         TypeTuple typeTuple ->
             TypeTuple
-                { part0 = typeTuple.part0 |> typeVariablesMap variableMap
-                , part1 = typeTuple.part1 |> typeVariablesMap variableMap
+                { part0 = typeTuple.part0 |> typeMapVariables variableMap
+                , part1 = typeTuple.part1 |> typeMapVariables variableMap
                 }
 
         TypeTriple typeTriple ->
             TypeTriple
-                { part0 = typeTriple.part0 |> typeVariablesMap variableMap
-                , part1 = typeTriple.part1 |> typeVariablesMap variableMap
-                , part2 = typeTriple.part2 |> typeVariablesMap variableMap
+                { part0 = typeTriple.part0 |> typeMapVariables variableMap
+                , part1 = typeTriple.part1 |> typeMapVariables variableMap
+                , part2 = typeTriple.part2 |> typeMapVariables variableMap
                 }
 
         TypeRecord typeRecordFields ->
@@ -329,7 +329,7 @@ typeNotVariableVariablesMap variableMap typeNotVariable =
                 (typeRecordFields
                     |> FastDict.map
                         (\_ fieldValue ->
-                            fieldValue |> typeVariablesMap variableMap
+                            fieldValue |> typeMapVariables variableMap
                         )
                 )
 
@@ -342,14 +342,14 @@ typeNotVariableVariablesMap variableMap typeNotVariable =
                     typeRecordExtension.fields
                         |> FastDict.map
                             (\_ fieldValue ->
-                                fieldValue |> typeVariablesMap variableMap
+                                fieldValue |> typeMapVariables variableMap
                             )
                 }
 
         TypeFunction typeFunction ->
             TypeFunction
-                { input = typeFunction.input |> typeVariablesMap variableMap
-                , output = typeFunction.output |> typeVariablesMap variableMap
+                { input = typeFunction.input |> typeMapVariables variableMap
+                , output = typeFunction.output |> typeMapVariables variableMap
                 }
 
 
@@ -934,7 +934,7 @@ typeSubstituteVariableBy declarationTypes replacement type_ =
             Ok
                 { type_ =
                     type_
-                        |> typeVariablesMap
+                        |> typeMapVariables
                             (\variable ->
                                 if variable == replacement.variable then
                                     argumentVariable
@@ -1932,7 +1932,7 @@ typeNotVariableUnify declarationTypes a b =
                                         |> listFoldlWhileOkFrom
                                             { type_ =
                                                 originAliasDeclaration.type_
-                                                    |> typeVariablesMap (\aliasVariable -> ( [], aliasVariable ))
+                                                    |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
                                             , substitutions = variableSubstitutionsNone
                                             }
                                             (\substitution soFar ->
@@ -4140,7 +4140,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                                     r.signatures
                                                         |> FastDict.insert name
                                                             (type_
-                                                                |> typeVariablesMap
+                                                                |> typeMapVariables
                                                                     (\( _, variableName ) -> variableName)
                                                             )
                                             }
@@ -5192,6 +5192,142 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         replacement
                 )
                 |> Result.andThen identity
+
+
+patternTypedNodeMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypedNode Pattern
+    -> TypedNode Pattern
+patternTypedNodeMapTypeVariables typeVariableChange patternTypedNode =
+    { range = patternTypedNode.range
+    , value =
+        patternTypedNode.value
+            |> patternMapTypeVariables typeVariableChange
+    , type_ =
+        patternTypedNode.type_
+            |> typeMapVariables typeVariableChange
+    }
+
+
+patternMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> Pattern
+    -> Pattern
+patternMapTypeVariables typeVariableChange pattern =
+    -- IGNORE TCO
+    case pattern of
+        PatternUnit ->
+            PatternUnit
+
+        PatternChar charValue ->
+            PatternChar charValue
+
+        PatternString stringValue ->
+            PatternString stringValue
+
+        PatternInt patternInt ->
+            PatternInt patternInt
+
+        PatternIgnored ->
+            PatternIgnored
+
+        PatternVariable variable ->
+            PatternVariable variable
+
+        PatternParenthesized inParens ->
+            PatternParenthesized
+                (inParens
+                    |> patternTypedNodeMapTypeVariables typeVariableChange
+                )
+
+        PatternAs patternAs ->
+            let
+                patternWithTypeWithVariablesChanged : TypedNode Pattern
+                patternWithTypeWithVariablesChanged =
+                    patternAs.pattern
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+            in
+            PatternAs
+                { pattern = patternWithTypeWithVariablesChanged
+                , variable =
+                    { range = patternAs.variable.range
+                    , value = patternAs.variable.value
+                    , type_ = patternWithTypeWithVariablesChanged.type_
+                    }
+                }
+
+        PatternListCons patternListCons ->
+            PatternListCons
+                { head =
+                    patternListCons.head
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , tail =
+                    patternListCons.tail
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        PatternTuple patternTuple ->
+            PatternTuple
+                { part0 =
+                    patternTuple.part0
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , part1 =
+                    patternTuple.part1
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        PatternTriple patternTriple ->
+            PatternTriple
+                { part0 =
+                    patternTriple.part0
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , part1 =
+                    patternTriple.part1
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , part2 =
+                    patternTriple.part2
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        PatternRecord patternRecordFields ->
+            PatternRecord
+                (patternRecordFields
+                    |> List.map
+                        (\field ->
+                            { value = field.value
+                            , range = field.range
+                            , type_ =
+                                field.type_
+                                    |> typeMapVariables typeVariableChange
+                            }
+                        )
+                )
+
+        PatternListExact patternListElement ->
+            PatternListExact
+                (patternListElement
+                    |> List.map
+                        (\element ->
+                            element
+                                |> patternTypedNodeMapTypeVariables
+                                    typeVariableChange
+                        )
+                )
+
+        PatternVariant patternVariant ->
+            PatternVariant
+                { qualification = patternVariant.qualification
+                , name = patternVariant.name
+                , moduleOrigin = patternVariant.moduleOrigin
+                , arguments =
+                    patternVariant.arguments
+                        |> List.map
+                            (\argument ->
+                                argument
+                                    |> patternTypedNodeMapTypeVariables
+                                        typeVariableChange
+                            )
+                }
 
 
 equivalentVariablesCreateUnifiedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
