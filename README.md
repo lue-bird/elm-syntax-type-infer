@@ -60,7 +60,7 @@ exampleModuleOriginLookup =
 ## TODO
 
 -   finish current implementation (TODO comments)
--   is unification between in and output types always the same? Especially with regards to type variable constriaints
+-   is unification between in and output types always the same? Especially with regards to type variable constraints
 -   are variable constraints upheld in all places (equivalence for example?)
 -   (mutually) recursive type aliases can run into an infinite loop
 -   mutually recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`) can run into an infinite loop
