@@ -64,6 +64,8 @@ exampleModuleOriginLookup =
 -   are variable constraints upheld in all places (equivalence for example?)
 -   (mutually) recursive type aliases can run into an infinite loop
 -   mutually recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`) can run into an infinite loop
+-   prefer variable names without context to those with context when creating a variable name for equivalent variables
+    (to keep let declared type variables)
 
 ### performance problems?
 
