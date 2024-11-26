@@ -2132,39 +2132,26 @@ type alias TypedNode value =
 
 
 {-| Like [`Elm.Syntax.Expression.Expression`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Expression)
-but all its sub-nodes are [`TypedNode`](#TypedNode)s
+but its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
 type Expression
     = ExpressionUnit
-    | ExpressionCall
-        { called : TypedNode Expression
-        , argument0 : TypedNode Expression
-        , argument1Up : List (TypedNode Expression)
-        }
-    | ExpressionInfixOperation
-        { symbol : String
-        , left : TypedNode Expression
-        , right : TypedNode Expression
-        }
-    | ExpressionReference
-        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , qualification : Elm.Syntax.ModuleName.ModuleName
-        , name : String
-        }
-    | ExpressionIfThenElse
-        { condition : TypedNode Expression
-        , onTrue : TypedNode Expression
-        , onFalse : TypedNode Expression
-        }
-    | ExpressionOperatorFunction String
     | ExpressionNumber
         { base : Base10Or16
         , value : Int
         }
     | ExpressionFloat Float
-    | ExpressionNegation (TypedNode Expression)
     | ExpressionString String
     | ExpressionChar Char
+    | ExpressionReference
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        , qualification : Elm.Syntax.ModuleName.ModuleName
+        , name : String
+        }
+    | ExpressionOperatorFunction String
+    | ExpressionRecordAccessFunction String
+    | ExpressionNegation (TypedNode Expression)
+    | ExpressionParenthesized (TypedNode Expression)
     | ExpressionTuple
         { part0 : TypedNode Expression
         , part1 : TypedNode Expression
@@ -2174,22 +2161,26 @@ type Expression
         , part1 : TypedNode Expression
         , part2 : TypedNode Expression
         }
-    | ExpressionParenthesized (TypedNode Expression)
-    | ExpressionLetIn
-        { declarations : List LetDeclaration
-        , result : TypedNode Expression
+    | ExpressionRecordAccess
+        { record : TypedNode Expression
+        , fieldNameRange : Elm.Syntax.Range.Range
+        , fieldName : String
         }
-    | ExpressionCaseOf
-        { matchedExpression : TypedNode Expression
-        , cases :
-            List
-                { pattern : TypedNode Pattern
-                , result : TypedNode Expression
-                }
+    | ExpressionInfixOperation
+        { symbol : String
+        , left : TypedNode Expression
+        , right : TypedNode Expression
         }
-    | ExpressionLambda
-        { arguments : List (TypedNode Pattern)
-        , result : TypedNode Expression
+    | ExpressionIfThenElse
+        { condition : TypedNode Expression
+        , onTrue : TypedNode Expression
+        , onFalse : TypedNode Expression
+        }
+    | ExpressionList (List (TypedNode Expression))
+    | ExpressionCall
+        { called : TypedNode Expression
+        , argument0 : TypedNode Expression
+        , argument1Up : List (TypedNode Expression)
         }
     | ExpressionRecord
         (List
@@ -2199,13 +2190,6 @@ type Expression
             , value : TypedNode Expression
             }
         )
-    | ExpressionList (List (TypedNode Expression))
-    | ExpressionRecordAccess
-        { record : TypedNode Expression
-        , fieldNameRange : Elm.Syntax.Range.Range
-        , fieldName : String
-        }
-    | ExpressionRecordAccessFunction String
     | ExpressionRecordUpdate
         { recordVariable : TypedNode String
         , fields :
@@ -2214,6 +2198,23 @@ type Expression
                 , name : String
                 , nameRange : Elm.Syntax.Range.Range
                 , value : TypedNode Expression
+                }
+        }
+    | ExpressionLambda
+        -- TODO split into argument0 and argument1Up
+        { arguments : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        }
+    | ExpressionLetIn
+        { declarations : List (Elm.Syntax.Node.Node LetDeclaration)
+        , result : TypedNode Expression
+        }
+    | ExpressionCaseOf
+        { matchedExpression : TypedNode Expression
+        , cases :
+            List
+                { pattern : TypedNode Pattern
+                , result : TypedNode Expression
                 }
         }
 
@@ -2228,13 +2229,15 @@ type LetDeclaration
         }
     | LetValueOrFunction
         { signature :
-            { nameRange : Elm.Syntax.Range.Range
-            , type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
-            }
+            Maybe
+                { nameRange : Elm.Syntax.Range.Range
+                , type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
+                }
         , nameRange : Elm.Syntax.Range.Range
         , name : String
         , arguments : List (TypedNode Pattern)
         , result : TypedNode Expression
+        , type_ : Type TypeVariableFromContext
         }
 
 
@@ -4659,16 +4662,16 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
                                     replacement
                                 |> Result.andThen
-                                    (\elementSubstituted ->
+                                    (\argumentSubstituted ->
                                         variableSubstitutionsMerge
                                             declarationTypes
-                                            elementSubstituted.substitutions
+                                            argumentSubstituted.substitutions
                                             soFar.substitutions
                                             |> Result.map
                                                 (\fullSubstitutions ->
                                                     { substitutions = fullSubstitutions
                                                     , nodesReverse =
-                                                        elementSubstituted.node
+                                                        argumentSubstituted.node
                                                             :: soFar.nodesReverse
                                                     }
                                                 )
@@ -4801,14 +4804,292 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 |> Result.andThen identity
 
-        ExpressionLetIn _ ->
-            Debug.todo ""
+        ExpressionLambda expressionLambda ->
+            Result.map3
+                (\argumentsSubstituted resultSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        argumentsSubstituted.substitutions
+                        resultSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionLambda
+                                            { arguments =
+                                                argumentsSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            , result = resultSubstituted.node
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionLambda.arguments
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\argumentNode soFar ->
+                            argumentNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\argumentSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            argumentSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , nodesReverse =
+                                                        argumentSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (expressionLambda.result
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionCaseOf _ ->
-            Debug.todo ""
+        ExpressionCaseOf expressionCaseOf ->
+            Result.map3
+                (\matchedSubstituted casesSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        matchedSubstituted.substitutions
+                        casesSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionCaseOf
+                                            { cases =
+                                                casesSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            , matchedExpression = matchedSubstituted.node
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionCaseOf.matchedExpression
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionCaseOf.cases
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\case_ soFar ->
+                            Result.map2
+                                (\patternSubstituted resultSubstituted ->
+                                    variableSubstitutionsMerge3 declarationTypes
+                                        patternSubstituted.substitutions
+                                        resultSubstituted.substitutions
+                                        soFar.substitutions
+                                        |> Result.map
+                                            (\fullSubstitutions ->
+                                                { substitutions = fullSubstitutions
+                                                , nodesReverse =
+                                                    { pattern = patternSubstituted.node
+                                                    , result = resultSubstituted.node
+                                                    }
+                                                        :: soFar.nodesReverse
+                                                }
+                                            )
+                                )
+                                (case_.pattern
+                                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                        replacement
+                                )
+                                (case_.result
+                                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                        replacement
+                                )
+                                |> Result.andThen identity
+                        )
+                )
+                (expression.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
-        ExpressionLambda _ ->
-            Debug.todo ""
+        ExpressionLetIn expressionLetIn ->
+            Result.map2
+                (\declarationsSubstituted resultSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        resultSubstituted.substitutions
+                        declarationsSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , node =
+                                    { range = expression.range
+                                    , value =
+                                        ExpressionLetIn
+                                            { declarations =
+                                                declarationsSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            , result = resultSubstituted.node
+                                            }
+                                    , type_ = resultSubstituted.node.type_
+                                    }
+                                }
+                            )
+                )
+                (expressionLetIn.declarations
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\(Elm.Syntax.Node.Node declarationRange letDeclaration) soFar ->
+                            Result.andThen
+                                (\declarationSubstituted ->
+                                    variableSubstitutionsMerge declarationTypes
+                                        declarationSubstituted.substitutions
+                                        soFar.substitutions
+                                        |> Result.map
+                                            (\fullSubstitutions ->
+                                                { substitutions = fullSubstitutions
+                                                , nodesReverse =
+                                                    Elm.Syntax.Node.Node declarationRange
+                                                        declarationSubstituted.letDeclaration
+                                                        :: soFar.nodesReverse
+                                                }
+                                            )
+                                )
+                                (letDeclaration
+                                    |> expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes
+                                        replacement
+                                )
+                        )
+                )
+                (expressionLetIn.result
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+
+expressionLetDeclarationSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    ->
+        { variable : TypeVariableFromContext
+        , type_ : TypeNotVariable TypeVariableFromContext
+        }
+    -> LetDeclaration
+    ->
+        Result
+            String
+            { letDeclaration : LetDeclaration
+            , substitutions : VariableSubstitutions
+            }
+expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDeclaration =
+    case letDeclaration of
+        LetDestructuring letDestructuring ->
+            Result.map2
+                (\patternSubstituted expressionSubstituted ->
+                    variableSubstitutionsMerge declarationTypes
+                        patternSubstituted.substitutions
+                        expressionSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , letDeclaration =
+                                    LetDestructuring
+                                        { pattern = patternSubstituted.node
+                                        , expression = expressionSubstituted.node
+                                        }
+                                }
+                            )
+                )
+                (letDestructuring.pattern
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (letDestructuring.expression
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
+
+        LetValueOrFunction letValueOrFunction ->
+            Result.map3
+                (\argumentsSubstituted resultSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge3 declarationTypes
+                        argumentsSubstituted.substitutions
+                        resultSubstituted.substitutions
+                        typeSubstituted.substitutions
+                        |> Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , letDeclaration =
+                                    LetValueOrFunction
+                                        { arguments =
+                                            argumentsSubstituted.nodesReverse
+                                                |> List.reverse
+                                        , result = resultSubstituted.node
+                                        , type_ = typeSubstituted.type_
+                                        , signature = letValueOrFunction.signature
+                                        , nameRange = letValueOrFunction.nameRange
+                                        , name = letValueOrFunction.name
+                                        }
+                                }
+                            )
+                )
+                (letValueOrFunction.arguments
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\argumentNode soFar ->
+                            argumentNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                                |> Result.andThen
+                                    (\argumentSubstituted ->
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            argumentSubstituted.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , nodesReverse =
+                                                        argumentSubstituted.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
+                (letValueOrFunction.result
+                    |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (letValueOrFunction.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                |> Result.andThen identity
 
 
 expressionTypedNodeMapTypeVariables :
