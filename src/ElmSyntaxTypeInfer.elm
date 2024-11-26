@@ -2193,7 +2193,7 @@ type Expression
         }
     | ExpressionRecord
         (List
-            { fieldRange : Elm.Syntax.Range.Range
+            { range : Elm.Syntax.Range.Range
             , name : String
             , nameRange : Elm.Syntax.Range.Range
             , value : TypedNode Expression
@@ -2210,7 +2210,7 @@ type Expression
         { recordVariable : TypedNode String
         , fields :
             List
-                { fieldRange : Elm.Syntax.Range.Range
+                { range : Elm.Syntax.Range.Range
                 , name : String
                 , nameRange : Elm.Syntax.Range.Range
                 , value : TypedNode Expression
@@ -3100,7 +3100,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         |> Result.map
                                             (\substitutionsWithField ->
                                                 { fieldTypedNodesReverse =
-                                                    { fieldRange = fieldRange
+                                                    { range = fieldRange
                                                     , name = fieldName
                                                     , nameRange = fieldNameRange
                                                     , value = fieldValueTypedNode.node
@@ -4721,7 +4721,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                 (\fullSubstitutions ->
                                                     { substitutions = fullSubstitutions
                                                     , nodesReverse =
-                                                        { fieldRange = fieldNode.fieldRange
+                                                        { range = fieldNode.range
                                                         , name = fieldNode.name
                                                         , nameRange = fieldNode.nameRange
                                                         , value = fieldValueSubstituted.node
@@ -4784,7 +4784,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                 (\fullSubstitutions ->
                                                     { substitutions = fullSubstitutions
                                                     , nodesReverse =
-                                                        { fieldRange = fieldNode.fieldRange
+                                                        { range = fieldNode.range
                                                         , name = fieldNode.name
                                                         , nameRange = fieldNode.nameRange
                                                         , value = fieldValueSubstituted.node
@@ -4800,6 +4800,201 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
                 |> Result.andThen identity
+
+        ExpressionLetIn _ ->
+            Debug.todo ""
+
+        ExpressionCaseOf _ ->
+            Debug.todo ""
+
+        ExpressionLambda _ ->
+            Debug.todo ""
+
+
+expressionTypedNodeMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypedNode Expression
+    -> TypedNode Expression
+expressionTypedNodeMapTypeVariables typeVariableChange expressionTypedNode =
+    { range = expressionTypedNode.range
+    , value =
+        expressionTypedNode.value
+            |> expressionMapTypeVariables typeVariableChange
+    , type_ =
+        expressionTypedNode.type_
+            |> typeMapVariables typeVariableChange
+    }
+
+
+expressionMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> Expression
+    -> Expression
+expressionMapTypeVariables typeVariableChange expression =
+    -- IGNORE TCO
+    -- TODO potentially merge with expressionTypedNodeMapTypeVariables
+    -- to save some duplicate work
+    case expression of
+        ExpressionUnit ->
+            ExpressionUnit
+
+        ExpressionFloat floatValue ->
+            ExpressionFloat floatValue
+
+        ExpressionChar charValue ->
+            ExpressionChar charValue
+
+        ExpressionString stringValue ->
+            ExpressionString stringValue
+
+        ExpressionNumber expressionNumber ->
+            ExpressionNumber expressionNumber
+
+        ExpressionReference reference ->
+            ExpressionReference reference
+
+        ExpressionOperatorFunction expressionOperatorFunction ->
+            ExpressionOperatorFunction expressionOperatorFunction
+
+        ExpressionRecordAccessFunction fieldName ->
+            ExpressionRecordAccessFunction fieldName
+
+        ExpressionNegation inNegation ->
+            ExpressionNegation
+                (inNegation
+                    |> expressionTypedNodeMapTypeVariables typeVariableChange
+                )
+
+        ExpressionParenthesized inParens ->
+            ExpressionParenthesized
+                (inParens
+                    |> expressionTypedNodeMapTypeVariables typeVariableChange
+                )
+
+        ExpressionRecordAccess expressionRecordAccess ->
+            ExpressionRecordAccess
+                { record =
+                    expressionRecordAccess.record
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , fieldName = expressionRecordAccess.fieldName
+                , fieldNameRange = expressionRecordAccess.fieldNameRange
+                }
+
+        ExpressionInfixOperation expressionInfixOperation ->
+            ExpressionInfixOperation
+                { symbol = expressionInfixOperation.symbol
+                , left =
+                    expressionInfixOperation.left
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , right =
+                    expressionInfixOperation.right
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        ExpressionTuple expressionTuple ->
+            ExpressionTuple
+                { part0 =
+                    expressionTuple.part0
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , part1 =
+                    expressionTuple.part1
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        ExpressionTriple expressionTriple ->
+            ExpressionTriple
+                { part0 =
+                    expressionTriple.part0
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , part1 =
+                    expressionTriple.part1
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , part2 =
+                    expressionTriple.part2
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        ExpressionIfThenElse expressionIfThenElse ->
+            ExpressionIfThenElse
+                { condition =
+                    expressionIfThenElse.condition
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , onTrue =
+                    expressionIfThenElse.onTrue
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , onFalse =
+                    expressionIfThenElse.onFalse
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        ExpressionList expressionListElements ->
+            ExpressionList
+                (expressionListElements
+                    |> List.map
+                        (\element ->
+                            element
+                                |> expressionTypedNodeMapTypeVariables
+                                    typeVariableChange
+                        )
+                )
+
+        ExpressionCall expressionCall ->
+            ExpressionCall
+                { called =
+                    expressionCall.called
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , argument0 =
+                    expressionCall.argument0
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , argument1Up =
+                    expressionCall.argument1Up
+                        |> List.map
+                            (\argument ->
+                                argument
+                                    |> expressionTypedNodeMapTypeVariables
+                                        typeVariableChange
+                            )
+                }
+
+        ExpressionRecord expressionRecordFields ->
+            ExpressionRecord
+                (expressionRecordFields
+                    |> List.map
+                        (\field ->
+                            { range = field.range
+                            , name = field.name
+                            , nameRange = field.nameRange
+                            , value =
+                                field.value
+                                    |> expressionTypedNodeMapTypeVariables
+                                        typeVariableChange
+                            }
+                        )
+                )
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            ExpressionRecordUpdate
+                { recordVariable =
+                    { range = expressionRecordUpdate.recordVariable.range
+                    , value = expressionRecordUpdate.recordVariable.value
+                    , type_ =
+                        expressionRecordUpdate.recordVariable.type_
+                            |> typeMapVariables typeVariableChange
+                    }
+                , fields =
+                    expressionRecordUpdate.fields
+                        |> List.map
+                            (\field ->
+                                { range = field.range
+                                , name = field.name
+                                , nameRange = field.nameRange
+                                , value =
+                                    field.value
+                                        |> expressionTypedNodeMapTypeVariables
+                                            typeVariableChange
+                                }
+                            )
+                }
 
         ExpressionLetIn _ ->
             Debug.todo ""
