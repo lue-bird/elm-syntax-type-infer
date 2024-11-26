@@ -87,20 +87,25 @@ we need to differentiate these from variables in the current "context"
 
 For example,
 
+    ( 0, 1 )
+    -- ( number, number )
     ( identity, List.map identity )
     -- ( a -> a, List a -> List a )
 
-would be an incorrect inference because the `a` in `identity` and `List.map` are not related
+would be incorrect inferences because
+the `number` in `0` and `1` or `a` in `identity` and `List.map` are not related
 and can be different types.
 So in practice these are
 
+    ( 0, 1 )
+    -- ( ( [ "0" ], "number" ), ( [ "1" ], "number" ) )
     ( identity, List.map identity )
-    -- ( ( [ "first" ], "a" ) -> ( [ "first" ], "a" )
-    -- , List ( [ "second", "0" ], "a" ) -> List ( [ "second", "0" ], "a" )
+    -- ( ( [ "0" ], "a" ) -> ( [ "0" ], "a" )
+    -- , List ( [ "1", "0" ], "a" ) -> List ( [ "1", "0" ], "a" )
     -- )
 
-`"first"` and `"second"` referring to the tuple part location
-and `"0"` referring to the applied argument index.
+`"0"` and `"1"` referring to the tuple part location
+and the last `"0"` referring to the applied argument index.
 
 We could work with some kind of name disambiguation system
 but preserving names and context is usually nicer
@@ -2879,39 +2884,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     }
                 }
 
-        Elm.Syntax.Expression.Application _ ->
-            Debug.todo "branch 'Application _' not implemented"
-
-        Elm.Syntax.Expression.OperatorApplication _ _ _ _ ->
-            Debug.todo "branch 'OperatorApplication _ _ _ _' not implemented"
-
-        Elm.Syntax.Expression.FunctionOrValue _ _ ->
-            -- TODO check for locallyIntroducedVariableExpressions first
-            Debug.todo "branch 'FunctionOrValue _ _' not implemented"
-
-        Elm.Syntax.Expression.IfBlock _ _ _ ->
-            Debug.todo "branch 'unify condition with Basics.Bool"
-
-        Elm.Syntax.Expression.PrefixOperator operator ->
-            operatorFunctionType
-                { path = context.path
-                , moduleOriginLookup = context.moduleOriginLookup
-                }
-                operator
-                |> Result.map
-                    (\type_ ->
-                        { node =
-                            { range = fullRange
-                            , value = ExpressionOperatorFunction operator
-                            , type_ = type_
-                            }
-                        , substitutions = variableSubstitutionsNone
-                        }
-                    )
-
-        Elm.Syntax.Expression.Operator _ ->
-            Err "Elm.Syntax.Expression.Operator should not exist in a valid parse result"
-
         Elm.Syntax.Expression.Integer intValue ->
             Ok
                 { substitutions = variableSubstitutionsNone
@@ -2942,9 +2914,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     }
                 }
 
-        Elm.Syntax.Expression.Negation _ ->
-            Debug.todo "branch 'Negation _' not implemented"
-
         Elm.Syntax.Expression.Literal stringValue ->
             Ok
                 { substitutions = variableSubstitutionsNone
@@ -2964,6 +2933,148 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , type_ = typeCharChar
                     }
                 }
+
+        Elm.Syntax.Expression.PrefixOperator operator ->
+            operatorFunctionType
+                { path = context.path
+                , moduleOriginLookup = context.moduleOriginLookup
+                }
+                operator
+                |> Result.map
+                    (\type_ ->
+                        { node =
+                            { range = fullRange
+                            , value = ExpressionOperatorFunction operator
+                            , type_ = type_
+                            }
+                        , substitutions = variableSubstitutionsNone
+                        }
+                    )
+
+        Elm.Syntax.Expression.FunctionOrValue _ _ ->
+            -- TODO check for locallyIntroducedVariableExpressions first
+            Debug.todo "branch 'FunctionOrValue _ _' not implemented"
+
+        Elm.Syntax.Expression.RecordAccessFunction dotFieldName ->
+            let
+                fieldName : String
+                fieldName =
+                    dotFieldName |> String.replace "." ""
+
+                fieldValueType : Type TypeVariableFromContext
+                fieldValueType =
+                    TypeVariable ( context.path, fieldName )
+            in
+            Ok
+                { node =
+                    { range = fullRange
+                    , value =
+                        ExpressionRecordAccessFunction fieldName
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input =
+                                    TypeNotVariable
+                                        (TypeRecordExtension
+                                            { recordVariable =
+                                                ( context.path
+                                                , "recordWith"
+                                                    ++ (fieldName
+                                                            |> stringFirstCharToUpper
+                                                       )
+                                                )
+                                            , fields =
+                                                FastDict.singleton fieldName
+                                                    fieldValueType
+                                            }
+                                        )
+                                , output = fieldValueType
+                                }
+                            )
+                    }
+                , substitutions = variableSubstitutionsNone
+                }
+
+        Elm.Syntax.Expression.ParenthesizedExpression inParens ->
+            inParens
+                |> expressionTypeInfer context
+                |> Result.map
+                    (\inParensNodeAndSubstitutions ->
+                        { node =
+                            { value = ExpressionParenthesized inParensNodeAndSubstitutions.node
+                            , type_ = inParensNodeAndSubstitutions.node.type_
+                            , range = fullRange
+                            }
+                        , substitutions = inParensNodeAndSubstitutions.substitutions
+                        }
+                    )
+
+        Elm.Syntax.Expression.Negation _ ->
+            Debug.todo "branch 'Negation _' not implemented"
+
+        Elm.Syntax.Expression.Application _ ->
+            Debug.todo "branch 'Application _' not implemented"
+
+        Elm.Syntax.Expression.OperatorApplication _ _ _ _ ->
+            Debug.todo "branch 'OperatorApplication _ _ _ _' not implemented"
+
+        Elm.Syntax.Expression.RecordAccess recordNode fieldNameNode ->
+            expressionTypeInfer context recordNode
+                |> Result.andThen
+                    (\recordTypedNodeAndSubstitutions ->
+                        let
+                            fieldName : String
+                            fieldName =
+                                fieldNameNode |> Elm.Syntax.Node.value
+
+                            fieldValueType : Type TypeVariableFromContext
+                            fieldValueType =
+                                TypeVariable ( context.path, fieldName )
+                        in
+                        typeUnify context.declarationTypes
+                            recordTypedNodeAndSubstitutions.node.type_
+                            (TypeNotVariable
+                                (TypeRecordExtension
+                                    { recordVariable =
+                                        ( context.path
+                                        , "recordWith"
+                                            ++ (fieldName |> stringFirstCharToUpper)
+                                        )
+                                    , fields =
+                                        FastDict.singleton fieldName
+                                            fieldValueType
+                                    }
+                                )
+                            )
+                            |> Result.andThen
+                                (\recordWithAccessedField ->
+                                    variableSubstitutionsMerge context.declarationTypes
+                                        recordTypedNodeAndSubstitutions.substitutions
+                                        recordWithAccessedField.substitutions
+                                        |> Result.map
+                                            (\fullSubstitutions ->
+                                                { node =
+                                                    { range = fullRange
+                                                    , value =
+                                                        ExpressionRecordAccess
+                                                            { record =
+                                                                { range = recordTypedNodeAndSubstitutions.node.range
+                                                                , value = recordTypedNodeAndSubstitutions.node.value
+                                                                , type_ = recordWithAccessedField.type_
+                                                                }
+                                                            , fieldName = fieldName
+                                                            , fieldNameRange = fieldNameNode |> Elm.Syntax.Node.range
+                                                            }
+                                                    , type_ = fieldValueType
+                                                    }
+                                                , substitutions = fullSubstitutions
+                                                }
+                                            )
+                                )
+                    )
+
+        Elm.Syntax.Expression.IfBlock _ _ _ ->
+            Debug.todo "branch 'unify condition with Basics.Bool"
 
         Elm.Syntax.Expression.TupledExpression tupleParts ->
             case tupleParts of
@@ -3020,8 +3131,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     )
                         )
-                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "first"))
-                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "second"))
+                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "0"))
+                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "1"))
                         |> Result.andThen identity
 
                 [ part0, part1, part2 ] ->
@@ -3054,36 +3165,13 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     )
                         )
-                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "first"))
-                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "second"))
-                        (part2 |> expressionTypeInfer (context |> expressionContextToInPath "third"))
+                        (part0 |> expressionTypeInfer (context |> expressionContextToInPath "0"))
+                        (part1 |> expressionTypeInfer (context |> expressionContextToInPath "1"))
+                        (part2 |> expressionTypeInfer (context |> expressionContextToInPath "2"))
                         |> Result.andThen identity
 
                 _ :: _ :: _ :: _ :: _ ->
                     Err "too many tuple parts. Should not exist in a valid parse result"
-
-        Elm.Syntax.Expression.ParenthesizedExpression inParens ->
-            inParens
-                |> expressionTypeInfer context
-                |> Result.map
-                    (\inParensNodeAndSubstitutions ->
-                        { node =
-                            { value = ExpressionParenthesized inParensNodeAndSubstitutions.node
-                            , type_ = inParensNodeAndSubstitutions.node.type_
-                            , range = fullRange
-                            }
-                        , substitutions = inParensNodeAndSubstitutions.substitutions
-                        }
-                    )
-
-        Elm.Syntax.Expression.LetExpression letIn ->
-            Debug.todo "branch 'LetExpression _' not implemented"
-
-        Elm.Syntax.Expression.CaseExpression caseOf ->
-            Debug.todo "branch 'CaseExpression _' not implemented"
-
-        Elm.Syntax.Expression.LambdaExpression lambda ->
-            Debug.todo "branch 'LambdaExpression _' not implemented"
 
         Elm.Syntax.Expression.RecordExpr fields ->
             fields
@@ -3223,103 +3311,20 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 }
                             )
 
-        Elm.Syntax.Expression.RecordAccess recordNode fieldNameNode ->
-            expressionTypeInfer context recordNode
-                |> Result.andThen
-                    (\recordTypedNodeAndSubstitutions ->
-                        let
-                            fieldName : String
-                            fieldName =
-                                fieldNameNode |> Elm.Syntax.Node.value
-
-                            fieldValueType : Type TypeVariableFromContext
-                            fieldValueType =
-                                TypeVariable ( context.path, fieldName )
-                        in
-                        typeUnify context.declarationTypes
-                            recordTypedNodeAndSubstitutions.node.type_
-                            (TypeNotVariable
-                                (TypeRecordExtension
-                                    { recordVariable =
-                                        ( context.path
-                                        , "recordWith"
-                                            ++ (fieldName |> stringFirstCharToUpper)
-                                        )
-                                    , fields =
-                                        FastDict.singleton fieldName
-                                            fieldValueType
-                                    }
-                                )
-                            )
-                            |> Result.andThen
-                                (\recordWithAccessedField ->
-                                    variableSubstitutionsMerge context.declarationTypes
-                                        recordTypedNodeAndSubstitutions.substitutions
-                                        recordWithAccessedField.substitutions
-                                        |> Result.map
-                                            (\fullSubstitutions ->
-                                                { node =
-                                                    { range = fullRange
-                                                    , value =
-                                                        ExpressionRecordAccess
-                                                            { record =
-                                                                { range = recordTypedNodeAndSubstitutions.node.range
-                                                                , value = recordTypedNodeAndSubstitutions.node.value
-                                                                , type_ = recordWithAccessedField.type_
-                                                                }
-                                                            , fieldName = fieldName
-                                                            , fieldNameRange = fieldNameNode |> Elm.Syntax.Node.range
-                                                            }
-                                                    , type_ = fieldValueType
-                                                    }
-                                                , substitutions = fullSubstitutions
-                                                }
-                                            )
-                                )
-                    )
-
-        Elm.Syntax.Expression.RecordAccessFunction dotFieldName ->
-            let
-                fieldName : String
-                fieldName =
-                    dotFieldName |> String.replace "." ""
-
-                fieldValueType : Type TypeVariableFromContext
-                fieldValueType =
-                    TypeVariable ( context.path, fieldName )
-            in
-            Ok
-                { node =
-                    { range = fullRange
-                    , value =
-                        ExpressionRecordAccessFunction fieldName
-                    , type_ =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input =
-                                    TypeNotVariable
-                                        (TypeRecordExtension
-                                            { recordVariable =
-                                                ( context.path
-                                                , "recordWith"
-                                                    ++ (fieldName
-                                                            |> stringFirstCharToUpper
-                                                       )
-                                                )
-                                            , fields =
-                                                FastDict.singleton fieldName
-                                                    fieldValueType
-                                            }
-                                        )
-                                , output = fieldValueType
-                                }
-                            )
-                    }
-                , substitutions = variableSubstitutionsNone
-                }
-
         Elm.Syntax.Expression.RecordUpdateExpression recordVariable fields ->
             Debug.todo "branch 'RecordUpdateExpression _ _' not implemented"
+
+        Elm.Syntax.Expression.LambdaExpression lambda ->
+            Debug.todo "branch 'LambdaExpression _' not implemented"
+
+        Elm.Syntax.Expression.CaseExpression caseOf ->
+            Debug.todo "branch 'CaseExpression _' not implemented"
+
+        Elm.Syntax.Expression.LetExpression letIn ->
+            Debug.todo "branch 'LetExpression _' not implemented"
+
+        Elm.Syntax.Expression.Operator _ ->
+            Err "Elm.Syntax.Expression.Operator should not exist in a valid parse result"
 
         Elm.Syntax.Expression.GLSLExpression _ ->
             Err "glsl shader expressions not supported"
@@ -4180,7 +4185,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                     |> expressionTypeInfer
                         { declarationTypes = declarationTypes
                         , locallyIntroducedVariableExpressions = locallyIntroducedVariableExpressions
-                        , path = [ "implementation" ]
+                        , path = [ "result" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
                         }
                     |> Result.andThen
