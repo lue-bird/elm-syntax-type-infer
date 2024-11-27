@@ -44,7 +44,7 @@ Ok
         , name = "List"
         , arguments =
             [  ElmSyntaxTypeInfer.TypeNumberVariable
-                ( [ "0", "implementation" ], "number" )
+                ( [ "0", "result" ], "number" )
             ]
         }
     )
@@ -60,12 +60,20 @@ exampleModuleOriginLookup =
 ## TODO
 
 -   finish current implementation (TODO comments)
--   is unification between in and output types always the same? Especially with regards to type variable constraints
 -   are variable constraints upheld in all places (equivalence for example?)
 -   (mutually) recursive type aliases can run into an infinite loop
 -   mutually recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`) can run into an infinite loop
 -   prefer variable names without context to those with context when creating a variable name for equivalent variables
     (to keep let declared type variables)
+-   somehow "elevate" let declaration types to "module declaration level".
+    Do _not_ let usage influence their types
+    (forall type variables).
+    To infer (mutually) recursive let declarations:
+    substituting in the type of a (let) declaration also substitutes its "descendants"
+    but not the other way around
+-   create `resultAndThenN` to replace `Result.mapN |> Result.andThen identity`
+-   type infer record type alias constructor function reference expression.
+    Requires storing `Maybe (List String)` field order in module type alias declaration types
 
 ### performance problems?
 
