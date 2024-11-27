@@ -71,7 +71,6 @@ exampleModuleOriginLookup =
     To infer (mutually) recursive let declarations:
     substituting in the type of a (let) declaration also substitutes its "descendants"
     but not the other way around
--   create `resultAndThenN` to replace `Result.mapN |> Result.andThen identity`
 -   type infer record type alias constructor function reference expression.
     Requires storing `Maybe (List String)` field order in module type alias declaration types
 
