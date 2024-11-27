@@ -118,11 +118,14 @@ still contain these [`TypeVariableFromContext`](#TypeVariableFromContext)s
 instead of just strings to preserve all that juicy information.
 So you need to convert these yourself, like with something like
 
-    typeVaiableFromContextToString : ElmSyntaxTypeInfer.TypeVariableFromContext -> String
-    typeVaiableFromContextToString ( context, name ) =
+    typeVariableFromContextToString : ElmSyntaxTypeInfer.TypeVariableFromContext -> String
+    typeVariableFromContextToString ( context, name ) =
         -- make sure the constraint like number is preserved
         name ++ (context |> List.map (\part -> "_" ++ part) |> String.concat)
 
+(If you'd like to see something like this exposed,
+[open an issue](https://github.com/lue-bird/elm-syntax-type-infer/issues/new))
+        
 Performance note: `ContextVariable` is a tuple to allow for internal use as a dict key.
 
 -}
@@ -1253,7 +1256,7 @@ typeNotVariableSubstituteVariable declarationTypes replacement typeNotVariable =
                                             )
 
                                 TypeRecordExtension replacementRecordExtension ->
-                                    typeRecordExtensionRecordUnify declarationTypes
+                                    typeRecordExtensionUnifyWithRecord declarationTypes
                                         { recordVariable = replacementRecordExtension.recordVariable
                                         , fields = replacementRecordExtension.fields
                                         }
@@ -1658,6 +1661,30 @@ variableSubstitutionsMerge4 declarationTypes a b c d =
             )
 
 
+variableSubstitutionsMerge5 :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    -> Result String VariableSubstitutions
+variableSubstitutionsMerge5 declarationTypes a b c d e =
+    variableSubstitutionsMerge4
+        declarationTypes
+        a
+        b
+        c
+        d
+        |> Result.andThen
+            (\abcSubstitutions ->
+                variableSubstitutionsMerge
+                    declarationTypes
+                    abcSubstitutions
+                    d
+            )
+
+
 equivalentVariablesInsert :
     FastSet.Set comparable
     -> List (FastSet.Set comparable)
@@ -1761,6 +1788,39 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
                         tail
 
 
+typeUnify3 :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> Type TypeVariableFromContext
+    -> Type TypeVariableFromContext
+    -> Type TypeVariableFromContext
+    ->
+        Result
+            String
+            { type_ : Type TypeVariableFromContext
+            , substitutions : VariableSubstitutions
+            }
+typeUnify3 declarationTypes a b c =
+    typeUnify declarationTypes a b
+        |> Result.andThen
+            (\abUnified ->
+                typeUnify declarationTypes
+                    abUnified.type_
+                    c
+                    |> Result.andThen
+                        (\abcUnified ->
+                            variableSubstitutionsMerge declarationTypes
+                                abUnified.substitutions
+                                abcUnified.substitutions
+                                |> Result.map
+                                    (\fullSubstitutions ->
+                                        { substitutions = fullSubstitutions
+                                        , type_ = abcUnified.type_
+                                        }
+                                    )
+                        )
+            )
+
+
 typeUnify :
     ModuleLevelDeclarationTypesInAvailableInModule
     -> Type TypeVariableFromContext
@@ -1834,23 +1894,17 @@ typeNotVariableUnify :
             , substitutions : VariableSubstitutions
             }
 typeNotVariableUnify declarationTypes a b =
-    -- (!!) TODO explicitly check for aliases on either side first
-    case a of
-        TypeUnit ->
-            case b of
-                TypeUnit ->
-                    Ok
-                        { type_ = TypeNotVariable TypeUnit
-                        , substitutions = variableSubstitutionsNone
-                        }
-
-                _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
-
-        TypeConstruct aTypeConstruct ->
-            let
-                maybeBTypeConstructWithSameNameArguments : Maybe (List (Type TypeVariableFromContext))
-                maybeBTypeConstructWithSameNameArguments =
+    let
+        maybeTypeConstructsWithSameName :
+            Maybe
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , name : String
+                , aArguments : List (Type TypeVariableFromContext)
+                , bArguments : List (Type TypeVariableFromContext)
+                }
+        maybeTypeConstructsWithSameName =
+            case a of
+                TypeConstruct aTypeConstruct ->
                     case b of
                         TypeConstruct bTypeConstruct ->
                             if
@@ -1861,266 +1915,606 @@ typeNotVariableUnify declarationTypes a b =
                                             == bTypeConstruct.name
                                        )
                             then
-                                Just bTypeConstruct.arguments
+                                Just
+                                    { moduleOrigin = aTypeConstruct.moduleOrigin
+                                    , name = aTypeConstruct.name
+                                    , aArguments = aTypeConstruct.arguments
+                                    , bArguments = bTypeConstruct.arguments
+                                    }
 
                             else
                                 Nothing
 
                         _ ->
                             Nothing
-            in
-            case maybeBTypeConstructWithSameNameArguments of
-                Just bTypeConstructArguments ->
-                    List.map2
-                        (\aArgument bArgument -> { a = aArgument, b = bArgument })
-                        aTypeConstruct.arguments
-                        bTypeConstructArguments
-                        |> listFoldlWhileOkFrom
-                            { argumentsReverse = []
-                            , substitutions = variableSubstitutionsNone
+
+                _ ->
+                    Nothing
+
+        maybeUnifiedWithTypeConstruct :
+            Maybe
+                (Result
+                    String
+                    { type_ : Type TypeVariableFromContext
+                    , substitutions : VariableSubstitutions
+                    }
+                )
+        maybeUnifiedWithTypeConstruct =
+            case maybeTypeConstructsWithSameName of
+                Just matchingTypeConstructs ->
+                    Result.map
+                        (\argumentsABUnified ->
+                            { type_ =
+                                TypeNotVariable
+                                    (TypeConstruct
+                                        { moduleOrigin = matchingTypeConstructs.moduleOrigin
+                                        , name = matchingTypeConstructs.name
+                                        , arguments =
+                                            argumentsABUnified.argumentsReverse
+                                                |> List.reverse
+                                        }
+                                    )
+                            , substitutions = argumentsABUnified.substitutions
                             }
-                            (\ab soFar ->
-                                typeUnify declarationTypes ab.a ab.b
-                                    |> Result.andThen
-                                        (\argumentTypeUnifiedAndSubstitutions ->
-                                            variableSubstitutionsMerge
-                                                declarationTypes
-                                                argumentTypeUnifiedAndSubstitutions.substitutions
-                                                soFar.substitutions
-                                                |> Result.map
-                                                    (\substitutionsWithArgument ->
-                                                        { argumentsReverse =
-                                                            argumentTypeUnifiedAndSubstitutions.type_
-                                                                :: soFar.argumentsReverse
-                                                        , substitutions =
-                                                            substitutionsWithArgument
-                                                        }
-                                                    )
-                                        )
-                            )
-                        |> Result.map
-                            (\substitutionsAndArgumentsUnified ->
-                                { type_ =
-                                    TypeNotVariable
-                                        (TypeConstruct
-                                            { moduleOrigin = aTypeConstruct.moduleOrigin
-                                            , name = aTypeConstruct.name
-                                            , arguments =
-                                                substitutionsAndArgumentsUnified.argumentsReverse
-                                                    |> List.reverse
-                                            }
-                                        )
-                                , substitutions = substitutionsAndArgumentsUnified.substitutions
+                        )
+                        (List.map2
+                            (\aArgument bArgument -> { a = aArgument, b = bArgument })
+                            matchingTypeConstructs.aArguments
+                            matchingTypeConstructs.bArguments
+                            |> listFoldlWhileOkFrom
+                                { argumentsReverse = []
+                                , substitutions = variableSubstitutionsNone
                                 }
-                            )
-
-                Nothing ->
-                    -- TODO "expand alias left if possible and unify, then try right and unify.
-                    -- if both are not in context, err
-                    -- TODO also check locally declared
-                    case declarationTypes |> FastDict.get aTypeConstruct.moduleOrigin of
-                        Nothing ->
-                            Err
-                                ("no choice type/type alias declaration found for "
-                                    ++ qualifiedToString { qualification = aTypeConstruct.moduleOrigin, name = aTypeConstruct.name }
-                                )
-
-                        Just aOriginModuleTypes ->
-                            case aOriginModuleTypes.typeAliases |> FastDict.get aTypeConstruct.name of
-                                Just originAliasDeclaration ->
-                                    List.map2
-                                        (\parameterName argument ->
-                                            { variable = ( [], parameterName ), type_ = argument }
-                                        )
-                                        originAliasDeclaration.parameters
-                                        aTypeConstruct.arguments
-                                        |> listFoldlWhileOkFrom
-                                            { type_ =
-                                                originAliasDeclaration.type_
-                                                    |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
-                                            , substitutions = variableSubstitutionsNone
-                                            }
-                                            (\substitution soFar ->
-                                                soFar.type_
-                                                    |> typeSubstituteVariableBy declarationTypes
-                                                        { variable = substitution.variable
-                                                        , type_ = substitution.type_
-                                                        }
-                                                    |> Result.andThen
-                                                        (\substituted ->
-                                                            variableSubstitutionsMerge declarationTypes
-                                                                substituted.substitutions
-                                                                soFar.substitutions
-                                                                |> Result.map
-                                                                    (\substitutionsAfterSubstitution ->
-                                                                        { type_ = substituted.type_
-                                                                        , substitutions = substitutionsAfterSubstitution
-                                                                        }
-                                                                    )
+                                (\ab soFar ->
+                                    typeUnify declarationTypes ab.a ab.b
+                                        |> Result.andThen
+                                            (\argumentTypeUnifiedAndSubstitutions ->
+                                                variableSubstitutionsMerge
+                                                    declarationTypes
+                                                    argumentTypeUnifiedAndSubstitutions.substitutions
+                                                    soFar.substitutions
+                                                    |> Result.map
+                                                        (\substitutionsWithArgument ->
+                                                            { argumentsReverse =
+                                                                argumentTypeUnifiedAndSubstitutions.type_
+                                                                    :: soFar.argumentsReverse
+                                                            , substitutions =
+                                                                substitutionsWithArgument
+                                                            }
                                                         )
                                             )
-
-                                Nothing ->
-                                    -- choice type
-                                    -- TODO check right for alias
-                                    Debug.todo ""
-
-        TypeTuple aTuple ->
-            case b of
-                TypeTuple bTuple ->
-                    Result.map2
-                        (\part0ABUnified part1ABUnified ->
-                            variableSubstitutionsMerge declarationTypes
-                                part0ABUnified.substitutions
-                                part1ABUnified.substitutions
-                                |> Result.map
-                                    (\substitutionsABMerged ->
-                                        { type_ =
-                                            TypeNotVariable
-                                                (TypeTuple
-                                                    { part0 = part0ABUnified.type_
-                                                    , part1 = part1ABUnified.type_
-                                                    }
-                                                )
-                                        , substitutions = substitutionsABMerged
-                                        }
-                                    )
+                                )
                         )
-                        (typeUnify declarationTypes aTuple.part0 bTuple.part0)
-                        (typeUnify declarationTypes aTuple.part1 bTuple.part1)
-                        |> Result.andThen identity
+                        |> Just
 
-                _ ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                Nothing ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes a b of
+                        Just result ->
+                            Just result
 
-        TypeTriple aTriple ->
-            case b of
-                TypeTriple bTriple ->
-                    Result.map3
-                        (\part0ABUnified part1ABUnified part2ABUnified ->
-                            variableSubstitutionsMerge3 declarationTypes
-                                part0ABUnified.substitutions
-                                part1ABUnified.substitutions
-                                part2ABUnified.substitutions
-                                |> Result.map
-                                    (\substitutionsABMerged ->
-                                        { type_ =
-                                            TypeNotVariable
-                                                (TypeTriple
-                                                    { part0 = part0ABUnified.type_
-                                                    , part1 = part1ABUnified.type_
-                                                    , part2 = part2ABUnified.type_
-                                                    }
-                                                )
-                                        , substitutions = substitutionsABMerged
-                                        }
-                                    )
-                        )
-                        (typeUnify declarationTypes aTriple.part0 bTriple.part0)
-                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
-                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
-                        |> Result.andThen identity
+                        Nothing ->
+                            typeUnifyWithTryToExpandTypeConstruct declarationTypes b a
+    in
+    case maybeUnifiedWithTypeConstruct of
+        Just result ->
+            result
 
-                _ ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-        TypeRecord aRecord ->
-            case b of
-                TypeRecord bRecord ->
-                    typeRecordUnify declarationTypes aRecord bRecord
-                        |> Result.map
-                            (\typeAndSubstitutions ->
-                                { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                , substitutions = typeAndSubstitutions.substitutions
+        Nothing ->
+            case a of
+                TypeUnit ->
+                    case b of
+                        TypeUnit ->
+                            Ok
+                                { type_ = TypeNotVariable TypeUnit
+                                , substitutions = variableSubstitutionsNone
                                 }
-                            )
 
-                TypeRecordExtension bRecordExtension ->
-                    typeRecordExtensionRecordUnify declarationTypes
-                        bRecordExtension
-                        aRecord
-                        |> Result.map
-                            (\typeAndSubstitutions ->
-                                { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                , substitutions = typeAndSubstitutions.substitutions
+                        _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                TypeConstruct aTypeConstruct ->
+                    Err
+                        ("choice type "
+                            ++ qualifiedToString
+                                { qualification = aTypeConstruct.moduleOrigin
+                                , name = aTypeConstruct.name
                                 }
-                            )
+                            ++ "cannot be unified be with a choice type with a different name"
+                        )
 
-                _ ->
-                    Err "record cannot be unified with types other than record or record extension"
+                TypeTuple aTuple ->
+                    case b of
+                        TypeTuple bTuple ->
+                            Result.map2
+                                (\part0ABUnified part1ABUnified ->
+                                    variableSubstitutionsMerge declarationTypes
+                                        part0ABUnified.substitutions
+                                        part1ABUnified.substitutions
+                                        |> Result.map
+                                            (\substitutionsABMerged ->
+                                                { type_ =
+                                                    TypeNotVariable
+                                                        (TypeTuple
+                                                            { part0 = part0ABUnified.type_
+                                                            , part1 = part1ABUnified.type_
+                                                            }
+                                                        )
+                                                , substitutions = substitutionsABMerged
+                                                }
+                                            )
+                                )
+                                (typeUnify declarationTypes aTuple.part0 bTuple.part0)
+                                (typeUnify declarationTypes aTuple.part1 bTuple.part1)
+                                |> Result.andThen identity
 
-        TypeRecordExtension aRecordExtension ->
-            -- TODO add fields and unify overlapping fields
-            Debug.todo ""
+                        _ ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
 
-        TypeFunction aFunction ->
-            case b of
-                TypeFunction bFunction ->
-                    Result.map2
-                        (\inputABUnified outputABUnified ->
-                            variableSubstitutionsMerge declarationTypes
-                                inputABUnified.substitutions
-                                outputABUnified.substitutions
+                TypeTriple aTriple ->
+                    case b of
+                        TypeTriple bTriple ->
+                            Result.map3
+                                (\part0ABUnified part1ABUnified part2ABUnified ->
+                                    variableSubstitutionsMerge3 declarationTypes
+                                        part0ABUnified.substitutions
+                                        part1ABUnified.substitutions
+                                        part2ABUnified.substitutions
+                                        |> Result.map
+                                            (\substitutionsABMerged ->
+                                                { type_ =
+                                                    TypeNotVariable
+                                                        (TypeTriple
+                                                            { part0 = part0ABUnified.type_
+                                                            , part1 = part1ABUnified.type_
+                                                            , part2 = part2ABUnified.type_
+                                                            }
+                                                        )
+                                                , substitutions = substitutionsABMerged
+                                                }
+                                            )
+                                )
+                                (typeUnify declarationTypes aTriple.part0 bTriple.part0)
+                                (typeUnify declarationTypes aTriple.part1 bTriple.part1)
+                                (typeUnify declarationTypes aTriple.part1 bTriple.part1)
+                                |> Result.andThen identity
+
+                        _ ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeRecord aRecord ->
+                    case b of
+                        TypeRecord bRecord ->
+                            typeRecordUnify declarationTypes aRecord bRecord
                                 |> Result.map
-                                    (\substitutionsABMerged ->
-                                        { type_ =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = inputABUnified.type_
-                                                    , output = outputABUnified.type_
-                                                    }
-                                                )
-                                        , substitutions = substitutionsABMerged
+                                    (\typeAndSubstitutions ->
+                                        { type_ = TypeNotVariable typeAndSubstitutions.type_
+                                        , substitutions = typeAndSubstitutions.substitutions
                                         }
                                     )
-                        )
-                        (typeUnify declarationTypes aFunction.input bFunction.input)
-                        (typeUnify declarationTypes aFunction.output bFunction.output)
-                        |> Result.andThen identity
 
-                _ ->
-                    Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeRecordExtension bRecordExtension ->
+                            typeRecordExtensionUnifyWithRecord declarationTypes
+                                bRecordExtension
+                                aRecord
+                                |> Result.map
+                                    (\typeAndSubstitutions ->
+                                        { type_ = TypeNotVariable typeAndSubstitutions.type_
+                                        , substitutions = typeAndSubstitutions.substitutions
+                                        }
+                                    )
+
+                        _ ->
+                            Err "record cannot be unified with types other than record or record extension"
+
+                TypeRecordExtension aRecordExtension ->
+                    case b of
+                        TypeRecord bRecord ->
+                            typeRecordExtensionUnifyWithRecord declarationTypes
+                                aRecordExtension
+                                bRecord
+                                |> Result.map
+                                    (\typeAndSubstitutions ->
+                                        { type_ = TypeNotVariable typeAndSubstitutions.type_
+                                        , substitutions = typeAndSubstitutions.substitutions
+                                        }
+                                    )
+
+                        TypeRecordExtension bRecordExtension ->
+                            typeRecordExtensionUnifyWithRecordExtension declarationTypes
+                                aRecordExtension
+                                bRecordExtension
+                                |> Result.map
+                                    (\typeAndSubstitutions ->
+                                        { type_ = TypeNotVariable typeAndSubstitutions.type_
+                                        , substitutions = typeAndSubstitutions.substitutions
+                                        }
+                                    )
+
+                        _ ->
+                            Err "record extension cannot be unified with types other than record or record extension"
+
+                TypeFunction aFunction ->
+                    case b of
+                        TypeFunction bFunction ->
+                            Result.map2
+                                (\inputABUnified outputABUnified ->
+                                    variableSubstitutionsMerge declarationTypes
+                                        inputABUnified.substitutions
+                                        outputABUnified.substitutions
+                                        |> Result.map
+                                            (\substitutionsABMerged ->
+                                                { type_ =
+                                                    TypeNotVariable
+                                                        (TypeFunction
+                                                            { input = inputABUnified.type_
+                                                            , output = outputABUnified.type_
+                                                            }
+                                                        )
+                                                , substitutions = substitutionsABMerged
+                                                }
+                                            )
+                                )
+                                (typeUnify declarationTypes aFunction.input bFunction.input)
+                                (typeUnify declarationTypes aFunction.output bFunction.output)
+                                |> Result.andThen identity
+
+                        _ ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+
+typeUnifyWithTryToExpandTypeConstruct :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable TypeVariableFromContext
+    ->
+        Maybe
+            (Result
+                String
+                { substitutions : VariableSubstitutions
+                , type_ : Type TypeVariableFromContext
+                }
+            )
+typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
+    case toExpand of
+        TypeConstruct typeConstructToExpand ->
+            case declarationTypes |> FastDict.get typeConstructToExpand.moduleOrigin of
+                Nothing ->
+                    Nothing
+
+                Just aOriginModuleTypes ->
+                    case aOriginModuleTypes.typeAliases |> FastDict.get typeConstructToExpand.name of
+                        Just originAliasDeclaration ->
+                            List.map2
+                                (\parameterName argument ->
+                                    { variable = ( [], parameterName ), type_ = argument }
+                                )
+                                originAliasDeclaration.parameters
+                                typeConstructToExpand.arguments
+                                |> listFoldlWhileOkFrom
+                                    { type_ =
+                                        originAliasDeclaration.type_
+                                            |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                    , substitutions = variableSubstitutionsNone
+                                    }
+                                    (\substitution soFar ->
+                                        soFar.type_
+                                            |> typeSubstituteVariableBy declarationTypes
+                                                { variable = substitution.variable
+                                                , type_ = substitution.type_
+                                                }
+                                            |> Result.andThen
+                                                (\substituted ->
+                                                    variableSubstitutionsMerge declarationTypes
+                                                        substituted.substitutions
+                                                        soFar.substitutions
+                                                        |> Result.map
+                                                            (\substitutionsAfterSubstitution ->
+                                                                { type_ = substituted.type_
+                                                                , substitutions = substitutionsAfterSubstitution
+                                                                }
+                                                            )
+                                                )
+                                    )
+                                |> Result.andThen
+                                    (\typeConstructExpandedWithArguments ->
+                                        typeUnify declarationTypes
+                                            typeConstructExpandedWithArguments.type_
+                                            (TypeNotVariable b)
+                                            |> Result.andThen
+                                                (\typeUnified ->
+                                                    variableSubstitutionsMerge declarationTypes
+                                                        typeConstructExpandedWithArguments.substitutions
+                                                        typeUnified.substitutions
+                                                        |> Result.map
+                                                            (\fullSubstitutions ->
+                                                                { substitutions = fullSubstitutions
+                                                                , type_ = typeUnified.type_
+                                                                }
+                                                            )
+                                                )
+                                    )
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+
+        _ ->
+            Nothing
 
 
 typeRecordUnify :
     ModuleLevelDeclarationTypesInAvailableInModule
-    -> FastDict.Dict String (Type variable)
-    -> FastDict.Dict String (Type variable)
+    -> FastDict.Dict String (Type TypeVariableFromContext)
+    -> FastDict.Dict String (Type TypeVariableFromContext)
     ->
         Result
             String
-            { type_ : TypeNotVariable variable
+            { type_ : TypeNotVariable TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeRecordUnify declarationTypes aFields bFields =
-    -- TODO unify overlapping fields
-    Ok
-        { type_ =
-            TypeRecord
-                (FastDict.union
-                    aFields
-                    bFields
-                )
-        , substitutions = variableSubstitutionsNone
-        }
+    Result.map
+        (\fieldsUnified ->
+            { type_ = TypeRecord fieldsUnified.fieldsUnified
+            , substitutions = fieldsUnified.substitutions
+            }
+        )
+        (FastDict.merge
+            (\name _ _ ->
+                Err
+                    ("record with the field "
+                        ++ name
+                        ++ " cannot be unified with a record that does not have this field"
+                    )
+            )
+            (\name aValue bValue soFarOrError ->
+                Result.map2
+                    (\abValueUnified soFar ->
+                        variableSubstitutionsMerge declarationTypes
+                            abValueUnified.substitutions
+                            soFar.substitutions
+                            |> Result.map
+                                (\substitutionsWithField ->
+                                    { substitutions = substitutionsWithField
+                                    , fieldsUnified =
+                                        soFar.fieldsUnified
+                                            |> FastDict.insert name abValueUnified.type_
+                                    }
+                                )
+                    )
+                    (typeUnify declarationTypes aValue bValue)
+                    soFarOrError
+                    |> Result.andThen identity
+            )
+            (\name _ _ ->
+                Err
+                    ("record with the field "
+                        ++ name
+                        ++ " cannot be unified with a record that does not have this field"
+                    )
+            )
+            aFields
+            bFields
+            (Ok
+                { fieldsUnified = FastDict.empty
+                , substitutions = variableSubstitutionsNone
+                }
+            )
+        )
 
 
-typeRecordExtensionRecordUnify :
+typeRecordExtensionUnifyWithRecord :
     ModuleLevelDeclarationTypesInAvailableInModule
     ->
-        { recordVariable : variable
-        , fields : FastDict.Dict String (Type variable)
+        { recordVariable : TypeVariableFromContext
+        , fields : FastDict.Dict String (Type TypeVariableFromContext)
         }
-    -> FastDict.Dict String (Type variable)
+    -> FastDict.Dict String (Type TypeVariableFromContext)
     ->
         Result
             String
-            { type_ : TypeNotVariable variable
+            { type_ : TypeNotVariable TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeRecordExtensionRecordUnify declarationTypes recordExtension record =
-    -- TODO unify overlapping fields
-    Debug.todo ""
+typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields =
+    Result.andThen
+        (\fieldsUnified ->
+            Result.map
+                (\fullSubstitutions ->
+                    { substitutions = fullSubstitutions
+                    , type_ =
+                        TypeRecordExtension
+                            { recordVariable = recordExtension.recordVariable
+                            , fields = fieldsUnified.fieldsUnified
+                            }
+                    }
+                )
+                (variableSubstitutionsMerge declarationTypes
+                    fieldsUnified.substitutions
+                    { equivalentVariables = []
+                    , variableToType =
+                        FastDict.singleton
+                            recordExtension.recordVariable
+                            (TypeRecord
+                                (FastDict.diff
+                                    recordFields
+                                    recordExtension.fields
+                                )
+                            )
+                    }
+                )
+        )
+        (FastDict.merge
+            (\name _ _ ->
+                Err
+                    ("record extension with the field "
+                        ++ name
+                        ++ " cannot be unified with a record that does not have this field"
+                    )
+            )
+            (\name aValue bValue soFarOrError ->
+                Result.map2
+                    (\abValueUnified soFar ->
+                        variableSubstitutionsMerge declarationTypes
+                            abValueUnified.substitutions
+                            soFar.substitutions
+                            |> Result.map
+                                (\substitutionsWithField ->
+                                    { substitutions = substitutionsWithField
+                                    , fieldsUnified =
+                                        soFar.fieldsUnified
+                                            |> FastDict.insert name abValueUnified.type_
+                                    }
+                                )
+                    )
+                    (typeUnify declarationTypes aValue bValue)
+                    soFarOrError
+                    |> Result.andThen identity
+            )
+            (\name value soFarOrError ->
+                soFarOrError
+                    |> Result.map
+                        (\soFar ->
+                            { substitutions = soFar.substitutions
+                            , fieldsUnified =
+                                soFar.fieldsUnified
+                                    |> FastDict.insert name value
+                            }
+                        )
+            )
+            recordExtension.fields
+            recordFields
+            (Ok
+                { fieldsUnified = FastDict.empty
+                , substitutions = variableSubstitutionsNone
+                }
+            )
+        )
+
+
+typeRecordExtensionUnifyWithRecordExtension :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    ->
+        { recordVariable : TypeVariableFromContext
+        , fields : FastDict.Dict String (Type TypeVariableFromContext)
+        }
+    ->
+        { recordVariable : TypeVariableFromContext
+        , fields : FastDict.Dict String (Type TypeVariableFromContext)
+        }
+    ->
+        Result
+            String
+            { type_ : TypeNotVariable TypeVariableFromContext
+            , substitutions : VariableSubstitutions
+            }
+typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bRecordExtension =
+    Result.andThen
+        (\fieldsUnified ->
+            let
+                newBaseVariable : TypeVariableFromContext
+                newBaseVariable =
+                    ( -- creating a new variable safely (I hope)
+                      "_of"
+                        :: ([ (aRecordExtension.recordVariable |> typeContextVariableName)
+                                :: (aRecordExtension.recordVariable |> Tuple.first)
+                            , (bRecordExtension.recordVariable |> typeContextVariableName)
+                                :: (bRecordExtension.recordVariable |> Tuple.first)
+                            ]
+                                |> List.sort
+                                |> List.intersperse [ "_and" ]
+                                |> List.concat
+                           )
+                    , "base"
+                    )
+            in
+            Result.map
+                (\fullSubstitutions ->
+                    { substitutions = fullSubstitutions
+                    , type_ =
+                        TypeRecordExtension
+                            { recordVariable = newBaseVariable
+                            , fields = fieldsUnified.fieldsUnified
+                            }
+                    }
+                )
+                (variableSubstitutionsMerge declarationTypes
+                    fieldsUnified.substitutions
+                    { equivalentVariables = []
+                    , variableToType =
+                        FastDict.singleton
+                            aRecordExtension.recordVariable
+                            (TypeRecordExtension
+                                { recordVariable = newBaseVariable
+                                , fields =
+                                    FastDict.diff
+                                        bRecordExtension.fields
+                                        aRecordExtension.fields
+                                }
+                            )
+                            |> FastDict.insert
+                                bRecordExtension.recordVariable
+                                (TypeRecordExtension
+                                    { recordVariable = newBaseVariable
+                                    , fields =
+                                        FastDict.diff
+                                            aRecordExtension.fields
+                                            bRecordExtension.fields
+                                    }
+                                )
+                    }
+                )
+        )
+        (FastDict.merge
+            (\name value soFarOrError ->
+                soFarOrError
+                    |> Result.map
+                        (\soFar ->
+                            { substitutions = soFar.substitutions
+                            , fieldsUnified =
+                                soFar.fieldsUnified
+                                    |> FastDict.insert name value
+                            }
+                        )
+            )
+            (\name aValue bValue soFarOrError ->
+                Result.map2
+                    (\abValueUnified soFar ->
+                        variableSubstitutionsMerge declarationTypes
+                            abValueUnified.substitutions
+                            soFar.substitutions
+                            |> Result.map
+                                (\substitutionsWithField ->
+                                    { substitutions = substitutionsWithField
+                                    , fieldsUnified =
+                                        soFar.fieldsUnified
+                                            |> FastDict.insert name abValueUnified.type_
+                                    }
+                                )
+                    )
+                    (typeUnify declarationTypes aValue bValue)
+                    soFarOrError
+                    |> Result.andThen identity
+            )
+            (\name value soFarOrError ->
+                soFarOrError
+                    |> Result.map
+                        (\soFar ->
+                            { substitutions = soFar.substitutions
+                            , fieldsUnified =
+                                soFar.fieldsUnified
+                                    |> FastDict.insert name value
+                            }
+                        )
+            )
+            aRecordExtension.fields
+            bRecordExtension.fields
+            (Ok
+                { fieldsUnified = FastDict.empty
+                , substitutions = variableSubstitutionsNone
+                }
+            )
+        )
 
 
 {-| A part in the syntax tree
@@ -2149,8 +2543,12 @@ type Expression
     | ExpressionString String
     | ExpressionChar Char
     | ExpressionReference
-        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , qualification : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin :
+            -- `[]` for current module
+            Elm.Syntax.ModuleName.ModuleName
+        , qualification :
+            -- `[]` for no qualification
+            Elm.Syntax.ModuleName.ModuleName
         , name : String
         }
     | ExpressionOperatorFunction String
@@ -2206,7 +2604,7 @@ type Expression
                 }
         }
     | ExpressionLambda
-        -- TODO split into argument0 and argument1Up
+        -- TODO split into parameter0 and parameter1Up
         { arguments : List (TypedNode Pattern)
         , result : TypedNode Expression
         }
@@ -2277,8 +2675,12 @@ type Pattern
         }
     | PatternListExact (List (TypedNode Pattern))
     | PatternVariant
-        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , qualification : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin :
+            -- `[]` for current module
+            Elm.Syntax.ModuleName.ModuleName
+        , qualification :
+            -- `[]` for no qualification
+            Elm.Syntax.ModuleName.ModuleName
         , name : String
         , arguments : List (TypedNode Pattern)
         }
@@ -2298,6 +2700,17 @@ typeBasicsFloat =
         (TypeConstruct
             { moduleOrigin = [ "Basics" ]
             , name = "Float"
+            , arguments = []
+            }
+        )
+
+
+typeBasicsBool : Type variable_
+typeBasicsBool =
+    TypeNotVariable
+        (TypeConstruct
+            { moduleOrigin = [ "Basics" ]
+            , name = "Bool"
             , arguments = []
             }
         )
@@ -2331,17 +2744,6 @@ typeCharChar =
         (TypeConstruct
             { moduleOrigin = [ "Char" ]
             , name = "Char"
-            , arguments = []
-            }
-        )
-
-
-typeBasicsBool : Type variable_
-typeBasicsBool =
-    TypeNotVariable
-        (TypeConstruct
-            { moduleOrigin = [ "Basics" ]
-            , name = "Bool"
             , arguments = []
             }
         )
@@ -2859,7 +3261,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
 expressionTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
-    , locallyIntroducedVariableExpressions :
+    , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
     , path : List String
     , moduleOriginLookup : ModuleOriginLookup
@@ -2935,25 +3337,164 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 }
 
         Elm.Syntax.Expression.PrefixOperator operator ->
-            operatorFunctionType
-                { path = context.path
-                , moduleOriginLookup = context.moduleOriginLookup
-                }
-                operator
-                |> Result.map
-                    (\type_ ->
-                        { node =
-                            { range = fullRange
-                            , value = ExpressionOperatorFunction operator
-                            , type_ = type_
-                            }
-                        , substitutions = variableSubstitutionsNone
+            Result.map
+                (\type_ ->
+                    { node =
+                        { range = fullRange
+                        , value = ExpressionOperatorFunction operator
+                        , type_ = type_
                         }
-                    )
+                    , substitutions = variableSubstitutionsNone
+                    }
+                )
+                (operatorFunctionType
+                    { path = context.path
+                    , moduleOriginLookup = context.moduleOriginLookup
+                    }
+                    operator
+                )
 
-        Elm.Syntax.Expression.FunctionOrValue _ _ ->
-            -- TODO check for locallyIntroducedVariableExpressions first
-            Debug.todo "branch 'FunctionOrValue _ _' not implemented"
+        Elm.Syntax.Expression.FunctionOrValue qualification name ->
+            case context.moduleOriginLookup.references |> FastDict.get ( qualification, name ) of
+                Just moduleOrigin ->
+                    case context.declarationTypes |> FastDict.get moduleOrigin of
+                        Nothing ->
+                            Err
+                                ("No declaration types found for the origin module "
+                                    ++ (moduleOrigin |> moduleNameToString)
+                                )
+
+                        Just originModuleDeclarationTypes ->
+                            case originModuleDeclarationTypes.signatures |> FastDict.get name of
+                                Just signatureType ->
+                                    Ok
+                                        { substitutions = variableSubstitutionsNone
+                                        , node =
+                                            { range = fullRange
+                                            , value =
+                                                ExpressionReference
+                                                    { qualification = qualification
+                                                    , moduleOrigin = moduleOrigin
+                                                    , name = name
+                                                    }
+                                            , type_ =
+                                                signatureType
+                                                    |> typeMapVariables
+                                                        (\variableName -> ( context.path, variableName ))
+                                            }
+                                        }
+
+                                Nothing ->
+                                    case
+                                        originModuleDeclarationTypes.choiceTypes
+                                            |> fastDictMapAndSmallestJust
+                                                (\choiceTypeName choiceTypeInfo ->
+                                                    choiceTypeInfo.variants
+                                                        |> FastDict.get name
+                                                        |> Maybe.map
+                                                            (\variantParameters ->
+                                                                { variantParameters = variantParameters
+                                                                , choiceTypeName = choiceTypeName
+                                                                , choiceTypeParameters = choiceTypeInfo.parameters
+                                                                }
+                                                            )
+                                                )
+                                    of
+                                        Just variant ->
+                                            let
+                                                resultType : Type String
+                                                resultType =
+                                                    TypeNotVariable
+                                                        (TypeConstruct
+                                                            { moduleOrigin = moduleOrigin
+                                                            , name = variant.choiceTypeName
+                                                            , arguments =
+                                                                variant.choiceTypeParameters
+                                                                    |> List.map TypeVariable
+                                                            }
+                                                        )
+
+                                                fullType : Type TypeVariableFromContext
+                                                fullType =
+                                                    variant.variantParameters
+                                                        |> List.foldr
+                                                            (\argument output ->
+                                                                TypeNotVariable
+                                                                    (TypeFunction
+                                                                        { input = argument
+                                                                        , output = output
+                                                                        }
+                                                                    )
+                                                            )
+                                                            resultType
+                                                        |> typeMapVariables
+                                                            (\variableName -> ( context.path, variableName ))
+                                            in
+                                            Ok
+                                                { substitutions = variableSubstitutionsNone
+                                                , node =
+                                                    { range = fullRange
+                                                    , value =
+                                                        ExpressionReference
+                                                            { qualification = qualification
+                                                            , moduleOrigin = moduleOrigin
+                                                            , name = name
+                                                            }
+                                                    , type_ = fullType
+                                                    }
+                                                }
+
+                                        Nothing ->
+                                            case originModuleDeclarationTypes.typeAliases |> FastDict.get name of
+                                                Just _ ->
+                                                    Err
+                                                        ("I found what looks like a record type alias constructor: "
+                                                            ++ qualifiedToString
+                                                                { qualification = moduleOrigin, name = name }
+                                                            ++ ". These are not supported, yet because our record types don't preserve field order.\n"
+                                                            ++ "Hint: no value/function/port/variant was found in the origin module of that reference, so that might be the actual problem."
+                                                        )
+
+                                                Nothing ->
+                                                    Err
+                                                        ("No value/function/port/variant/record type alias constructor found in the origin module of the reference "
+                                                            ++ qualifiedToString
+                                                                { qualification = moduleOrigin, name = name }
+                                                        )
+
+                Nothing ->
+                    case qualification of
+                        qualificationPart0 :: qualificationPart1Up ->
+                            Err
+                                ("No origin module found for the qualified reference "
+                                    ++ qualifiedToString
+                                        { qualification = qualificationPart0 :: qualificationPart1Up
+                                        , name = name
+                                        }
+                                )
+
+                        [] ->
+                            case context.locallyIntroducedExpressionVariables |> FastDict.get name of
+                                Nothing ->
+                                    Err
+                                        ("No locally introduced expression variables found with the name "
+                                            ++ name
+                                        )
+
+                                Just locallyIntroducedExpressionVariable ->
+                                    Ok
+                                        { substitutions = variableSubstitutionsNone
+                                        , node =
+                                            { range = fullRange
+                                            , value =
+                                                ExpressionReference
+                                                    { qualification = []
+                                                    , moduleOrigin = []
+                                                    , name = name
+                                                    }
+                                            , type_ = locallyIntroducedExpressionVariable
+                                            }
+                                        }
 
         Elm.Syntax.Expression.RecordAccessFunction dotFieldName ->
             let
@@ -2996,27 +3537,51 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 }
 
         Elm.Syntax.Expression.ParenthesizedExpression inParens ->
-            inParens
-                |> expressionTypeInfer context
-                |> Result.map
-                    (\inParensNodeAndSubstitutions ->
-                        { node =
-                            { value = ExpressionParenthesized inParensNodeAndSubstitutions.node
-                            , type_ = inParensNodeAndSubstitutions.node.type_
-                            , range = fullRange
-                            }
-                        , substitutions = inParensNodeAndSubstitutions.substitutions
+            Result.map
+                (\inParensNodeAndSubstitutions ->
+                    { node =
+                        { value = ExpressionParenthesized inParensNodeAndSubstitutions.node
+                        , type_ = inParensNodeAndSubstitutions.node.type_
+                        , range = fullRange
                         }
-                    )
+                    , substitutions = inParensNodeAndSubstitutions.substitutions
+                    }
+                )
+                (inParens
+                    |> expressionTypeInfer context
+                )
 
-        Elm.Syntax.Expression.Negation _ ->
-            Debug.todo "branch 'Negation _' not implemented"
-
-        Elm.Syntax.Expression.Application _ ->
-            Debug.todo "branch 'Application _' not implemented"
-
-        Elm.Syntax.Expression.OperatorApplication _ _ _ _ ->
-            Debug.todo "branch 'OperatorApplication _ _ _ _' not implemented"
+        Elm.Syntax.Expression.Negation toNegate ->
+            Result.andThen
+                (\toNegateInferred ->
+                    typeUnify context.declarationTypes
+                        toNegateInferred.node.type_
+                        (TypeVariable ( context.path, "numberNegated" ))
+                        |> Result.andThen
+                            (\fullType ->
+                                variableSubstitutionsMerge context.declarationTypes
+                                    toNegateInferred.substitutions
+                                    fullType.substitutions
+                                    |> Result.map
+                                        (\fullSubstitutions ->
+                                            { node =
+                                                { value =
+                                                    ExpressionNegation
+                                                        { type_ = fullType.type_
+                                                        , range = toNegateInferred.node.range
+                                                        , value = toNegateInferred.node.value
+                                                        }
+                                                , type_ = fullType.type_
+                                                , range = fullRange
+                                                }
+                                            , substitutions = fullSubstitutions
+                                            }
+                                        )
+                            )
+                )
+                (toNegate
+                    |> expressionTypeInfer context
+                )
 
         Elm.Syntax.Expression.RecordAccess recordNode fieldNameNode ->
             expressionTypeInfer context recordNode
@@ -3073,8 +3638,67 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                     )
 
-        Elm.Syntax.Expression.IfBlock _ _ _ ->
-            Debug.todo "branch 'unify condition with Basics.Bool"
+        Elm.Syntax.Expression.OperatorApplication operator _ left right ->
+            expressionInfixOperationTypeInfer context
+                { fullRange = fullRange
+                , operator = operator
+                , left = left
+                , right = right
+                }
+
+        Elm.Syntax.Expression.IfBlock condition onTrue onFalse ->
+            Result.map3
+                (\conditionInferred onTrueInferred onFalseInferred ->
+                    Result.map2
+                        (\conditionTypeInferredAsBool resultType ->
+                            variableSubstitutionsMerge5 context.declarationTypes
+                                conditionInferred.substitutions
+                                onTrueInferred.substitutions
+                                onFalseInferred.substitutions
+                                conditionTypeInferredAsBool.substitutions
+                                resultType.substitutions
+                                |> Result.map
+                                    (\fullSubstitutions ->
+                                        { substitutions = fullSubstitutions
+                                        , node =
+                                            { range = fullRange
+                                            , value =
+                                                ExpressionIfThenElse
+                                                    { condition =
+                                                        { range = conditionInferred.node.range
+                                                        , value = conditionInferred.node.value
+                                                        , type_ = typeBasicsBool
+                                                        }
+                                                    , onTrue =
+                                                        { range = onTrueInferred.node.range
+                                                        , value = onTrueInferred.node.value
+                                                        , type_ = resultType.type_
+                                                        }
+                                                    , onFalse =
+                                                        { range = onTrueInferred.node.range
+                                                        , value = onTrueInferred.node.value
+                                                        , type_ = resultType.type_
+                                                        }
+                                                    }
+                                            , type_ = resultType.type_
+                                            }
+                                        }
+                                    )
+                        )
+                        (typeUnify context.declarationTypes
+                            conditionInferred.node.type_
+                            typeBasicsBool
+                        )
+                        (typeUnify context.declarationTypes
+                            onTrueInferred.node.type_
+                            onFalseInferred.node.type_
+                        )
+                        |> Result.andThen identity
+                )
+                (condition |> expressionTypeInfer (context |> expressionContextToInPath "condition"))
+                (onTrue |> expressionTypeInfer (context |> expressionContextToInPath "onTrue"))
+                (onFalse |> expressionTypeInfer (context |> expressionContextToInPath "onFalse"))
+                |> Result.andThen identity
 
         Elm.Syntax.Expression.TupledExpression tupleParts ->
             case tupleParts of
@@ -3173,61 +3797,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 _ :: _ :: _ :: _ :: _ ->
                     Err "too many tuple parts. Should not exist in a valid parse result"
 
-        Elm.Syntax.Expression.RecordExpr fields ->
-            fields
-                |> listFoldlWhileOkFrom
-                    { substitutions = variableSubstitutionsNone
-                    , fieldTypedNodesReverse = []
-                    }
-                    (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node fieldNameRange fieldName, fieldValueNode )) soFar ->
-                        fieldValueNode
-                            |> expressionTypeInfer
-                                (context |> expressionContextToInPath fieldName)
-                            |> Result.andThen
-                                (\fieldValueTypedNode ->
-                                    variableSubstitutionsMerge context.declarationTypes
-                                        fieldValueTypedNode.substitutions
-                                        soFar.substitutions
-                                        |> Result.map
-                                            (\substitutionsWithField ->
-                                                { fieldTypedNodesReverse =
-                                                    { range = fieldRange
-                                                    , name = fieldName
-                                                    , nameRange = fieldNameRange
-                                                    , value = fieldValueTypedNode.node
-                                                    }
-                                                        :: soFar.fieldTypedNodesReverse
-                                                , substitutions = substitutionsWithField
-                                                }
-                                            )
-                                )
-                    )
-                |> Result.map
-                    (\fieldTypedNodesAndSubstitutions ->
-                        { substitutions =
-                            fieldTypedNodesAndSubstitutions.substitutions
-                        , node =
-                            { range = fullRange
-                            , value =
-                                ExpressionRecord
-                                    (fieldTypedNodesAndSubstitutions.fieldTypedNodesReverse
-                                        |> List.reverse
-                                    )
-                            , type_ =
-                                TypeNotVariable
-                                    (TypeRecord
-                                        (fieldTypedNodesAndSubstitutions.fieldTypedNodesReverse
-                                            |> List.foldl
-                                                (\field soFar ->
-                                                    soFar |> FastDict.insert field.name field.value.type_
-                                                )
-                                                FastDict.empty
-                                        )
-                                    )
-                            }
-                        }
-                    )
-
         Elm.Syntax.Expression.ListExpr elements ->
             case elements of
                 [] ->
@@ -3243,82 +3812,435 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         }
 
                 head :: tail ->
-                    expressionTypeInfer
-                        (context |> expressionContextToInPath "0")
-                        head
-                        |> Result.andThen
-                            (\headTypedNodeAndSubstitutions ->
-                                tail
-                                    |> listFoldlWhileOkFrom
-                                        { substitutions = headTypedNodeAndSubstitutions.substitutions
-                                        , elementType = headTypedNodeAndSubstitutions.node.type_
-                                        , elementNodesReverse = []
-                                        , index = 1
-                                        }
-                                        (\elementNode soFar ->
-                                            expressionTypeInfer
-                                                (context
-                                                    |> expressionContextToInPath
-                                                        (soFar.index |> String.fromInt)
+                    Result.map
+                        (\elementTypeAndSubstitutions ->
+                            { substitutions = elementTypeAndSubstitutions.substitutions
+                            , node =
+                                { range = fullRange
+                                , value =
+                                    ExpressionList
+                                        (elementTypeAndSubstitutions.elementNodesReverse
+                                            |> listReverseAndMap
+                                                (\elementNode ->
+                                                    { range = elementNode.range
+                                                    , value = elementNode.value
+                                                    , type_ = elementTypeAndSubstitutions.elementType
+                                                    }
                                                 )
-                                                elementNode
-                                                |> Result.andThen
-                                                    (\elementTypedNodeAndSubstitutions ->
-                                                        typeUnify context.declarationTypes
-                                                            elementTypedNodeAndSubstitutions.node.type_
-                                                            soFar.elementType
-                                                            |> Result.andThen
-                                                                (\elementTypeWithCurrent ->
-                                                                    variableSubstitutionsMerge3 context.declarationTypes
-                                                                        elementTypedNodeAndSubstitutions.substitutions
-                                                                        elementTypeWithCurrent.substitutions
-                                                                        soFar.substitutions
-                                                                        |> Result.map
-                                                                            (\substitutionsWithElement ->
-                                                                                { index = soFar.index + 1
-                                                                                , elementNodesReverse =
-                                                                                    { range = elementTypedNodeAndSubstitutions.node.range
-                                                                                    , value = elementTypedNodeAndSubstitutions.node.value
-                                                                                    }
-                                                                                        :: soFar.elementNodesReverse
-                                                                                , elementType = elementTypeWithCurrent.type_
-                                                                                , substitutions = substitutionsWithElement
-                                                                                }
-                                                                            )
-                                                                )
-                                                    )
                                         )
-                            )
-                        |> Result.map
-                            (\elementTypeAndSubstitutions ->
-                                { substitutions = elementTypeAndSubstitutions.substitutions
-                                , node =
-                                    { range = fullRange
-                                    , value =
-                                        ExpressionList
-                                            (elementTypeAndSubstitutions.elementNodesReverse
-                                                |> listReverseAndMap
-                                                    (\elementNode ->
-                                                        { range = elementNode.range
-                                                        , value = elementNode.value
-                                                        , type_ = elementTypeAndSubstitutions.elementType
-                                                        }
-                                                    )
-                                            )
-                                    , type_ =
-                                        typeListList elementTypeAndSubstitutions.elementType
-                                    }
+                                , type_ =
+                                    typeListList elementTypeAndSubstitutions.elementType
                                 }
-                            )
+                            }
+                        )
+                        (expressionTypeInfer
+                            (context |> expressionContextToInPath "0")
+                            head
+                            |> Result.andThen
+                                (\headTypedNodeAndSubstitutions ->
+                                    tail
+                                        |> listFoldlWhileOkFrom
+                                            { substitutions = headTypedNodeAndSubstitutions.substitutions
+                                            , elementType = headTypedNodeAndSubstitutions.node.type_
+                                            , elementNodesReverse = []
+                                            , index = 1
+                                            }
+                                            (\elementNode soFar ->
+                                                expressionTypeInfer
+                                                    (context
+                                                        |> expressionContextToInPath
+                                                            (soFar.index |> String.fromInt)
+                                                    )
+                                                    elementNode
+                                                    |> Result.andThen
+                                                        (\elementTypedNodeAndSubstitutions ->
+                                                            typeUnify context.declarationTypes
+                                                                elementTypedNodeAndSubstitutions.node.type_
+                                                                soFar.elementType
+                                                                |> Result.andThen
+                                                                    (\elementTypeWithCurrent ->
+                                                                        variableSubstitutionsMerge3 context.declarationTypes
+                                                                            elementTypedNodeAndSubstitutions.substitutions
+                                                                            elementTypeWithCurrent.substitutions
+                                                                            soFar.substitutions
+                                                                            |> Result.map
+                                                                                (\substitutionsWithElement ->
+                                                                                    { index = soFar.index + 1
+                                                                                    , elementNodesReverse =
+                                                                                        { range = elementTypedNodeAndSubstitutions.node.range
+                                                                                        , value = elementTypedNodeAndSubstitutions.node.value
+                                                                                        }
+                                                                                            :: soFar.elementNodesReverse
+                                                                                    , elementType = elementTypeWithCurrent.type_
+                                                                                    , substitutions = substitutionsWithElement
+                                                                                    }
+                                                                                )
+                                                                    )
+                                                        )
+                                            )
+                                )
+                        )
+
+        Elm.Syntax.Expression.Application application ->
+            case application of
+                [] ->
+                    Err "empty application is invalid syntax"
+
+                [ subExpression ] ->
+                    subExpression |> expressionTypeInfer context
+
+                called :: argument0 :: argument1Up ->
+                    Result.map3
+                        (\calledInferred argument0Inferred argument1UpInferred ->
+                            let
+                                resultType : Type TypeVariableFromContext
+                                resultType =
+                                    TypeVariable ( context.path, "result" )
+
+                                calledTypeInferredFromArguments : Type TypeVariableFromContext
+                                calledTypeInferredFromArguments =
+                                    TypeNotVariable
+                                        (TypeFunction
+                                            { input = argument0Inferred.node.type_
+                                            , output =
+                                                argument1UpInferred.nodesReverse
+                                                    |> List.foldl
+                                                        (\argumentInferred output ->
+                                                            TypeNotVariable
+                                                                (TypeFunction
+                                                                    { input = argumentInferred.type_
+                                                                    , output = output
+                                                                    }
+                                                                )
+                                                        )
+                                                        resultType
+                                            }
+                                        )
+                            in
+                            typeUnify context.declarationTypes
+                                calledTypeInferredFromArguments
+                                calledInferred.node.type_
+                                |> Result.andThen
+                                    (\callType ->
+                                        variableSubstitutionsMerge4 context.declarationTypes
+                                            calledInferred.substitutions
+                                            argument0Inferred.substitutions
+                                            argument1UpInferred.substitutions
+                                            callType.substitutions
+                                            |> Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , node =
+                                                        { range = fullRange
+                                                        , value =
+                                                            ExpressionCall
+                                                                { called = calledInferred.node
+                                                                , argument0 = argument0Inferred.node
+                                                                , argument1Up =
+                                                                    argument1UpInferred.nodesReverse
+                                                                        |> List.reverse
+                                                                }
+                                                        , type_ = resultType
+                                                        }
+                                                    }
+                                                )
+                                    )
+                        )
+                        (called
+                            |> expressionTypeInfer
+                                (context |> expressionContextToInPath "called")
+                        )
+                        (argument0
+                            |> expressionTypeInfer
+                                (context |> expressionContextToInPath "argument0")
+                        )
+                        (argument1Up
+                            |> listFoldlWhileOkFrom
+                                { substitutions = variableSubstitutionsNone
+                                , nodesReverse = []
+                                , index = 1
+                                }
+                                (\argumentNode soFar ->
+                                    argumentNode
+                                        |> expressionTypeInfer
+                                            (context
+                                                |> expressionContextToInPath
+                                                    ("argument" ++ (soFar.index |> String.fromInt))
+                                            )
+                                        |> Result.andThen
+                                            (\argumentInferred ->
+                                                variableSubstitutionsMerge context.declarationTypes
+                                                    argumentInferred.substitutions
+                                                    soFar.substitutions
+                                                    |> Result.map
+                                                        (\substitutionsWithArgument ->
+                                                            { index = soFar.index + 1
+                                                            , substitutions = substitutionsWithArgument
+                                                            , nodesReverse =
+                                                                argumentInferred.node
+                                                                    :: soFar.nodesReverse
+                                                            }
+                                                        )
+                                            )
+                                )
+                        )
+                        |> Result.andThen identity
+
+        Elm.Syntax.Expression.RecordExpr fields ->
+            Result.map
+                (\fieldTypedNodesAndSubstitutions ->
+                    { substitutions =
+                        fieldTypedNodesAndSubstitutions.substitutions
+                    , node =
+                        { range = fullRange
+                        , value =
+                            ExpressionRecord
+                                (fieldTypedNodesAndSubstitutions.fieldTypedNodesReverse
+                                    |> List.reverse
+                                )
+                        , type_ =
+                            TypeNotVariable
+                                (TypeRecord
+                                    (fieldTypedNodesAndSubstitutions.fieldTypedNodesReverse
+                                        |> List.foldl
+                                            (\field soFar ->
+                                                soFar |> FastDict.insert field.name field.value.type_
+                                            )
+                                            FastDict.empty
+                                    )
+                                )
+                        }
+                    }
+                )
+                (fields
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , fieldTypedNodesReverse = []
+                        }
+                        (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node fieldNameRange fieldName, fieldValueNode )) soFar ->
+                            fieldValueNode
+                                |> expressionTypeInfer
+                                    (context |> expressionContextToInPath fieldName)
+                                |> Result.andThen
+                                    (\fieldValueTypedNode ->
+                                        variableSubstitutionsMerge context.declarationTypes
+                                            fieldValueTypedNode.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\substitutionsWithField ->
+                                                    { fieldTypedNodesReverse =
+                                                        { range = fieldRange
+                                                        , name = fieldName
+                                                        , nameRange = fieldNameRange
+                                                        , value = fieldValueTypedNode.node
+                                                        }
+                                                            :: soFar.fieldTypedNodesReverse
+                                                    , substitutions = substitutionsWithField
+                                                    }
+                                                )
+                                    )
+                        )
+                )
 
         Elm.Syntax.Expression.RecordUpdateExpression recordVariable fields ->
             Debug.todo "branch 'RecordUpdateExpression _ _' not implemented"
 
         Elm.Syntax.Expression.LambdaExpression lambda ->
-            Debug.todo "branch 'LambdaExpression _' not implemented"
+            Result.andThen
+                (\argumentsInferred ->
+                    lambda.expression
+                        |> expressionTypeInfer
+                            { path = context.path
+                            , declarationTypes = context.declarationTypes
+                            , moduleOriginLookup = context.moduleOriginLookup
+                            , locallyIntroducedExpressionVariables =
+                                FastDict.union
+                                    argumentsInferred.introducedExpressionVariables
+                                    context.locallyIntroducedExpressionVariables
+                            }
+                        |> Result.andThen
+                            (\resultInferred ->
+                                variableSubstitutionsMerge context.declarationTypes
+                                    argumentsInferred.substitutions
+                                    resultInferred.substitutions
+                                    |> Result.map
+                                        (\fullSubstitutions ->
+                                            { substitutions = fullSubstitutions
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    ExpressionLambda
+                                                        { arguments =
+                                                            argumentsInferred.nodesReverse
+                                                                |> List.reverse
+                                                        , result = resultInferred.node
+                                                        }
+                                                , type_ =
+                                                    argumentsInferred.nodesReverse
+                                                        |> List.foldl
+                                                            (\argumentTypedNode output ->
+                                                                TypeNotVariable
+                                                                    (TypeFunction
+                                                                        { input = argumentTypedNode.type_
+                                                                        , output = output
+                                                                        }
+                                                                    )
+                                                            )
+                                                            resultInferred.node.type_
+                                                }
+                                            }
+                                        )
+                            )
+                )
+                (lambda.args
+                    |> listFoldlWhileOkFrom
+                        { introducedExpressionVariables = FastDict.empty
+                        , substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\argumentNode soFar ->
+                            argumentNode
+                                |> patternTypeInfer
+                                    { path = context.path
+                                    , declarationTypes = context.declarationTypes
+                                    , moduleOriginLookup = context.moduleOriginLookup
+                                    }
+                                |> Result.andThen
+                                    (\argumentInferred ->
+                                        variableSubstitutionsMerge context.declarationTypes
+                                            argumentInferred.substitutions
+                                            soFar.substitutions
+                                            |> Result.map
+                                                (\substitutionsWithArgument ->
+                                                    { substitutions = substitutionsWithArgument
+                                                    , introducedExpressionVariables =
+                                                        FastDict.union
+                                                            argumentInferred.introducedExpressionVariables
+                                                            soFar.introducedExpressionVariables
+                                                    , nodesReverse =
+                                                        argumentInferred.node
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                    )
+                        )
+                )
 
         Elm.Syntax.Expression.CaseExpression caseOf ->
-            Debug.todo "branch 'CaseExpression _' not implemented"
+            Result.map2
+                (\matchedInferred casesInferred ->
+                    casesInferred.nodesReverse
+                        |> listFoldlWhileOkFrom
+                            { substitutions = variableSubstitutionsNone
+                            , type_ = matchedInferred.node.type_
+                            }
+                            (\caseInferred soFar ->
+                                typeUnify3 context.declarationTypes
+                                    caseInferred.pattern.type_
+                                    caseInferred.result.type_
+                                    soFar.type_
+                                    |> Result.andThen
+                                        (\typeUnifiedWithCase ->
+                                            variableSubstitutionsMerge context.declarationTypes
+                                                typeUnifiedWithCase.substitutions
+                                                soFar.substitutions
+                                                |> Result.map
+                                                    (\substitutionsWithCase ->
+                                                        { substitutions = substitutionsWithCase
+                                                        , type_ = typeUnifiedWithCase.type_
+                                                        }
+                                                    )
+                                        )
+                            )
+                        |> Result.andThen
+                            (\unifiedType ->
+                                variableSubstitutionsMerge3 context.declarationTypes
+                                    matchedInferred.substitutions
+                                    casesInferred.substitutions
+                                    unifiedType.substitutions
+                                    |> Result.map
+                                        (\fullSubstitutions ->
+                                            { substitutions = fullSubstitutions
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    ExpressionCaseOf
+                                                        { matchedExpression =
+                                                            matchedInferred.node
+                                                                |> typedNodeReplaceTypeBy
+                                                                    unifiedType.type_
+                                                        , cases =
+                                                            casesInferred.nodesReverse
+                                                                |> listReverseAndMap
+                                                                    (\case_ ->
+                                                                        { pattern =
+                                                                            case_.pattern
+                                                                                |> typedNodeReplaceTypeBy
+                                                                                    unifiedType.type_
+                                                                        , result =
+                                                                            case_.result
+                                                                                |> typedNodeReplaceTypeBy
+                                                                                    unifiedType.type_
+                                                                        }
+                                                                    )
+                                                        }
+                                                , type_ = unifiedType.type_
+                                                }
+                                            }
+                                        )
+                            )
+                )
+                (caseOf.expression
+                    |> expressionTypeInfer context
+                )
+                (caseOf.cases
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        }
+                        (\( casePattern, caseResult ) soFar ->
+                            Result.andThen
+                                (\patternInferred ->
+                                    Result.map
+                                        (\resultInferred ->
+                                            variableSubstitutionsMerge3 context.declarationTypes
+                                                patternInferred.substitutions
+                                                resultInferred.substitutions
+                                                soFar.substitutions
+                                                |> Result.map
+                                                    (\fullSubstitutions ->
+                                                        { substitutions = fullSubstitutions
+                                                        , nodesReverse =
+                                                            { pattern = patternInferred.node
+                                                            , result = resultInferred.node
+                                                            }
+                                                                :: soFar.nodesReverse
+                                                        }
+                                                    )
+                                        )
+                                        (caseResult
+                                            |> expressionTypeInfer
+                                                { declarationTypes = context.declarationTypes
+                                                , moduleOriginLookup = context.moduleOriginLookup
+                                                , path = context.path
+                                                , locallyIntroducedExpressionVariables =
+                                                    FastDict.union
+                                                        patternInferred.introducedExpressionVariables
+                                                        context.locallyIntroducedExpressionVariables
+                                                }
+                                        )
+                                )
+                                (casePattern
+                                    |> patternTypeInfer
+                                        { declarationTypes = context.declarationTypes
+                                        , moduleOriginLookup = context.moduleOriginLookup
+                                        , path = context.path
+                                        }
+                                )
+                                |> Result.andThen identity
+                        )
+                )
+                |> Result.andThen identity
 
         Elm.Syntax.Expression.LetExpression letIn ->
             Debug.todo "branch 'LetExpression _' not implemented"
@@ -3328,6 +4250,22 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
         Elm.Syntax.Expression.GLSLExpression _ ->
             Err "glsl shader expressions not supported"
+
+
+moduleNameToString : Elm.Syntax.ModuleName.ModuleName -> String
+moduleNameToString moduleName =
+    moduleName |> String.join "."
+
+
+typedNodeReplaceTypeBy :
+    Type TypeVariableFromContext
+    -> TypedNode value
+    -> TypedNode value
+typedNodeReplaceTypeBy replacementType typedNode =
+    { value = typedNode.value
+    , range = typedNode.range
+    , type_ = replacementType
+    }
 
 
 listReverseAndMap : (a -> b) -> List a -> List b
@@ -3356,6 +4294,86 @@ stringFirstCharToLower string =
 
         Just ( headChar, tailString ) ->
             String.cons (Char.toLower headChar) tailString
+
+
+expressionInfixOperationTypeInfer :
+    { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+    , locallyIntroducedExpressionVariables :
+        FastDict.Dict String (Type TypeVariableFromContext)
+    , path : List String
+    , moduleOriginLookup : ModuleOriginLookup
+    }
+    ->
+        { fullRange : Elm.Syntax.Range.Range
+        , operator : String
+        , left : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
+        , right : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
+        }
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , node : TypedNode Expression
+            }
+expressionInfixOperationTypeInfer context infixOperation =
+    Result.map3
+        (\operatorAsFunctionType leftInferred rightInferred ->
+            let
+                resultType : Type TypeVariableFromContext
+                resultType =
+                    TypeVariable ( context.path, "result" )
+            in
+            typeUnify context.declarationTypes
+                operatorAsFunctionType
+                (TypeNotVariable
+                    (TypeFunction
+                        { input = leftInferred.node.type_
+                        , output =
+                            TypeNotVariable
+                                (TypeFunction
+                                    { input = rightInferred.node.type_
+                                    , output = resultType
+                                    }
+                                )
+                        }
+                    )
+                )
+                |> Result.andThen
+                    (\unifiedType ->
+                        variableSubstitutionsMerge3 context.declarationTypes
+                            leftInferred.substitutions
+                            rightInferred.substitutions
+                            unifiedType.substitutions
+                            |> Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , node =
+                                        { range = infixOperation.fullRange
+                                        , value =
+                                            ExpressionInfixOperation
+                                                { symbol = infixOperation.operator
+                                                , left = leftInferred.node
+                                                , right = rightInferred.node
+                                                }
+                                        , type_ = resultType
+                                        }
+                                    }
+                                )
+                    )
+        )
+        (operatorFunctionType
+            { path = context.path
+            , moduleOriginLookup = context.moduleOriginLookup
+            }
+            infixOperation.operator
+        )
+        (infixOperation.left
+            |> expressionTypeInfer context
+        )
+        (infixOperation.right
+            |> expressionTypeInfer context
+        )
+        |> Result.andThen identity
 
 
 operatorFunctionType :
@@ -4048,21 +5066,21 @@ expressionContextToInPath :
     String
     ->
         { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
-        , locallyIntroducedVariableExpressions :
+        , locallyIntroducedExpressionVariables :
             FastDict.Dict String (Type TypeVariableFromContext)
         , path : List String
         , moduleOriginLookup : ModuleOriginLookup
         }
     ->
         { declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
-        , locallyIntroducedVariableExpressions :
+        , locallyIntroducedExpressionVariables :
             FastDict.Dict String (Type TypeVariableFromContext)
         , path : List String
         , moduleOriginLookup : ModuleOriginLookup
         }
 expressionContextToInPath innermostPathDescription context =
     { declarationTypes = context.declarationTypes
-    , locallyIntroducedVariableExpressions = context.locallyIntroducedVariableExpressions
+    , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
     , path = innermostPathDescription :: context.path
     , moduleOriginLookup = context.moduleOriginLookup
     }
@@ -4177,14 +5195,14 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                 )
                                 resultTypeVariable
 
-                    locallyIntroducedVariableExpressions : FastDict.Dict String (Type TypeVariableFromContext)
-                    locallyIntroducedVariableExpressions =
+                    locallyIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+                    locallyIntroducedExpressionVariables =
                         arguments.introducedExpressionVariables
                 in
                 implementation.expression
                     |> expressionTypeInfer
                         { declarationTypes = declarationTypes
-                        , locallyIntroducedVariableExpressions = locallyIntroducedVariableExpressions
+                        , locallyIntroducedExpressionVariables = locallyIntroducedExpressionVariables
                         , path = [ "result" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
                         }
@@ -5893,6 +6911,21 @@ fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
                                 Ok foldedWithEntry |> FastDict.Continue
             )
             (Ok initialFolded)
+
+
+fastDictMapAndSmallestJust : (key -> value -> Maybe ok) -> FastDict.Dict key value -> Maybe ok
+fastDictMapAndSmallestJust keyValueToMaybe fastDict =
+    fastDict
+        |> FastDict.stoppableFoldl
+            (\key value _ ->
+                case keyValueToMaybe key value of
+                    Just foldedWithEntry ->
+                        Just foldedWithEntry |> FastDict.Stop
+
+                    Nothing ->
+                        Nothing |> FastDict.Continue
+            )
+            Nothing
 
 
 parameterPatternsTypeInfer :
