@@ -2847,63 +2847,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 , introducedExpressionVariables = FastDict.empty
                 }
 
-        Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
-            parenthesizedInParens
-                |> patternTypeInfer context
-                |> Result.map
-                    (\inParens ->
-                        { substitutions = inParens.substitutions
-                        , node =
-                            { type_ = inParens.node.type_
-                            , value =
-                                PatternParenthesized inParens.node
-                            , range = fullRange
-                            }
-                        , introducedExpressionVariables = inParens.introducedExpressionVariables
-                        }
-                    )
-
-        Elm.Syntax.Pattern.VarPattern variableName ->
-            let
-                type_ : Type TypeVariableFromContext
-                type_ =
-                    TypeVariable ( context.path, variableName )
-            in
-            Ok
-                { substitutions = variableSubstitutionsNone
-                , node =
-                    { range = fullRange
-                    , value = PatternVariable variableName
-                    , type_ = type_
-                    }
-                , introducedExpressionVariables =
-                    FastDict.singleton variableName
-                        type_
-                }
-
-        Elm.Syntax.Pattern.AsPattern innerPatternNode (Elm.Syntax.Node.Node variableNameRange variableName) ->
-            innerPatternNode
-                |> patternTypeInfer context
-                |> Result.map
-                    (\inner ->
-                        { substitutions = inner.substitutions
-                        , node =
-                            { type_ = inner.node.type_
-                            , value =
-                                PatternAs
-                                    { pattern = inner.node
-                                    , variable =
-                                        { value = variableName
-                                        , range = variableNameRange
-                                        , type_ = inner.node.type_
-                                        }
-                                    }
-                            , range = fullRange
-                            }
-                        , introducedExpressionVariables = inner.introducedExpressionVariables
-                        }
-                    )
-
         Elm.Syntax.Pattern.UnitPattern ->
             Ok
                 { node =
@@ -2921,17 +2864,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     { range = fullRange
                     , value = PatternChar charValue
                     , type_ = typeCharChar
-                    }
-                , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
-                }
-
-        Elm.Syntax.Pattern.StringPattern stringValue ->
-            Ok
-                { node =
-                    { range = fullRange
-                    , value = PatternString stringValue
-                    , type_ = typeStringString
                     }
                 , substitutions = variableSubstitutionsNone
                 , introducedExpressionVariables = FastDict.empty
@@ -2959,6 +2891,76 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 , introducedExpressionVariables = FastDict.empty
                 }
 
+        Elm.Syntax.Pattern.StringPattern stringValue ->
+            Ok
+                { node =
+                    { range = fullRange
+                    , value = PatternString stringValue
+                    , type_ = typeStringString
+                    }
+                , substitutions = variableSubstitutionsNone
+                , introducedExpressionVariables = FastDict.empty
+                }
+
+        Elm.Syntax.Pattern.VarPattern variableName ->
+            let
+                type_ : Type TypeVariableFromContext
+                type_ =
+                    TypeVariable ( context.path, variableName )
+            in
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , node =
+                    { range = fullRange
+                    , value = PatternVariable variableName
+                    , type_ = type_
+                    }
+                , introducedExpressionVariables =
+                    FastDict.singleton variableName
+                        type_
+                }
+
+        Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
+            Result.map
+                (\inParens ->
+                    { substitutions = inParens.substitutions
+                    , node =
+                        { type_ = inParens.node.type_
+                        , value =
+                            PatternParenthesized inParens.node
+                        , range = fullRange
+                        }
+                    , introducedExpressionVariables = inParens.introducedExpressionVariables
+                    }
+                )
+                (parenthesizedInParens
+                    |> patternTypeInfer context
+                )
+
+        Elm.Syntax.Pattern.AsPattern innerPatternNode (Elm.Syntax.Node.Node variableNameRange variableName) ->
+            Result.map
+                (\inner ->
+                    { substitutions = inner.substitutions
+                    , node =
+                        { type_ = inner.node.type_
+                        , value =
+                            PatternAs
+                                { pattern = inner.node
+                                , variable =
+                                    { value = variableName
+                                    , range = variableNameRange
+                                    , type_ = inner.node.type_
+                                    }
+                                }
+                        , range = fullRange
+                        }
+                    , introducedExpressionVariables = inner.introducedExpressionVariables
+                    }
+                )
+                (innerPatternNode
+                    |> patternTypeInfer context
+                )
+
         Elm.Syntax.Pattern.TuplePattern parts ->
             case parts of
                 [] ->
@@ -2975,46 +2977,48 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
                 [ parenthesizedInParens ] ->
                     -- should be handled by ParenthesizedPattern
-                    parenthesizedInParens
-                        |> patternTypeInfer context
-                        |> Result.map
-                            (\inParens ->
-                                { substitutions = inParens.substitutions
-                                , node =
-                                    { type_ = inParens.node.type_
-                                    , value =
-                                        PatternParenthesized inParens.node
-                                    , range = fullRange
-                                    }
-                                , introducedExpressionVariables = inParens.introducedExpressionVariables
+                    Result.map
+                        (\inParens ->
+                            { substitutions = inParens.substitutions
+                            , node =
+                                { type_ = inParens.node.type_
+                                , value =
+                                    PatternParenthesized inParens.node
+                                , range = fullRange
                                 }
-                            )
+                            , introducedExpressionVariables = inParens.introducedExpressionVariables
+                            }
+                        )
+                        (parenthesizedInParens
+                            |> patternTypeInfer context
+                        )
 
                 [ tuplePart0, tuplePart1 ] ->
                     resultAndThen2
                         (\part0 part1 ->
-                            variableSubstitutionsMerge
-                                context.declarationTypes
-                                part0.substitutions
-                                part1.substitutions
-                                |> Result.map
-                                    (\substitutionsPart01 ->
-                                        { node =
-                                            { range = fullRange
-                                            , value = PatternTuple { part0 = part0.node, part1 = part1.node }
-                                            , type_ =
-                                                TypeNotVariable
-                                                    (TypeTuple
-                                                        { part0 = part0.node.type_, part1 = part1.node.type_ }
-                                                    )
-                                            }
-                                        , substitutions = substitutionsPart01
-                                        , introducedExpressionVariables =
-                                            FastDict.union
-                                                part0.introducedExpressionVariables
-                                                part1.introducedExpressionVariables
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { node =
+                                        { range = fullRange
+                                        , value = PatternTuple { part0 = part0.node, part1 = part1.node }
+                                        , type_ =
+                                            TypeNotVariable
+                                                (TypeTuple
+                                                    { part0 = part0.node.type_, part1 = part1.node.type_ }
+                                                )
                                         }
-                                    )
+                                    , substitutions = fullSubstitutions
+                                    , introducedExpressionVariables =
+                                        FastDict.union
+                                            part0.introducedExpressionVariables
+                                            part1.introducedExpressionVariables
+                                    }
+                                )
+                                (variableSubstitutionsMerge
+                                    context.declarationTypes
+                                    part0.substitutions
+                                    part1.substitutions
+                                )
                         )
                         (tuplePart0 |> patternTypeInfer context)
                         (tuplePart1 |> patternTypeInfer context)
@@ -3022,40 +3026,41 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 [ tuplePart0, tuplePart1, tuplePart2 ] ->
                     resultAndThen3
                         (\part0 part1 part2 ->
-                            variableSubstitutionsMerge3
-                                context.declarationTypes
-                                part0.substitutions
-                                part1.substitutions
-                                part2.substitutions
-                                |> Result.map
-                                    (\substitutionsPart012 ->
-                                        { node =
-                                            { range = fullRange
-                                            , value =
-                                                PatternTriple
-                                                    { part0 = part0.node
-                                                    , part1 = part1.node
-                                                    , part2 = part2.node
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { node =
+                                        { range = fullRange
+                                        , value =
+                                            PatternTriple
+                                                { part0 = part0.node
+                                                , part1 = part1.node
+                                                , part2 = part2.node
+                                                }
+                                        , type_ =
+                                            TypeNotVariable
+                                                (TypeTriple
+                                                    { part0 = part0.node.type_
+                                                    , part1 = part1.node.type_
+                                                    , part2 = part2.node.type_
                                                     }
-                                            , type_ =
-                                                TypeNotVariable
-                                                    (TypeTriple
-                                                        { part0 = part0.node.type_
-                                                        , part1 = part1.node.type_
-                                                        , part2 = part2.node.type_
-                                                        }
-                                                    )
-                                            }
-                                        , substitutions = substitutionsPart012
-                                        , introducedExpressionVariables =
-                                            FastDict.union
-                                                part0.introducedExpressionVariables
-                                                (FastDict.union
-                                                    part1.introducedExpressionVariables
-                                                    part2.introducedExpressionVariables
                                                 )
                                         }
-                                    )
+                                    , substitutions = fullSubstitutions
+                                    , introducedExpressionVariables =
+                                        FastDict.union
+                                            part0.introducedExpressionVariables
+                                            (FastDict.union
+                                                part1.introducedExpressionVariables
+                                                part2.introducedExpressionVariables
+                                            )
+                                    }
+                                )
+                                (variableSubstitutionsMerge3
+                                    context.declarationTypes
+                                    part0.substitutions
+                                    part1.substitutions
+                                    part2.substitutions
+                                )
                         )
                         (tuplePart0 |> patternTypeInfer context)
                         (tuplePart1 |> patternTypeInfer context)
@@ -3110,40 +3115,42 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
         Elm.Syntax.Pattern.UnConsPattern headNode tailNode ->
             resultAndThen2
                 (\headInferred tailInferred ->
-                    typeUnify
-                        context.declarationTypes
-                        headInferred.node.type_
-                        tailInferred.node.type_
-                        |> Result.andThen
-                            (\fullListUnified ->
-                                variableSubstitutionsMerge3
+                    Result.andThen
+                        (\fullListUnified ->
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , introducedExpressionVariables =
+                                        FastDict.union
+                                            headInferred.introducedExpressionVariables
+                                            tailInferred.introducedExpressionVariables
+                                    , node =
+                                        { range = fullRange
+                                        , value =
+                                            PatternListCons
+                                                { head = headInferred.node
+                                                , tail =
+                                                    { range = tailInferred.node.range
+                                                    , value = tailInferred.node.value
+                                                    , type_ = fullListUnified.type_
+                                                    }
+                                                }
+                                        , type_ = fullListUnified.type_
+                                        }
+                                    }
+                                )
+                                (variableSubstitutionsMerge3
                                     context.declarationTypes
                                     headInferred.substitutions
                                     tailInferred.substitutions
                                     fullListUnified.substitutions
-                                    |> Result.map
-                                        (\substitutionsHeadTail ->
-                                            { substitutions = substitutionsHeadTail
-                                            , introducedExpressionVariables =
-                                                FastDict.union
-                                                    headInferred.introducedExpressionVariables
-                                                    tailInferred.introducedExpressionVariables
-                                            , node =
-                                                { range = fullRange
-                                                , value =
-                                                    PatternListCons
-                                                        { head = headInferred.node
-                                                        , tail =
-                                                            { range = tailInferred.node.range
-                                                            , value = tailInferred.node.value
-                                                            , type_ = fullListUnified.type_
-                                                            }
-                                                        }
-                                                , type_ = fullListUnified.type_
-                                                }
-                                            }
-                                        )
-                            )
+                                )
+                        )
+                        (typeUnify
+                            context.declarationTypes
+                            (typeListList headInferred.node.type_)
+                            tailInferred.node.type_
+                        )
                 )
                 (patternTypeInfer
                     (context |> patternContextToInPath "head")
@@ -3170,10 +3177,30 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         }
 
                 head :: tail ->
-                    patternTypeInfer
-                        (context |> patternContextToInPath "0")
-                        head
-                        |> Result.andThen
+                    Result.map
+                        (\elementTypeAndSubstitutions ->
+                            { substitutions = elementTypeAndSubstitutions.substitutions
+                            , introducedExpressionVariables =
+                                elementTypeAndSubstitutions.introducedExpressionVariables
+                            , node =
+                                { range = fullRange
+                                , value =
+                                    PatternListExact
+                                        (elementTypeAndSubstitutions.elementNodesReverse
+                                            |> listReverseAndMap
+                                                (\elementNode ->
+                                                    { range = elementNode.range
+                                                    , value = elementNode.value
+                                                    , type_ = elementTypeAndSubstitutions.elementType
+                                                    }
+                                                )
+                                        )
+                                , type_ =
+                                    typeListList elementTypeAndSubstitutions.elementType
+                                }
+                            }
+                        )
+                        (Result.andThen
                             (\headTypedNodeAndSubstitutions ->
                                 tail
                                     |> listFoldlWhileOkFrom
@@ -3184,67 +3211,215 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                         , index = 1
                                         }
                                         (\elementNode soFar ->
-                                            patternTypeInfer
-                                                (context
-                                                    |> patternContextToInPath
-                                                        (soFar.index |> String.fromInt)
-                                                )
-                                                elementNode
-                                                |> Result.andThen
-                                                    (\elementTypedNodeAndSubstitutions ->
-                                                        typeUnify context.declarationTypes
-                                                            elementTypedNodeAndSubstitutions.node.type_
-                                                            soFar.elementType
-                                                            |> Result.andThen
-                                                                (\elementTypeWithCurrent ->
-                                                                    variableSubstitutionsMerge3 context.declarationTypes
-                                                                        elementTypedNodeAndSubstitutions.substitutions
-                                                                        elementTypeWithCurrent.substitutions
-                                                                        soFar.substitutions
-                                                                        |> Result.map
-                                                                            (\substitutionsWithElement ->
-                                                                                { index = soFar.index + 1
-                                                                                , elementNodesReverse =
-                                                                                    { range = elementTypedNodeAndSubstitutions.node.range
-                                                                                    , value = elementTypedNodeAndSubstitutions.node.value
-                                                                                    }
-                                                                                        :: soFar.elementNodesReverse
-                                                                                , elementType = elementTypeWithCurrent.type_
-                                                                                , substitutions = substitutionsWithElement
-                                                                                , introducedExpressionVariables =
-                                                                                    elementTypedNodeAndSubstitutions.introducedExpressionVariables
+                                            Result.andThen
+                                                (\elementTypedNodeAndSubstitutions ->
+                                                    typeUnify context.declarationTypes
+                                                        elementTypedNodeAndSubstitutions.node.type_
+                                                        soFar.elementType
+                                                        |> Result.andThen
+                                                            (\elementTypeWithCurrent ->
+                                                                variableSubstitutionsMerge3 context.declarationTypes
+                                                                    elementTypedNodeAndSubstitutions.substitutions
+                                                                    elementTypeWithCurrent.substitutions
+                                                                    soFar.substitutions
+                                                                    |> Result.map
+                                                                        (\substitutionsWithElement ->
+                                                                            { index = soFar.index + 1
+                                                                            , elementNodesReverse =
+                                                                                { range = elementTypedNodeAndSubstitutions.node.range
+                                                                                , value = elementTypedNodeAndSubstitutions.node.value
                                                                                 }
-                                                                            )
-                                                                )
+                                                                                    :: soFar.elementNodesReverse
+                                                                            , elementType = elementTypeWithCurrent.type_
+                                                                            , substitutions = substitutionsWithElement
+                                                                            , introducedExpressionVariables =
+                                                                                elementTypedNodeAndSubstitutions.introducedExpressionVariables
+                                                                            }
+                                                                        )
+                                                            )
+                                                )
+                                                (patternTypeInfer
+                                                    (context
+                                                        |> patternContextToInPath
+                                                            (soFar.index |> String.fromInt)
                                                     )
+                                                    elementNode
+                                                )
                                         )
                             )
-                        |> Result.map
-                            (\elementTypeAndSubstitutions ->
-                                { substitutions = elementTypeAndSubstitutions.substitutions
-                                , introducedExpressionVariables =
-                                    elementTypeAndSubstitutions.introducedExpressionVariables
-                                , node =
-                                    { range = fullRange
-                                    , value =
-                                        PatternListExact
-                                            (elementTypeAndSubstitutions.elementNodesReverse
-                                                |> listReverseAndMap
-                                                    (\elementNode ->
-                                                        { range = elementNode.range
-                                                        , value = elementNode.value
-                                                        , type_ = elementTypeAndSubstitutions.elementType
+                            (patternTypeInfer
+                                (context |> patternContextToInPath "0")
+                                head
+                            )
+                        )
+
+        Elm.Syntax.Pattern.NamedPattern qualified arguments ->
+            case context.moduleOriginLookup.references |> FastDict.get ( qualified.moduleName, qualified.name ) of
+                Nothing ->
+                    Err
+                        ("no module origin found for the variant reference "
+                            ++ qualifiedToString
+                                { qualification = qualified.moduleName
+                                , name = qualified.name
+                                }
+                        )
+
+                Just moduleOrigin ->
+                    case context.declarationTypes |> FastDict.get moduleOrigin of
+                        Nothing ->
+                            Err
+                                ("no declaration types found at the module origin of the variant reference "
+                                    ++ qualifiedToString
+                                        { qualification = moduleOrigin
+                                        , name = qualified.name
+                                        }
+                                )
+
+                        Just moduleOriginDeclarationTypes ->
+                            case
+                                moduleOriginDeclarationTypes.choiceTypes
+                                    |> fastDictMapAndSmallestJust
+                                        (\choiceTypeName choiceTypeInfo ->
+                                            choiceTypeInfo.variants
+                                                |> FastDict.get qualified.name
+                                                |> Maybe.map
+                                                    (\variantParameters ->
+                                                        { variantParameters = variantParameters
+                                                        , choiceTypeName = choiceTypeName
+                                                        , choiceTypeParameters = choiceTypeInfo.parameters
                                                         }
                                                     )
-                                            )
-                                    , type_ =
-                                        typeListList elementTypeAndSubstitutions.elementType
-                                    }
-                                }
-                            )
+                                        )
+                            of
+                                Nothing ->
+                                    Err
+                                        ("no choice type found at the module origin with the variant reference "
+                                            ++ qualifiedToString
+                                                { qualification = moduleOrigin
+                                                , name = qualified.name
+                                                }
+                                        )
 
-        Elm.Syntax.Pattern.NamedPattern _ _ ->
-            Debug.todo ""
+                                Just variant ->
+                                    patternVariantTypeInfer context
+                                        { fullRange = fullRange
+                                        , qualification = qualified.moduleName
+                                        , moduleOrigin = moduleOrigin
+                                        , name = qualified.name
+                                        , variantParameters = variant.variantParameters
+                                        , choiceTypeName = variant.choiceTypeName
+                                        , choiceTypeParameters = variant.choiceTypeParameters
+                                        , arguments = arguments
+                                        }
+
+
+patternVariantTypeInfer :
+    { moduleOriginLookup : ModuleOriginLookup, path : List String, declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule }
+    ->
+        { fullRange : Elm.Syntax.Range.Range
+        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        , qualification : Elm.Syntax.ModuleName.ModuleName
+        , name : String
+        , choiceTypeName : String
+        , choiceTypeParameters : List String
+        , variantParameters : List (Type String)
+        , arguments : List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
+        }
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , introducedExpressionVariables :
+                FastDict.Dict
+                    String
+                    (Type TypeVariableFromContext)
+            , node : TypedNode Pattern
+            }
+patternVariantTypeInfer context patternVariant =
+    Result.map
+        (\argumentsUnified ->
+            { substitutions = argumentsUnified.substitutions
+            , introducedExpressionVariables =
+                argumentsUnified.introducedExpressionVariables
+            , node =
+                { range = patternVariant.fullRange
+                , value =
+                    PatternVariant
+                        { moduleOrigin = patternVariant.moduleOrigin
+                        , qualification = patternVariant.qualification
+                        , name = patternVariant.name
+                        , arguments =
+                            argumentsUnified.nodesReverse
+                                |> List.reverse
+                        }
+                , type_ =
+                    TypeNotVariable
+                        (TypeConstruct
+                            { moduleOrigin = patternVariant.moduleOrigin
+                            , name = patternVariant.choiceTypeName
+                            , arguments =
+                                patternVariant.choiceTypeParameters
+                                    |> List.map
+                                        (\choiceTypeParameter ->
+                                            TypeVariable
+                                                ( context.path, choiceTypeParameter )
+                                        )
+                            }
+                        )
+                }
+            }
+        )
+        (List.map2
+            (\typeInVariant argumentPattern ->
+                { typeInVariant = typeInVariant
+                , pattern = argumentPattern
+                }
+            )
+            patternVariant.variantParameters
+            patternVariant.arguments
+            |> listFoldlWhileOkFrom
+                { substitutions = variableSubstitutionsNone
+                , introducedExpressionVariables =
+                    FastDict.empty
+                , nodesReverse = []
+                }
+                (\argument soFar ->
+                    Result.andThen
+                        (\argumentPatternInferred ->
+                            Result.andThen
+                                (\argumentUnified ->
+                                    Result.map
+                                        (\substitutionsWithArgument ->
+                                            { substitutions = substitutionsWithArgument
+                                            , introducedExpressionVariables =
+                                                FastDict.union
+                                                    argumentPatternInferred.introducedExpressionVariables
+                                                    soFar.introducedExpressionVariables
+                                            , nodesReverse =
+                                                (argumentPatternInferred.node
+                                                    |> typedNodeReplaceTypeBy argumentUnified.type_
+                                                )
+                                                    :: soFar.nodesReverse
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge context.declarationTypes
+                                            argumentPatternInferred.substitutions
+                                            argumentUnified.substitutions
+                                        )
+                                )
+                                (typeUnify context.declarationTypes
+                                    argumentPatternInferred.node.type_
+                                    (argument.typeInVariant
+                                        |> typeMapVariables
+                                            (\variableName -> ( context.path, variableName ))
+                                    )
+                                )
+                        )
+                        (argument.pattern
+                            |> patternTypeInfer context
+                        )
+                )
+        )
 
 
 expressionTypeInfer :
