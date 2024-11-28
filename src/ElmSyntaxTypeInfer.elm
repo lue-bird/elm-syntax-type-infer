@@ -101,11 +101,12 @@ So in practice these are
     -- ( ( [ "0" ], "number" ), ( [ "1" ], "number" ) )
     ( identity, List.map identity )
     -- ( ( [ "0" ], "a" ) -> ( [ "0" ], "a" )
-    -- , List ( [ "1", "0" ], "a" ) -> List ( [ "1", "0" ], "a" )
+    -- , List ( [ "1", "argument0" ], "a" )
+    --   -> List ( [ "1", "argument0" ], "a" )
     -- )
 
 `"0"` and `"1"` referring to the tuple part location
-and the last `"0"` referring to the applied argument index.
+and `"argument0"` referring to the applied argument index.
 
 We could work with some kind of name disambiguation system
 but preserving names and context is usually nicer
@@ -143,8 +144,8 @@ type TypeVariableConstraint
     | TypeVariableConstraintCompappend
 
 
-typeContextVariableName : TypeVariableFromContext -> String
-typeContextVariableName ( _, name ) =
+typeVariableFromContextName : TypeVariableFromContext -> String
+typeVariableFromContextName ( _, name ) =
     name
 
 
@@ -923,7 +924,7 @@ qualifiedToString reference =
                 ++ reference.name
 
 
-typeSubstituteVariableBy :
+typeSubstituteVariable :
     ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
@@ -936,7 +937,7 @@ typeSubstituteVariableBy :
             { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeSubstituteVariableBy declarationTypes replacement type_ =
+typeSubstituteVariable declarationTypes replacement type_ =
     case replacement.type_ of
         TypeVariable argumentVariable ->
             Ok
@@ -979,7 +980,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
     case type_ of
         TypeVariable typeVariable ->
             if typeVariable == replacement.variable then
-                case replacement.variable |> typeContextVariableName |> typeVariableConstraint of
+                case replacement.variable |> typeVariableFromContextName |> typeVariableConstraint of
                     Nothing ->
                         Ok
                             { type_ = TypeNotVariable replacement.type_
@@ -1009,7 +1010,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify appendable type variable with types other than String/List _"
 
                             TypeVariableConstraintComparable ->
-                                if replacement.type_ |> typeNotVariableIsComparable (\var -> var |> typeContextVariableName |> typeVariableConstraint) then
+                                if replacement.type_ |> typeNotVariableIsComparable (\var -> var |> typeVariableFromContextName |> typeVariableConstraint) then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1019,7 +1020,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
 
                             TypeVariableConstraintCompappend ->
-                                if replacement.type_ |> typeNotVariableIsCompappend (\var -> var |> typeContextVariableName |> typeVariableConstraint) then
+                                if replacement.type_ |> typeNotVariableIsCompappend (\var -> var |> typeVariableFromContextName |> typeVariableConstraint) then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1516,9 +1517,6 @@ into a concrete type with all the info we've inferred already.
 While variable types in context get passed down,
 variable substitutions get passed all the way to the top and only get processed there.
 
-TODO don't forget to apply variable to type substitutions for _all_ equivalent variables!
-TODO don't forget to apply variable to type substitutions for other variable to type substitutions!
-
 -}
 type alias VariableSubstitutions =
     { equivalentVariables :
@@ -1678,7 +1676,7 @@ variableSubstitutionsMerge5 declarationTypes a b c d e =
                 variableSubstitutionsMerge
                     declarationTypes
                     abcSubstitutions
-                    d
+                    e
             )
 
 
@@ -1732,7 +1730,6 @@ equivalentVariableSetMerge a b =
                     )
                     { sets = [], bRemaining = b }
     in
-    -- TODO remaining in b
     mergedIntoA.sets
         ++ mergedIntoA.bRemaining
 
@@ -2192,7 +2189,7 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
                                     }
                                     (\substitution soFar ->
                                         soFar.type_
-                                            |> typeSubstituteVariableBy declarationTypes
+                                            |> typeSubstituteVariable declarationTypes
                                                 { variable = substitution.variable
                                                 , type_ = substitution.type_
                                                 }
@@ -2406,11 +2403,11 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
             let
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    ( -- creating a new variable safely (I hope)
+                    ( -- creating a new variable safely
                       "_of"
-                        :: ([ (aRecordExtension.recordVariable |> typeContextVariableName)
+                        :: ([ (aRecordExtension.recordVariable |> typeVariableFromContextName)
                                 :: (aRecordExtension.recordVariable |> Tuple.first)
-                            , (bRecordExtension.recordVariable |> typeContextVariableName)
+                            , (bRecordExtension.recordVariable |> typeVariableFromContextName)
                                 :: (bRecordExtension.recordVariable |> Tuple.first)
                             ]
                                 |> List.sort
@@ -4282,7 +4279,10 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                                 (valueNode
                                     |> expressionTypeInfer
-                                        (context |> expressionContextToInPath name)
+                                        (context
+                                            |> expressionContextToInPath
+                                                ("field" ++ stringFirstCharToUpper name)
+                                        )
                                 )
                         )
                 )
@@ -5375,6 +5375,7 @@ expressionDeclaration :
             String
             { arguments : List (TypedNode Pattern)
             , result : TypedNode Expression
+            , type_ : Type TypeVariableFromContext
             }
 expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
     let
@@ -5382,126 +5383,214 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
         implementation =
             syntaxDeclarationExpression.declaration |> Elm.Syntax.Node.value
     in
-    implementation.arguments
-        |> parameterPatternsTypeInfer
-            { declarationTypes =
-                typesAndOriginLookup.importedTypes
-                    |> FastDict.insert [] typesAndOriginLookup.otherModuleDeclaredTypes
-            , path = []
-            , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
-            }
-        |> Result.andThen
-            (\arguments ->
-                let
-                    declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
-                    declarationTypes =
-                        typesAndOriginLookup.importedTypes
-                            |> FastDict.insert
-                                []
-                                (typesAndOriginLookup.otherModuleDeclaredTypes
-                                    |> (\r ->
-                                            { r
-                                                | signatures =
-                                                    r.signatures
-                                                        |> FastDict.insert name
-                                                            (type_
-                                                                |> typeMapVariables
-                                                                    (\( _, variableName ) -> variableName)
-                                                            )
-                                            }
-                                       )
+    Result.andThen
+        (\arguments ->
+            let
+                name : String
+                name =
+                    implementation.name |> Elm.Syntax.Node.value
+
+                resultTypeVariable : Type TypeVariableFromContext
+                resultTypeVariable =
+                    TypeVariable ( [], name )
+
+                type_ : Type TypeVariableFromContext
+                type_ =
+                    arguments.nodesReverse
+                        |> List.foldl
+                            (\argumentTypedNode soFar ->
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = argumentTypedNode.type_
+                                        , output = soFar
+                                        }
+                                    )
+                            )
+                            resultTypeVariable
+
+                declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+                declarationTypes =
+                    typesAndOriginLookup.importedTypes
+                        |> FastDict.insert
+                            []
+                            (typesAndOriginLookup.otherModuleDeclaredTypes
+                                |> (\r ->
+                                        { r
+                                            | signatures =
+                                                r.signatures
+                                                    |> FastDict.insert name
+                                                        (type_
+                                                            |> typeMapVariables
+                                                                (\( _, variableName ) -> variableName)
+                                                        )
+                                        }
+                                   )
+                            )
+            in
+            Result.andThen
+                (\resultInferred ->
+                    case syntaxDeclarationExpression.signature of
+                        Nothing ->
+                            Result.andThen
+                                (\argumentAndResultSubstitutions ->
+                                    { result = resultInferred.node
+                                    , type_ = type_
+                                    , arguments =
+                                        arguments.nodesReverse |> List.reverse
+                                    }
+                                        |> -- TODO instead first condense equivalent variables
+                                           -- then unify substitutions of equivalent variables
+                                           --      then in types of variable to type substitutions: map result variables to condensed
+                                           -- then substitute everything
+                                           declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                            declarationTypes
+                                            argumentAndResultSubstitutions
+                                        |> Result.andThen
+                                            declarationValueOrFunctionCondenseEquivalentVariables
+                                )
+                                (variableSubstitutionsMerge declarationTypes
+                                    resultInferred.substitutions
+                                    arguments.substitutions
                                 )
 
-                    name : String
-                    name =
-                        implementation.name |> Elm.Syntax.Node.value
-
-                    resultTypeVariable : Type TypeVariableFromContext
-                    resultTypeVariable =
-                        TypeVariable ( [], name )
-
-                    type_ : Type TypeVariableFromContext
-                    type_ =
-                        arguments.nodesReverse
-                            |> List.foldl
-                                (\argumentTypedNode soFar ->
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = argumentTypedNode.type_
-                                            , output = soFar
+                        Just (Elm.Syntax.Node.Node _ signature) ->
+                            Result.andThen
+                                (\typeUnifiedWithSignatureType ->
+                                    Result.andThen
+                                        (\argumentAndResultAndTypeUnifySubstitutions ->
+                                            { result = resultInferred.node
+                                            , type_ = typeUnifiedWithSignatureType.type_
+                                            , arguments =
+                                                arguments.nodesReverse |> List.reverse
                                             }
+                                                |> -- TODO instead first condense equivalent variables
+                                                   -- then unify substitutions of equivalent variables
+                                                   --      then in types of variable to type substitutions: map result variables to condensed
+                                                   -- then substitute everything
+                                                   declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                                    declarationTypes
+                                                    argumentAndResultAndTypeUnifySubstitutions
+                                                |> Result.andThen
+                                                    declarationValueOrFunctionCondenseEquivalentVariables
+                                        )
+                                        (variableSubstitutionsMerge3 declarationTypes
+                                            resultInferred.substitutions
+                                            arguments.substitutions
+                                            typeUnifiedWithSignatureType.substitutions
                                         )
                                 )
-                                resultTypeVariable
-
-                    locallyIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
-                    locallyIntroducedExpressionVariables =
-                        arguments.introducedExpressionVariables
-                in
-                implementation.expression
+                                (signature.typeAnnotation
+                                    |> Elm.Syntax.Node.value
+                                    |> syntaxToType typesAndOriginLookup.moduleOriginLookup
+                                    |> Result.andThen
+                                        (\signatureType ->
+                                            typeUnify declarationTypes
+                                                type_
+                                                (signatureType
+                                                    |> typeMapVariables
+                                                        (\variable -> ( [], variable ))
+                                                )
+                                        )
+                                )
+                )
+                (implementation.expression
                     |> expressionTypeInfer
                         { declarationTypes = declarationTypes
-                        , locallyIntroducedExpressionVariables = locallyIntroducedExpressionVariables
+                        , locallyIntroducedExpressionVariables = arguments.introducedExpressionVariables
                         , path = [ "result" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
                         }
-                    |> Result.andThen
-                        (\resultInferred ->
-                            let
-                                resultTypeSubstituted :
-                                    Result
-                                        String
-                                        { node : TypedNode Expression
-                                        , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
-                                        }
-                                resultTypeSubstituted =
-                                    -- TODO how to proceed with equivalent variables:
-                                    -- → unify types for all equivalent variables
-                                    --   and then combine their constraints
-                                    --   and then replace all except the combined variable in the final ExpressionTypedNode (tree)
-                                    --   TODO what do do with remaining equivalent variables?
-                                    resultInferred.node
-                                        |> expressionTypedNodeSubstituteVariablesByNotVariables
-                                            declarationTypes
-                                            resultInferred.substitutions
-                            in
-                            case syntaxDeclarationExpression.signature of
-                                Nothing ->
-                                    -- TODO unify+substitute in all places necessary
-                                    -- TODO query the original introduced type variable
-                                    --      for the final type
-                                    Debug.todo ""
+                )
+        )
+        (implementation.arguments
+            |> parameterPatternsTypeInfer
+                { declarationTypes =
+                    typesAndOriginLookup.importedTypes
+                        |> FastDict.insert [] typesAndOriginLookup.otherModuleDeclaredTypes
+                , path = []
+                , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
+                }
+        )
 
-                                Just signature ->
-                                    Debug.todo
-                                        """unify arguments and result
-                                         through creating a function with argument types and result type"""
+
+declarationValueOrFunctionCondenseEquivalentVariables :
+    { equivalentVariables : List (FastSet.Set TypeVariableFromContext)
+    , arguments : List (TypedNode Pattern)
+    , result : TypedNode Expression
+    , type_ : Type TypeVariableFromContext
+    }
+    ->
+        Result
+            String
+            { arguments : List (TypedNode Pattern)
+            , result : TypedNode Expression
+            , type_ : Type TypeVariableFromContext
+            }
+declarationValueOrFunctionCondenseEquivalentVariables declarationValueOrFunctionAndEquivalentVariables =
+    Result.map
+        (\lookupUnifiedVariable ->
+            { arguments = declarationValueOrFunctionAndEquivalentVariables.arguments
+            , result = declarationValueOrFunctionAndEquivalentVariables.result
+            , type_ = declarationValueOrFunctionAndEquivalentVariables.type_
+            }
+                |> declarationValueOrFunctionMapTypeVariables
+                    (\variable ->
+                        lookupUnifiedVariable
+                            |> FastDict.get variable
+                            |> Maybe.withDefault variable
+                    )
+        )
+        (declarationValueOrFunctionAndEquivalentVariables.equivalentVariables
+            |> listFoldlWhileOkFrom
+                FastDict.empty
+                (\equivalentVariableSet soFar ->
+                    Result.map
+                        (\unifiedVariable ->
+                            equivalentVariableSet
+                                |> FastSet.foldl
+                                    (\variable soFarInSet ->
+                                        soFarInSet
+                                            |> FastDict.insert variable unifiedVariable
+                                    )
+                                    soFar
                         )
-            )
+                        (equivalentVariablesCreateUnifiedVariable equivalentVariableSet)
+                )
+        )
 
 
-expressionTypedNodeSubstituteVariablesByNotVariables :
+declarationValueOrFunctionSubstituteVariablesByNotVariables :
     ModuleLevelDeclarationTypesInAvailableInModule
     -> VariableSubstitutions
-    -> TypedNode Expression
+    ->
+        { arguments : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type TypeVariableFromContext
+        }
     ->
         Result
             String
             { equivalentVariables : List (FastSet.Set TypeVariableFromContext)
-            , node : TypedNode Expression
+            , arguments : List (TypedNode Pattern)
+            , result : TypedNode Expression
+            , type_ : Type TypeVariableFromContext
             }
-expressionTypedNodeSubstituteVariablesByNotVariables declarationTypes variableSubstitutions expression =
+declarationValueOrFunctionSubstituteVariablesByNotVariables declarationTypes variableSubstitutions declarationValueOrFunctionSoFar =
     case variableSubstitutions.variableToType |> FastDict.popMin of
         Nothing ->
             Ok
                 { equivalentVariables = variableSubstitutions.equivalentVariables
-                , node = expression
+                , arguments = declarationValueOrFunctionSoFar.arguments
+                , result = declarationValueOrFunctionSoFar.result
+                , type_ =
+                    -- creating the type only at this stage would be faster
+                    declarationValueOrFunctionSoFar.type_
                 }
 
         Just ( ( replacementVariable, replacementTypeNotVariable ), remainingReplacements ) ->
             case
-                expression
-                    |> expressionTypedNodeSubstituteVariableByNotVariable
+                declarationValueOrFunctionSoFar
+                    |> declarationValueOrFunctionSubstituteVariableByNotVariable
                         declarationTypes
                         { variable = replacementVariable
                         , type_ = replacementTypeNotVariable
@@ -5523,10 +5612,119 @@ expressionTypedNodeSubstituteVariablesByNotVariables declarationTypes variableSu
                             Err error
 
                         Ok substitutionsAfterSubstitution ->
-                            expressionTypedNodeSubstituteVariablesByNotVariables
+                            declarationValueOrFunctionSubstituteVariablesByNotVariables
                                 declarationTypes
                                 substitutionsAfterSubstitution
-                                substituted.node
+                                { arguments = substituted.arguments
+                                , result = substituted.result
+                                , type_ = substituted.type_
+                                }
+
+
+declarationValueOrFunctionSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    ->
+        { variable : TypeVariableFromContext
+        , type_ : TypeNotVariable TypeVariableFromContext
+        }
+    ->
+        { arguments : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type TypeVariableFromContext
+        }
+    ->
+        Result
+            String
+            { arguments : List (TypedNode Pattern)
+            , result : TypedNode Expression
+            , type_ : Type TypeVariableFromContext
+            , substitutions : VariableSubstitutions
+            }
+declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
+    resultAndThen3
+        (\argumentsInferred resultInferred typeInferred ->
+            Result.map
+                (\fullSubstitutions ->
+                    { arguments =
+                        argumentsInferred.nodesReverse
+                            |> List.reverse
+                    , result = resultInferred.node
+                    , type_ =
+                        -- reconstructing the function is probably faster
+                        typeInferred.type_
+                    , substitutions = fullSubstitutions
+                    }
+                )
+                (variableSubstitutionsMerge3 declarationTypes
+                    argumentsInferred.substitutions
+                    resultInferred.substitutions
+                    typeInferred.substitutions
+                )
+        )
+        (declarationValueOrFunctionSoFar.arguments
+            |> listFoldlWhileOkFrom
+                { substitutions = variableSubstitutionsNone
+                , nodesReverse = []
+                }
+                (\patternTypedNode soFar ->
+                    Result.andThen
+                        (\patternSubstituted ->
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , nodesReverse =
+                                        patternSubstituted.node
+                                            :: soFar.nodesReverse
+                                    }
+                                )
+                                (variableSubstitutionsMerge declarationTypes
+                                    patternSubstituted.substitutions
+                                    soFar.substitutions
+                                )
+                        )
+                        (patternTypedNode
+                            |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                replacement
+                        )
+                )
+        )
+        (declarationValueOrFunctionSoFar.result
+            |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                replacement
+        )
+        (declarationValueOrFunctionSoFar.type_
+            |> typeSubstituteVariableByNotVariable declarationTypes
+                replacement
+        )
+
+
+declarationValueOrFunctionMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    ->
+        { arguments : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type TypeVariableFromContext
+        }
+    ->
+        { arguments : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type TypeVariableFromContext
+        }
+declarationValueOrFunctionMapTypeVariables variableChange declarationValueOrFunctionSoFar =
+    { arguments =
+        declarationValueOrFunctionSoFar.arguments
+            |> List.map
+                (\argument ->
+                    argument |> patternTypedNodeMapTypeVariables variableChange
+                )
+    , result =
+        declarationValueOrFunctionSoFar.result
+            |> expressionTypedNodeMapTypeVariables variableChange
+    , type_ =
+        -- reconstructing the function is probably faster
+        declarationValueOrFunctionSoFar.type_
+            |> typeMapVariables variableChange
+    }
 
 
 expressionTypedNodeSubstituteVariableByNotVariable :
@@ -6525,14 +6723,90 @@ expressionMapTypeVariables typeVariableChange expression =
                             )
                 }
 
-        ExpressionLetIn _ ->
-            Debug.todo ""
+        ExpressionLambda expressionLambda ->
+            ExpressionLambda
+                { arguments =
+                    expressionLambda.arguments
+                        |> List.map
+                            (\argument ->
+                                argument |> patternTypedNodeMapTypeVariables typeVariableChange
+                            )
+                , result =
+                    expressionLambda.result
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
 
-        ExpressionCaseOf _ ->
-            Debug.todo ""
+        ExpressionCaseOf expressionCaseOf ->
+            ExpressionCaseOf
+                { matchedExpression =
+                    expressionCaseOf.matchedExpression
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , cases =
+                    expressionCaseOf.cases
+                        |> List.map
+                            (\case_ ->
+                                { pattern =
+                                    case_.pattern
+                                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                                , result =
+                                    case_.result
+                                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                                }
+                            )
+                }
 
-        ExpressionLambda _ ->
-            Debug.todo ""
+        ExpressionLetIn expressionLetIn ->
+            ExpressionLetIn
+                { declarations =
+                    expressionLetIn.declarations
+                        |> List.map
+                            (\letDeclarationNode ->
+                                letDeclarationNode
+                                    |> Elm.Syntax.Node.map
+                                        (\letDeclaration ->
+                                            letDeclaration |> expressionLetDeclarationMapTypeVariables typeVariableChange
+                                        )
+                            )
+                , result =
+                    expressionLetIn.result
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+
+expressionLetDeclarationMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> LetDeclaration
+    -> LetDeclaration
+expressionLetDeclarationMapTypeVariables typeVariableChange expressionLetDeclaration =
+    case expressionLetDeclaration of
+        LetDestructuring letDestructuring ->
+            LetDestructuring
+                { pattern =
+                    letDestructuring.pattern
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , expression =
+                    letDestructuring.expression
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                }
+
+        LetValueOrFunction letValueOrFunction ->
+            LetValueOrFunction
+                { signature = letValueOrFunction.signature
+                , nameRange = letValueOrFunction.nameRange
+                , name = letValueOrFunction.name
+                , arguments =
+                    letValueOrFunction.arguments
+                        |> List.map
+                            (\argument ->
+                                argument |> patternTypedNodeMapTypeVariables typeVariableChange
+                            )
+                , result =
+                    letValueOrFunction.result
+                        |> expressionTypedNodeMapTypeVariables typeVariableChange
+                , type_ =
+                    letValueOrFunction.type_
+                        |> typeMapVariables typeVariableChange
+                }
 
 
 patternTypedNodeSubstituteVariableByNotVariable :
@@ -6651,9 +6925,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                             { head = headSubstituted.node
                                             , tail = tailSubstituted.node
                                             }
-                                    , type_ =
-                                        -- TODO take tail type?
-                                        typeSubstituted.type_
+                                    , type_ = typeSubstituted.type_
                                     }
                                 }
                             )
@@ -7056,19 +7328,27 @@ equivalentVariablesCreateUnifiedVariable set =
         [] ->
             Err "implementation bug: equivalent variables set is empty"
 
-        ( headVariableContext, headVariableName ) :: tailVariables ->
+        headVariable :: tailVariables ->
             tailVariables
                 |> listFoldlWhileOkFrom
-                    (headVariableName |> typeVariableConstraint)
+                    (headVariable |> typeVariableFromContextName |> typeVariableConstraint)
                     (\variable soFar ->
                         maybeTypeVariableConstraintMerge
-                            (variable |> typeContextVariableName |> typeVariableConstraint)
+                            (variable |> typeVariableFromContextName |> typeVariableConstraint)
                             soFar
                     )
                 |> Result.map
                     (\unifiedConstraint ->
-                        ( headVariableContext
-                        , headVariableName
+                        ( -- creating a new variable safely
+                          (headVariable :: tailVariables)
+                            |> List.map
+                                (\( context, name ) ->
+                                    name :: context
+                                )
+                            |> List.sort
+                            |> List.intersperse [ "_and" ]
+                            |> List.concat
+                        , "equivalent"
                             |> typeVariableNameReplaceMaybeConstraint unifiedConstraint
                         )
                     )
