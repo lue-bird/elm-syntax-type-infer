@@ -5392,9 +5392,9 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                 name =
                     implementation.name |> Elm.Syntax.Node.value
 
-                resultTypeVariable : Type TypeVariableFromContext
+                resultTypeVariable : TypeVariableFromContext
                 resultTypeVariable =
-                    TypeVariable ( [], name )
+                    ( [], "result" )
 
                 type_ : Type TypeVariableFromContext
                 type_ =
@@ -5408,7 +5408,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                         }
                                     )
                             )
-                            resultTypeVariable
+                            (TypeVariable resultTypeVariable)
 
                 declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
                 declarationTypes =
@@ -5431,6 +5431,36 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
             in
             Result.andThen
                 (\resultInferred ->
+                    let
+                        resultInferredSubstitutions :
+                            { variableToType :
+                                FastDict.Dict
+                                    TypeVariableFromContext
+                                    (TypeNotVariable TypeVariableFromContext)
+                            , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
+                            }
+                        resultInferredSubstitutions =
+                            -- TODO this doesnt work, it needs to be merged
+                            case resultInferred.node.type_ of
+                                TypeNotVariable resultInferredNotVariable ->
+                                    { variableToType =
+                                        resultInferred.substitutions.variableToType
+                                            |> FastDict.insert resultTypeVariable
+                                                resultInferredNotVariable
+                                    , equivalentVariables =
+                                        resultInferred.substitutions.equivalentVariables
+                                    }
+
+                                TypeVariable resultInferredVariable ->
+                                    { variableToType =
+                                        resultInferred.substitutions.variableToType
+                                    , equivalentVariables =
+                                        equivalentVariablesMergeWithSetOf2
+                                            resultTypeVariable
+                                            resultInferredVariable
+                                            resultInferred.substitutions.equivalentVariables
+                                    }
+                    in
                     case syntaxDeclarationExpression.signature of
                         Nothing ->
                             Result.andThen
@@ -5445,7 +5475,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                             argumentAndResultSubstitutions
                                 )
                                 (variableSubstitutionsMerge declarationTypes
-                                    resultInferred.substitutions
+                                    resultInferredSubstitutions
                                     arguments.substitutions
                                 )
 
@@ -5464,7 +5494,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                                     argumentAndResultAndTypeUnifySubstitutions
                                         )
                                         (variableSubstitutionsMerge3 declarationTypes
-                                            resultInferred.substitutions
+                                            resultInferredSubstitutions
                                             arguments.substitutions
                                             typeUnifiedWithSignatureType.substitutions
                                         )
@@ -7548,10 +7578,14 @@ parameterPatternsTypeInfer context parameterPatterns =
             { substitutions = variableSubstitutionsNone
             , introducedExpressionVariables = FastDict.empty
             , nodesReverse = []
+            , index = 0
             }
             (\pattern soFar ->
                 pattern
-                    |> patternTypeInfer context
+                    |> patternTypeInfer
+                        (context
+                            |> patternContextToInPath (soFar.index |> String.fromInt)
+                        )
                     |> Result.andThen
                         (\patternInferred ->
                             variableSubstitutionsMerge context.declarationTypes
@@ -7559,7 +7593,8 @@ parameterPatternsTypeInfer context parameterPatterns =
                                 patternInferred.substitutions
                                 |> Result.map
                                     (\substitutionsWithPattern ->
-                                        { substitutions = substitutionsWithPattern
+                                        { index = soFar.index + 1
+                                        , substitutions = substitutionsWithPattern
                                         , nodesReverse =
                                             patternInferred.node
                                                 :: soFar.nodesReverse
@@ -7570,6 +7605,14 @@ parameterPatternsTypeInfer context parameterPatterns =
                                         }
                                     )
                         )
+            )
+        |> Result.map
+            (\folded ->
+                { substitutions = folded.substitutions
+                , introducedExpressionVariables =
+                    folded.introducedExpressionVariables
+                , nodesReverse = folded.nodesReverse
+                }
             )
 
 

@@ -159,7 +159,7 @@ suite =
                     ]
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeVariable
-                            ( [ "a", "called", "result", "_and", "number", "argument0", "result", "_and", "result", "result" ]
+                            ( [ "a", "called", "result", "_and", "number", "argument0", "result", "_and", "result", "_and", "result", "result" ]
                             , "numberEquivalent"
                             )
                         )
@@ -224,6 +224,47 @@ suite =
                             )
                         )
             )
+        , Test.test "List.map called with Basics.identity (qualified from implicit import)"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
+                    ]
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { moduleOrigin = [ "List" ]
+                                            , name = "List"
+                                            , arguments =
+                                                [ ElmSyntaxTypeInfer.TypeVariable
+                                                    ( [ "a", "argument0", "result", "_and", "a", "called", "result", "_and", "b", "called", "result" ]
+                                                    , "equivalent"
+                                                    )
+                                                ]
+                                            }
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { moduleOrigin = [ "List" ]
+                                            , name = "List"
+                                            , arguments =
+                                                [ ElmSyntaxTypeInfer.TypeVariable
+                                                    ( [ "a", "argument0", "result", "_and", "a", "called", "result", "_and", "b", "called", "result" ]
+                                                    , "equivalent"
+                                                    )
+                                                ]
+                                            }
+                                        )
+                                }
+                            )
+                        )
+            )
         ]
 
 
@@ -251,7 +292,7 @@ expressionExpectInferredType expectedInferredType expression =
                         exampleModuleOriginLookup
                     |> .types
             }
-        |> Result.map (\typed -> typed.result.type_)
+        |> Result.map .type_
         |> Expect.equal (Ok expectedInferredType)
 
 
