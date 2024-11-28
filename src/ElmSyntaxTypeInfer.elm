@@ -298,15 +298,15 @@ typeMapVariables variableMap type_ =
         TypeNotVariable typeNotVariable ->
             TypeNotVariable
                 (typeNotVariable
-                    |> typeNotVariableVariablesMap variableMap
+                    |> typeNotVariableMapVariables variableMap
                 )
 
 
-typeNotVariableVariablesMap :
+typeNotVariableMapVariables :
     (variable -> variableMapped)
     -> TypeNotVariable variable
     -> TypeNotVariable variableMapped
-typeNotVariableVariablesMap variableMap typeNotVariable =
+typeNotVariableMapVariables variableMap typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
             TypeUnit
@@ -1573,10 +1573,9 @@ variableSubstitutionsMerge declarationTypes a b =
                                                 TypeVariable abUnifiedVariable ->
                                                     { equivalentVariables =
                                                         substitutionsWithAB.equivalentVariables
-                                                            |> equivalentVariablesInsert
-                                                                (FastSet.singleton variable
-                                                                    |> FastSet.insert abUnifiedVariable
-                                                                )
+                                                            |> equivalentVariablesMergeWithSetOf2
+                                                                variable
+                                                                abUnifiedVariable
                                                     , variableToType =
                                                         substitutionsWithAB.variableToType
                                                     }
@@ -1680,15 +1679,18 @@ variableSubstitutionsMerge5 declarationTypes a b c d e =
             )
 
 
-equivalentVariablesInsert :
-    FastSet.Set comparable
+equivalentVariablesMergeWithSetOf2 :
+    comparable
+    -> comparable
     -> List (FastSet.Set comparable)
     -> List (FastSet.Set comparable)
-equivalentVariablesInsert equivalentVariablesSet equivalentVariables =
-    -- TODO optimize?
+equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
+    -- TODO optimize
     equivalentVariableSetMerge
         equivalentVariables
-        [ equivalentVariablesSet ]
+        [ FastSet.singleton aEquivalentVariable
+            |> FastSet.insert bEquivalentVariable
+        ]
 
 
 equivalentVariableSetMerge :
@@ -5438,15 +5440,9 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                     , arguments =
                                         arguments.nodesReverse |> List.reverse
                                     }
-                                        |> -- TODO instead first condense equivalent variables
-                                           -- then unify substitutions of equivalent variables
-                                           --      then in types of variable to type substitutions: map result variables to condensed
-                                           -- then substitute everything
-                                           declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                        |> declarationValueOrFunctionSubstituteVariablesByNotVariables
                                             declarationTypes
                                             argumentAndResultSubstitutions
-                                        |> Result.andThen
-                                            declarationValueOrFunctionCondenseEquivalentVariables
                                 )
                                 (variableSubstitutionsMerge declarationTypes
                                     resultInferred.substitutions
@@ -5463,15 +5459,9 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                             , arguments =
                                                 arguments.nodesReverse |> List.reverse
                                             }
-                                                |> -- TODO instead first condense equivalent variables
-                                                   -- then unify substitutions of equivalent variables
-                                                   --      then in types of variable to type substitutions: map result variables to condensed
-                                                   -- then substitute everything
-                                                   declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                                |> declarationValueOrFunctionSubstituteVariablesByNotVariables
                                                     declarationTypes
                                                     argumentAndResultAndTypeUnifySubstitutions
-                                                |> Result.andThen
-                                                    declarationValueOrFunctionCondenseEquivalentVariables
                                         )
                                         (variableSubstitutionsMerge3 declarationTypes
                                             resultInferred.substitutions
@@ -5528,35 +5518,43 @@ declarationValueOrFunctionCondenseEquivalentVariables :
             }
 declarationValueOrFunctionCondenseEquivalentVariables declarationValueOrFunctionAndEquivalentVariables =
     Result.map
-        (\lookupUnifiedVariable ->
+        (\lookupCondensedVariable ->
             { arguments = declarationValueOrFunctionAndEquivalentVariables.arguments
             , result = declarationValueOrFunctionAndEquivalentVariables.result
             , type_ = declarationValueOrFunctionAndEquivalentVariables.type_
             }
                 |> declarationValueOrFunctionMapTypeVariables
                     (\variable ->
-                        lookupUnifiedVariable
+                        lookupCondensedVariable
                             |> FastDict.get variable
                             |> Maybe.withDefault variable
                     )
         )
-        (declarationValueOrFunctionAndEquivalentVariables.equivalentVariables
-            |> listFoldlWhileOkFrom
-                FastDict.empty
-                (\equivalentVariableSet soFar ->
-                    Result.map
-                        (\unifiedVariable ->
-                            equivalentVariableSet
-                                |> FastSet.foldl
-                                    (\variable soFarInSet ->
-                                        soFarInSet
-                                            |> FastDict.insert variable unifiedVariable
-                                    )
-                                    soFar
-                        )
-                        (equivalentVariablesCreateUnifiedVariable equivalentVariableSet)
-                )
+        (createEquivalentVariablesToCondensedVariableLookup
+            declarationValueOrFunctionAndEquivalentVariables.equivalentVariables
         )
+
+
+createEquivalentVariablesToCondensedVariableLookup :
+    List (FastSet.Set TypeVariableFromContext)
+    -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
+createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
+    equivalentVariables
+        |> listFoldlWhileOkFrom
+            FastDict.empty
+            (\equivalentVariableSet soFar ->
+                Result.map
+                    (\unifiedVariable ->
+                        equivalentVariableSet
+                            |> FastSet.foldl
+                                (\variable soFarInSet ->
+                                    soFarInSet
+                                        |> FastDict.insert variable unifiedVariable
+                                )
+                                soFar
+                    )
+                    (equivalentVariablesCreateCondensedVariable equivalentVariableSet)
+            )
 
 
 declarationValueOrFunctionSubstituteVariablesByNotVariables :
@@ -5570,55 +5568,156 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables :
     ->
         Result
             String
-            { equivalentVariables : List (FastSet.Set TypeVariableFromContext)
-            , arguments : List (TypedNode Pattern)
+            { arguments : List (TypedNode Pattern)
             , result : TypedNode Expression
             , type_ : Type TypeVariableFromContext
             }
 declarationValueOrFunctionSubstituteVariablesByNotVariables declarationTypes variableSubstitutions declarationValueOrFunctionSoFar =
-    case variableSubstitutions.variableToType |> FastDict.popMin of
-        Nothing ->
-            Ok
-                { equivalentVariables = variableSubstitutions.equivalentVariables
-                , arguments = declarationValueOrFunctionSoFar.arguments
-                , result = declarationValueOrFunctionSoFar.result
-                , type_ =
-                    -- creating the type only at this stage would be faster
-                    declarationValueOrFunctionSoFar.type_
-                }
+    case variableSubstitutions.equivalentVariables of
+        [] ->
+            case variableSubstitutions.variableToType |> FastDict.popMin of
+                Nothing ->
+                    { equivalentVariables = variableSubstitutions.equivalentVariables
+                    , arguments = declarationValueOrFunctionSoFar.arguments
+                    , result = declarationValueOrFunctionSoFar.result
+                    , type_ =
+                        -- creating the type only at this stage would be faster
+                        declarationValueOrFunctionSoFar.type_
+                    }
+                        |> declarationValueOrFunctionCondenseEquivalentVariables
 
-        Just ( ( replacementVariable, replacementTypeNotVariable ), remainingReplacements ) ->
-            case
-                declarationValueOrFunctionSoFar
-                    |> declarationValueOrFunctionSubstituteVariableByNotVariable
-                        declarationTypes
-                        { variable = replacementVariable
-                        , type_ = replacementTypeNotVariable
-                        }
-            of
-                Err error ->
-                    Err error
-
-                Ok substituted ->
+                Just ( ( replacementVariable, replacementTypeNotVariable ), remainingReplacements ) ->
                     case
-                        variableSubstitutionsMerge
-                            declarationTypes
-                            substituted.substitutions
-                            { equivalentVariables = variableSubstitutions.equivalentVariables
-                            , variableToType = remainingReplacements
-                            }
+                        declarationValueOrFunctionSoFar
+                            |> declarationValueOrFunctionSubstituteVariableByNotVariable
+                                declarationTypes
+                                { variable = replacementVariable
+                                , type_ = replacementTypeNotVariable
+                                }
                     of
                         Err error ->
                             Err error
 
-                        Ok substitutionsAfterSubstitution ->
-                            declarationValueOrFunctionSubstituteVariablesByNotVariables
-                                declarationTypes
-                                substitutionsAfterSubstitution
-                                { arguments = substituted.arguments
-                                , result = substituted.result
-                                , type_ = substituted.type_
-                                }
+                        Ok substituted ->
+                            case
+                                variableSubstitutionsMerge
+                                    declarationTypes
+                                    substituted.substitutions
+                                    { equivalentVariables = variableSubstitutions.equivalentVariables
+                                    , variableToType = remainingReplacements
+                                    }
+                            of
+                                Err error ->
+                                    Err error
+
+                                Ok substitutionsAfterSubstitution ->
+                                    declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                        declarationTypes
+                                        substitutionsAfterSubstitution
+                                        { arguments = substituted.arguments
+                                        , result = substituted.result
+                                        , type_ = substituted.type_
+                                        }
+
+        equivalentVariableSet0 :: equivalentVariableSet1Up ->
+            case
+                createEquivalentVariablesToCondensedVariableLookup
+                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
+            of
+                Err error ->
+                    Err error
+
+                Ok variableToCondensedLookup ->
+                    case
+                        variableSubstitutions.variableToType
+                            |> fastDictFoldlWhileOkFrom
+                                variableSubstitutionsNone
+                                (\uncondensedVariable replacementType soFar ->
+                                    case variableToCondensedLookup |> FastDict.get uncondensedVariable of
+                                        Nothing ->
+                                            Ok
+                                                { equivalentVariables = soFar.equivalentVariables
+                                                , variableToType =
+                                                    soFar.variableToType
+                                                        |> FastDict.insert uncondensedVariable
+                                                            (replacementType
+                                                                |> typeNotVariableMapVariables
+                                                                    (\variable ->
+                                                                        variableToCondensedLookup
+                                                                            |> FastDict.get variable
+                                                                            |> Maybe.withDefault variable
+                                                                    )
+                                                            )
+                                                }
+
+                                        Just condensedVariable ->
+                                            let
+                                                replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
+                                                replacementTypeUsingCondensedVariables =
+                                                    replacementType
+                                                        |> typeNotVariableMapVariables
+                                                            (\variable ->
+                                                                variableToCondensedLookup
+                                                                    |> FastDict.get variable
+                                                                    |> Maybe.withDefault variable
+                                                            )
+                                            in
+                                            case soFar.variableToType |> FastDict.get condensedVariable of
+                                                Nothing ->
+                                                    Ok
+                                                        { equivalentVariables = soFar.equivalentVariables
+                                                        , variableToType =
+                                                            soFar.variableToType
+                                                                |> FastDict.insert condensedVariable
+                                                                    replacementTypeUsingCondensedVariables
+                                                        }
+
+                                                Just existingReplacementTypeForCondensedVariable ->
+                                                    Result.andThen
+                                                        (\replacementTypeForCondensedVariable ->
+                                                            variableSubstitutionsMerge declarationTypes
+                                                                replacementTypeForCondensedVariable.substitutions
+                                                                (case replacementTypeForCondensedVariable.type_ of
+                                                                    TypeVariable newEquivalentVariable ->
+                                                                        { equivalentVariables =
+                                                                            soFar.equivalentVariables
+                                                                                |> equivalentVariablesMergeWithSetOf2
+                                                                                    condensedVariable
+                                                                                    newEquivalentVariable
+                                                                        , variableToType =
+                                                                            soFar.variableToType
+                                                                        }
+
+                                                                    TypeNotVariable replacementTypeForCondensedVariableTypeNotVariable ->
+                                                                        { equivalentVariables =
+                                                                            soFar.equivalentVariables
+                                                                        , variableToType =
+                                                                            soFar.variableToType
+                                                                                |> FastDict.insert condensedVariable
+                                                                                    replacementTypeForCondensedVariableTypeNotVariable
+                                                                        }
+                                                                )
+                                                        )
+                                                        (typeNotVariableUnify declarationTypes
+                                                            existingReplacementTypeForCondensedVariable
+                                                            replacementTypeUsingCondensedVariables
+                                                        )
+                                )
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeUsingCondensed ->
+                            declarationValueOrFunctionSubstituteVariablesByNotVariables declarationTypes
+                                variableToTypeUsingCondensed
+                                (declarationValueOrFunctionSoFar
+                                    |> declarationValueOrFunctionMapTypeVariables
+                                        (\variable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get variable
+                                                |> Maybe.withDefault variable
+                                        )
+                                )
 
 
 declarationValueOrFunctionSubstituteVariableByNotVariable :
@@ -7322,8 +7421,8 @@ patternMapTypeVariables typeVariableChange pattern =
                 }
 
 
-equivalentVariablesCreateUnifiedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
-equivalentVariablesCreateUnifiedVariable set =
+equivalentVariablesCreateCondensedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
+equivalentVariablesCreateCondensedVariable set =
     case set |> FastSet.toList of
         [] ->
             Err "implementation bug: equivalent variables set is empty"
