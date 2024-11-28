@@ -2525,7 +2525,7 @@ but its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
 type Expression
     = ExpressionUnit
-    | ExpressionNumber
+    | ExpressionInteger
         { base : Base10Or16
         , value : Int
         }
@@ -3453,7 +3453,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 { substitutions = variableSubstitutionsNone
                 , node =
                     { range = fullRange
-                    , value = ExpressionNumber { base = Base10, value = intValue }
+                    , value = ExpressionInteger { base = Base10, value = intValue }
                     , type_ = TypeVariable ( context.path, "number" )
                     }
                 }
@@ -3463,7 +3463,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 { substitutions = variableSubstitutionsNone
                 , node =
                     { range = fullRange
-                    , value = ExpressionNumber { base = Base16, value = intValue }
+                    , value = ExpressionInteger { base = Base16, value = intValue }
                     , type_ = TypeVariable ( context.path, "number" )
                     }
                 }
@@ -5965,7 +5965,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 , node = expression
                 }
 
-        ExpressionNumber _ ->
+        ExpressionInteger _ ->
             expression.type_
                 |> typeSubstituteVariableByNotVariable declarationTypes
                     replacement
@@ -6775,8 +6775,8 @@ expressionMapTypeVariables typeVariableChange expression =
         ExpressionString stringValue ->
             ExpressionString stringValue
 
-        ExpressionNumber expressionNumber ->
-            ExpressionNumber expressionNumber
+        ExpressionInteger expressionNumber ->
+            ExpressionInteger expressionNumber
 
         ExpressionReference reference ->
             ExpressionReference reference
