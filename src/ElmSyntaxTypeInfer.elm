@@ -4292,82 +4292,58 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.LambdaExpression lambda ->
             Result.andThen
                 (\argumentsInferred ->
-                    lambda.expression
-                        |> expressionTypeInfer
-                            { path = context.path
-                            , declarationTypes = context.declarationTypes
-                            , moduleOriginLookup = context.moduleOriginLookup
-                            , locallyIntroducedExpressionVariables =
-                                FastDict.union
-                                    argumentsInferred.introducedExpressionVariables
-                                    context.locallyIntroducedExpressionVariables
-                            }
-                        |> Result.andThen
-                            (\resultInferred ->
-                                variableSubstitutionsMerge context.declarationTypes
+                    Result.andThen
+                        (\resultInferred ->
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , node =
+                                        { range = fullRange
+                                        , value =
+                                            ExpressionLambda
+                                                { arguments =
+                                                    argumentsInferred.nodesReverse
+                                                        |> List.reverse
+                                                , result = resultInferred.node
+                                                }
+                                        , type_ =
+                                            argumentsInferred.nodesReverse
+                                                |> List.foldl
+                                                    (\argumentTypedNode output ->
+                                                        TypeNotVariable
+                                                            (TypeFunction
+                                                                { input = argumentTypedNode.type_
+                                                                , output = output
+                                                                }
+                                                            )
+                                                    )
+                                                    resultInferred.node.type_
+                                        }
+                                    }
+                                )
+                                (variableSubstitutionsMerge context.declarationTypes
                                     argumentsInferred.substitutions
                                     resultInferred.substitutions
-                                    |> Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
-                                            , node =
-                                                { range = fullRange
-                                                , value =
-                                                    ExpressionLambda
-                                                        { arguments =
-                                                            argumentsInferred.nodesReverse
-                                                                |> List.reverse
-                                                        , result = resultInferred.node
-                                                        }
-                                                , type_ =
-                                                    argumentsInferred.nodesReverse
-                                                        |> List.foldl
-                                                            (\argumentTypedNode output ->
-                                                                TypeNotVariable
-                                                                    (TypeFunction
-                                                                        { input = argumentTypedNode.type_
-                                                                        , output = output
-                                                                        }
-                                                                    )
-                                                            )
-                                                            resultInferred.node.type_
-                                                }
-                                            }
-                                        )
-                            )
+                                )
+                        )
+                        (lambda.expression
+                            |> expressionTypeInfer
+                                { path = context.path
+                                , declarationTypes = context.declarationTypes
+                                , moduleOriginLookup = context.moduleOriginLookup
+                                , locallyIntroducedExpressionVariables =
+                                    FastDict.union
+                                        argumentsInferred.introducedExpressionVariables
+                                        context.locallyIntroducedExpressionVariables
+                                }
+                        )
                 )
                 (lambda.args
-                    |> listFoldlWhileOkFrom
-                        { introducedExpressionVariables = FastDict.empty
-                        , substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                    |> parameterPatternsTypeInfer
+                        { path = context.path
+                        , declarationTypes = context.declarationTypes
+                        , moduleOriginLookup = context.moduleOriginLookup
                         }
-                        (\argumentNode soFar ->
-                            argumentNode
-                                |> patternTypeInfer
-                                    { path = context.path
-                                    , declarationTypes = context.declarationTypes
-                                    , moduleOriginLookup = context.moduleOriginLookup
-                                    }
-                                |> Result.andThen
-                                    (\argumentInferred ->
-                                        variableSubstitutionsMerge context.declarationTypes
-                                            argumentInferred.substitutions
-                                            soFar.substitutions
-                                            |> Result.map
-                                                (\substitutionsWithArgument ->
-                                                    { substitutions = substitutionsWithArgument
-                                                    , introducedExpressionVariables =
-                                                        FastDict.union
-                                                            argumentInferred.introducedExpressionVariables
-                                                            soFar.introducedExpressionVariables
-                                                    , nodesReverse =
-                                                        argumentInferred.node
-                                                            :: soFar.nodesReverse
-                                                    }
-                                                )
-                                    )
-                        )
                 )
 
         Elm.Syntax.Expression.CaseExpression caseOf ->
@@ -4485,7 +4461,103 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
 
         Elm.Syntax.Expression.LetExpression letIn ->
-            Debug.todo "branch 'LetExpression _' not implemented"
+            resultAndThen2
+                (\declarationsInferred resultInferred ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { substitutions = fullSubstitutions
+                            , node =
+                                { range = fullRange
+                                , value =
+                                    ExpressionLetIn
+                                        { declarations =
+                                            declarationsInferred.nodesReverse
+                                                |> List.reverse
+                                        , result = resultInferred.node
+                                        }
+                                , type_ = resultInferred.node.type_
+                                }
+                            }
+                        )
+                        (variableSubstitutionsMerge context.declarationTypes
+                            declarationsInferred.substitutions
+                            resultInferred.substitutions
+                        )
+                )
+                (letIn.declarations
+                    |> listFoldlWhileOkFrom
+                        { substitutions = variableSubstitutionsNone
+                        , nodesReverse = []
+                        , introducedExpressionVariables =
+                            FastDict.empty
+                        , index = 0
+                        }
+                        (\(Elm.Syntax.Node.Node letDeclarationRange letDeclaration) soFar ->
+                            let
+                                pathInnermost : String
+                                pathInnermost =
+                                    "letDeclaration"
+                                        ++ (soFar.index |> String.fromInt)
+                            in
+                            case letDeclaration of
+                                Elm.Syntax.Expression.LetDestructuring letDestructuringPattern letDestructuringExpression ->
+                                    resultAndThen2
+                                        (\patternInferred expressionInferred ->
+                                            Result.andThen
+                                                (\patternExpressionUnifedType ->
+                                                    Result.map
+                                                        (\fullSubstitutions ->
+                                                            { index = soFar.index + 1
+                                                            , substitutions = fullSubstitutions
+                                                            , introducedExpressionVariables =
+                                                                patternInferred.introducedExpressionVariables
+                                                            , nodesReverse =
+                                                                Elm.Syntax.Node.Node letDeclarationRange
+                                                                    (LetDestructuring
+                                                                        { pattern =
+                                                                            patternInferred.node
+                                                                                |> typedNodeReplaceTypeBy
+                                                                                    patternExpressionUnifedType.type_
+                                                                        , expression =
+                                                                            expressionInferred.node
+                                                                                |> typedNodeReplaceTypeBy
+                                                                                    patternExpressionUnifedType.type_
+                                                                        }
+                                                                    )
+                                                                    :: soFar.nodesReverse
+                                                            }
+                                                        )
+                                                        (variableSubstitutionsMerge3 context.declarationTypes
+                                                            patternInferred.substitutions
+                                                            expressionInferred.substitutions
+                                                            patternExpressionUnifedType.substitutions
+                                                        )
+                                                )
+                                                (typeUnify context.declarationTypes
+                                                    patternInferred.node.type_
+                                                    expressionInferred.node.type_
+                                                )
+                                        )
+                                        (letDestructuringPattern
+                                            |> patternTypeInfer
+                                                { path = pathInnermost :: context.path
+                                                , declarationTypes = context.declarationTypes
+                                                , moduleOriginLookup = context.moduleOriginLookup
+                                                }
+                                        )
+                                        (letDestructuringExpression
+                                            |> expressionTypeInfer
+                                                (context |> expressionContextToInPath pathInnermost)
+                                        )
+
+                                Elm.Syntax.Expression.LetFunction letValueOrFunction ->
+                                    Debug.todo ":)"
+                        )
+                )
+                (letIn.expression
+                    |> expressionTypeInfer
+                        (context |> expressionContextToInPath "letInResult")
+                )
 
         Elm.Syntax.Expression.Operator _ ->
             Err "Elm.Syntax.Expression.Operator should not exist in a valid parse result"
@@ -7584,7 +7656,8 @@ parameterPatternsTypeInfer context parameterPatterns =
                 pattern
                     |> patternTypeInfer
                         (context
-                            |> patternContextToInPath (soFar.index |> String.fromInt)
+                            |> patternContextToInPath
+                                ("parameter" ++ (soFar.index |> String.fromInt))
                         )
                     |> Result.andThen
                         (\patternInferred ->
