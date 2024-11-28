@@ -30,23 +30,19 @@ import ElmSyntaxTypeInfer
                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                     exampleModuleOriginLookup
         }
-    |> Result.map
-        (\typedDeclaration ->
-            typedDeclaration.declaration
-                |> Elm.Syntax.Node.value
-                |> .expression
-                |> .type_
-        )
+    |> Result.map .type_
 -->
 Ok
-    (ElmSyntaxTypeInfer.TypeConstruct
-        { moduleOrigin = [ "List" ]
-        , name = "List"
-        , arguments =
-            [  ElmSyntaxTypeInfer.TypeNumberVariable
-                ( [ "0", "result" ], "number" )
-            ]
-        }
+    (ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "List" ]
+            , name = "List"
+            , arguments =
+                [ ElmSyntaxTypeInfer.TypeVariable
+                    ( [ "0", "result" ], "number" )
+                ]
+            }
+        )
     )
 
 
@@ -55,6 +51,7 @@ exampleModuleOriginLookup =
     []
         |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
             ElmSyntaxTypeInfer.elmCoreTypes
+        |> .types
 ```
 
 ## TODO

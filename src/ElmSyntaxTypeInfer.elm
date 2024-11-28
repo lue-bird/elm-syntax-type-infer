@@ -152,7 +152,7 @@ typeVariableFromContextName ( _, name ) =
 typeVariableConstraint : String -> Maybe TypeVariableConstraint
 typeVariableConstraint variableName =
     if variableName |> String.startsWith "number" then
-        Nothing
+        Just TypeVariableConstraintNumber
 
     else if variableName |> String.startsWith "appendable" then
         Just TypeVariableConstraintAppendable
@@ -164,7 +164,7 @@ typeVariableConstraint variableName =
         Just TypeVariableConstraintCompappend
 
     else
-        Just TypeVariableConstraintNumber
+        Nothing
 
 
 maybeTypeVariableConstraintMerge : Maybe TypeVariableConstraint -> Maybe TypeVariableConstraint -> Result String (Maybe TypeVariableConstraint)
@@ -7582,77 +7582,134 @@ For elm-syntax modules, use [`moduleDeclarationsToTypes`](#moduleDeclarationsToT
 -}
 moduleInterfaceToTypes :
     Elm.Docs.Module
-    -> Result String ModuleTypes
+    -> { errors : List String, types : ModuleTypes }
 moduleInterfaceToTypes moduleInterface =
-    Result.map3
-        (\typeAliases choiceTypes signatures ->
-            { typeAliases = typeAliases
-            , choiceTypes = choiceTypes
-            , signatures = signatures
+    let
+        typeAliases :
+            { errors : List String
+            , types :
+                FastDict.Dict
+                    String
+                    { type_ : Type String, parameters : List String }
             }
-        )
-        (moduleInterface.aliases
-            |> listFoldlWhileOkFrom FastDict.empty
-                (\typeAliasDeclarationInterface soFar ->
-                    typeAliasDeclarationInterface.tipe
-                        |> interfaceToType
-                        |> Result.map
-                            (\type_ ->
-                                soFar
-                                    |> FastDict.insert
-                                        typeAliasDeclarationInterface.name
-                                        { type_ = type_
-                                        , parameters = typeAliasDeclarationInterface.args
-                                        }
-                            )
-                )
-        )
-        (moduleInterface.unions
-            |> listFoldlWhileOkFrom FastDict.empty
-                (\declarationChoiceType soFar ->
-                    declarationChoiceType.tags
-                        |> listFoldlWhileOkFrom
-                            FastDict.empty
-                            (\( variantName, variantValueInterfaces ) variantsSoFar ->
-                                variantValueInterfaces
-                                    |> listMapAndCombineOk
-                                        (\variantValue ->
-                                            variantValue |> interfaceToType
-                                        )
-                                    |> Result.map
-                                        (\variantValues ->
-                                            variantsSoFar
-                                                |> FastDict.insert
-                                                    variantName
-                                                    variantValues
-                                        )
-                            )
-                        |> Result.map
-                            (\variants ->
-                                soFar
-                                    |> FastDict.insert
-                                        declarationChoiceType.name
-                                        { parameters =
-                                            declarationChoiceType.args
-                                        , variants = variants
-                                        }
-                            )
-                )
-        )
-        (moduleInterface.values
-            |> listFoldlWhileOkFrom FastDict.empty
-                (\valueOrFunctionDeclarationInterface soFar ->
-                    valueOrFunctionDeclarationInterface.tipe
-                        |> interfaceToType
-                        |> Result.map
-                            (\type_ ->
-                                soFar
-                                    |> FastDict.insert
-                                        valueOrFunctionDeclarationInterface.name
-                                        type_
-                            )
-                )
-        )
+        typeAliases =
+            moduleInterface.aliases
+                |> List.foldl
+                    (\typeAliasDeclarationInterface soFar ->
+                        case
+                            typeAliasDeclarationInterface.tipe
+                                |> interfaceToType
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok type_ ->
+                                { errors = soFar.errors
+                                , types =
+                                    soFar.types
+                                        |> FastDict.insert
+                                            typeAliasDeclarationInterface.name
+                                            { type_ = type_
+                                            , parameters = typeAliasDeclarationInterface.args
+                                            }
+                                }
+                    )
+                    { types = FastDict.empty
+                    , errors = []
+                    }
+
+        choiceTypes :
+            { errors : List String
+            , types :
+                FastDict.Dict
+                    String
+                    { parameters : List String
+                    , variants : FastDict.Dict String (List (Type String))
+                    }
+            }
+        choiceTypes =
+            moduleInterface.unions
+                |> List.foldl
+                    (\declarationChoiceType soFar ->
+                        case
+                            declarationChoiceType.tags
+                                |> listFoldlWhileOkFrom
+                                    FastDict.empty
+                                    (\( variantName, variantValueInterfaces ) variantsSoFar ->
+                                        variantValueInterfaces
+                                            |> listMapAndCombineOk
+                                                (\variantValue ->
+                                                    variantValue |> interfaceToType
+                                                )
+                                            |> Result.map
+                                                (\variantValues ->
+                                                    variantsSoFar
+                                                        |> FastDict.insert
+                                                            variantName
+                                                            variantValues
+                                                )
+                                    )
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok variants ->
+                                { errors = soFar.errors
+                                , types =
+                                    soFar.types
+                                        |> FastDict.insert
+                                            declarationChoiceType.name
+                                            { parameters =
+                                                declarationChoiceType.args
+                                            , variants = variants
+                                            }
+                                }
+                    )
+                    { types = FastDict.empty
+                    , errors = []
+                    }
+
+        signatures : { errors : List String, types : FastDict.Dict String (Type String) }
+        signatures =
+            moduleInterface.values
+                |> List.foldl
+                    (\valueOrFunctionDeclarationInterface soFar ->
+                        case
+                            valueOrFunctionDeclarationInterface.tipe
+                                |> interfaceToType
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok type_ ->
+                                { errors = soFar.errors
+                                , types =
+                                    soFar.types
+                                        |> FastDict.insert
+                                            valueOrFunctionDeclarationInterface.name
+                                            type_
+                                }
+                    )
+                    { types = FastDict.empty
+                    , errors = []
+                    }
+    in
+    { errors =
+        typeAliases.errors
+            ++ choiceTypes.errors
+            ++ signatures.errors
+    , types =
+        { typeAliases = typeAliases.types
+        , choiceTypes = choiceTypes.types
+        , signatures = signatures.types
+        }
+    }
 
 
 interfaceToType : Elm.Type.Type -> Result String (Type String)
@@ -7772,52 +7829,68 @@ For dependency modules, use [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 moduleDeclarationsToTypes :
     ModuleOriginLookup
     -> List Elm.Syntax.Declaration.Declaration
-    -> Result String ModuleTypes
+    -> { types : ModuleTypes, errors : List String }
 moduleDeclarationsToTypes moduleOriginLookup declarations =
     declarations
-        |> listFoldlWhileOkFrom
-            { signatures = FastDict.empty
-            , typeAliases = FastDict.empty
-            , choiceTypes = FastDict.empty
-            }
+        |> List.foldl
             (\declaration soFar ->
                 case declaration of
                     Elm.Syntax.Declaration.InfixDeclaration _ ->
-                        Ok soFar
+                        soFar
 
                     Elm.Syntax.Declaration.Destructuring _ _ ->
-                        Err "destructuring at the module level is invalid syntax"
+                        { errors =
+                            "destructuring at the module level is invalid syntax"
+                                :: soFar.errors
+                        , types = soFar.types
+                        }
 
                     Elm.Syntax.Declaration.FunctionDeclaration declarationValueOrFunction ->
                         case declarationValueOrFunction.signature of
                             Nothing ->
-                                Ok soFar
+                                soFar
 
                             Just (Elm.Syntax.Node.Node _ declarationValueOrFunctionSignature) ->
-                                declarationValueOrFunctionSignature.typeAnnotation
-                                    |> Elm.Syntax.Node.value
-                                    |> syntaxToType moduleOriginLookup
-                                    |> Result.map
-                                        (\type_ ->
+                                case
+                                    declarationValueOrFunctionSignature.typeAnnotation
+                                        |> Elm.Syntax.Node.value
+                                        |> syntaxToType moduleOriginLookup
+                                of
+                                    Err error ->
+                                        { errors = error :: soFar.errors
+                                        , types = soFar.types
+                                        }
+
+                                    Ok type_ ->
+                                        { errors = soFar.errors
+                                        , types =
                                             { signatures =
-                                                soFar.signatures
+                                                soFar.types.signatures
                                                     |> FastDict.insert
                                                         (declarationValueOrFunctionSignature.name |> Elm.Syntax.Node.value)
                                                         type_
-                                            , typeAliases = soFar.typeAliases
-                                            , choiceTypes = soFar.choiceTypes
+                                            , typeAliases = soFar.types.typeAliases
+                                            , choiceTypes = soFar.types.choiceTypes
                                             }
-                                        )
+                                        }
 
                     Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
-                        declarationTypeAlias.typeAnnotation
-                            |> Elm.Syntax.Node.value
-                            |> syntaxToType moduleOriginLookup
-                            |> Result.map
-                                (\type_ ->
-                                    { signatures = soFar.signatures
+                        case
+                            declarationTypeAlias.typeAnnotation
+                                |> Elm.Syntax.Node.value
+                                |> syntaxToType moduleOriginLookup
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok type_ ->
+                                { errors = soFar.errors
+                                , types =
+                                    { signatures = soFar.types.signatures
                                     , typeAliases =
-                                        soFar.typeAliases
+                                        soFar.types.typeAliases
                                             |> FastDict.insert
                                                 (declarationTypeAlias.name |> Elm.Syntax.Node.value)
                                                 { parameters =
@@ -7825,34 +7898,42 @@ moduleDeclarationsToTypes moduleOriginLookup declarations =
                                                         |> List.map Elm.Syntax.Node.value
                                                 , type_ = type_
                                                 }
-                                    , choiceTypes = soFar.choiceTypes
+                                    , choiceTypes = soFar.types.choiceTypes
                                     }
-                                )
+                                }
 
                     Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
-                        declarationChoiceType.constructors
-                            |> listFoldlWhileOkFrom
-                                FastDict.empty
-                                (\(Elm.Syntax.Node.Node _ variant) variantsSoFar ->
-                                    variant.arguments
-                                        |> listMapAndCombineOk
-                                            (\(Elm.Syntax.Node.Node _ variantValue) ->
-                                                variantValue |> syntaxToType moduleOriginLookup
-                                            )
-                                        |> Result.map
-                                            (\variantValues ->
-                                                variantsSoFar
-                                                    |> FastDict.insert
-                                                        (variant.name |> Elm.Syntax.Node.value)
-                                                        variantValues
-                                            )
-                                )
-                            |> Result.map
-                                (\variants ->
-                                    { signatures = soFar.signatures
-                                    , typeAliases = soFar.typeAliases
+                        case
+                            declarationChoiceType.constructors
+                                |> listFoldlWhileOkFrom
+                                    FastDict.empty
+                                    (\(Elm.Syntax.Node.Node _ variant) variantsSoFar ->
+                                        variant.arguments
+                                            |> listMapAndCombineOk
+                                                (\(Elm.Syntax.Node.Node _ variantValue) ->
+                                                    variantValue |> syntaxToType moduleOriginLookup
+                                                )
+                                            |> Result.map
+                                                (\variantValues ->
+                                                    variantsSoFar
+                                                        |> FastDict.insert
+                                                            (variant.name |> Elm.Syntax.Node.value)
+                                                            variantValues
+                                                )
+                                    )
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok variants ->
+                                { errors = soFar.errors
+                                , types =
+                                    { signatures = soFar.types.signatures
+                                    , typeAliases = soFar.types.typeAliases
                                     , choiceTypes =
-                                        soFar.choiceTypes
+                                        soFar.types.choiceTypes
                                             |> FastDict.insert
                                                 (declarationChoiceType.name |> Elm.Syntax.Node.value)
                                                 { parameters =
@@ -7861,24 +7942,39 @@ moduleDeclarationsToTypes moduleOriginLookup declarations =
                                                 , variants = variants
                                                 }
                                     }
-                                )
+                                }
 
                     Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
-                        declarationPortSignature.typeAnnotation
-                            |> Elm.Syntax.Node.value
-                            |> syntaxToType moduleOriginLookup
-                            |> Result.map
-                                (\type_ ->
+                        case
+                            declarationPortSignature.typeAnnotation
+                                |> Elm.Syntax.Node.value
+                                |> syntaxToType moduleOriginLookup
+                        of
+                            Err error ->
+                                { errors = error :: soFar.errors
+                                , types = soFar.types
+                                }
+
+                            Ok type_ ->
+                                { errors = soFar.errors
+                                , types =
                                     { signatures =
-                                        soFar.signatures
+                                        soFar.types.signatures
                                             |> FastDict.insert
                                                 (declarationPortSignature.name |> Elm.Syntax.Node.value)
                                                 type_
-                                    , typeAliases = soFar.typeAliases
-                                    , choiceTypes = soFar.choiceTypes
+                                    , typeAliases = soFar.types.typeAliases
+                                    , choiceTypes = soFar.types.choiceTypes
                                     }
-                                )
+                                }
             )
+            { types =
+                { signatures = FastDict.empty
+                , typeAliases = FastDict.empty
+                , choiceTypes = FastDict.empty
+                }
+            , errors = []
+            }
 
 
 listFoldlWhileOkFrom :
