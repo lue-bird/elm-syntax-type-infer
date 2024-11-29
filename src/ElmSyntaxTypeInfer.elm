@@ -2599,7 +2599,8 @@ type Expression
         , result : TypedNode Expression
         }
     | ExpressionLetIn
-        { declarations : List (Elm.Syntax.Node.Node LetDeclaration)
+        { declaration0 : Elm.Syntax.Node.Node LetDeclaration
+        , declaration1Up : List (Elm.Syntax.Node.Node LetDeclaration)
         , result : TypedNode Expression
         }
     | ExpressionCaseOf
@@ -4367,7 +4368,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 { substitutions = variableSubstitutionsNone
                                 , introducedExpressionVariables = FastDict.empty
                                 , nodesReverse = []
-                                , index = 0
+                                , index = 1
                                 }
                                 (\pattern soFar ->
                                     pattern
@@ -4523,109 +4524,211 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
 
         Elm.Syntax.Expression.LetExpression letIn ->
-            resultAndThen2
-                (\declarationsInferred resultInferred ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = fullRange
-                                , value =
-                                    ExpressionLetIn
-                                        { declarations =
-                                            declarationsInferred.nodesReverse
-                                                |> List.reverse
-                                        , result = resultInferred.node
-                                        }
-                                , type_ = resultInferred.node.type_
-                                }
-                            }
-                        )
-                        (variableSubstitutionsMerge context.declarationTypes
-                            declarationsInferred.substitutions
-                            resultInferred.substitutions
-                        )
-                )
-                (letIn.declarations
-                    |> listFoldlWhileOkFrom
-                        { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
-                        , introducedExpressionVariables =
-                            FastDict.empty
-                        , index = 0
-                        }
-                        (\(Elm.Syntax.Node.Node letDeclarationRange letDeclaration) soFar ->
-                            let
-                                pathInnermost : String
-                                pathInnermost =
-                                    "letDeclaration"
-                                        ++ (soFar.index |> String.fromInt)
-                            in
-                            case letDeclaration of
-                                Elm.Syntax.Expression.LetDestructuring letDestructuringPattern letDestructuringExpression ->
-                                    resultAndThen2
-                                        (\patternInferred expressionInferred ->
-                                            Result.andThen
-                                                (\patternExpressionUnifedType ->
-                                                    Result.map
-                                                        (\fullSubstitutions ->
-                                                            { index = soFar.index + 1
-                                                            , substitutions = fullSubstitutions
-                                                            , introducedExpressionVariables =
-                                                                patternInferred.introducedExpressionVariables
-                                                            , nodesReverse =
-                                                                Elm.Syntax.Node.Node letDeclarationRange
-                                                                    (LetDestructuring
-                                                                        { pattern =
-                                                                            patternInferred.node
-                                                                                |> typedNodeReplaceTypeBy
-                                                                                    patternExpressionUnifedType.type_
-                                                                        , expression =
-                                                                            expressionInferred.node
-                                                                                |> typedNodeReplaceTypeBy
-                                                                                    patternExpressionUnifedType.type_
-                                                                        }
-                                                                    )
-                                                                    :: soFar.nodesReverse
-                                                            }
-                                                        )
-                                                        (variableSubstitutionsMerge3 context.declarationTypes
-                                                            patternInferred.substitutions
-                                                            expressionInferred.substitutions
-                                                            patternExpressionUnifedType.substitutions
-                                                        )
-                                                )
-                                                (typeUnify context.declarationTypes
-                                                    patternInferred.node.type_
-                                                    expressionInferred.node.type_
-                                                )
-                                        )
-                                        (letDestructuringPattern
-                                            |> patternTypeInfer
-                                                { path = pathInnermost :: context.path
-                                                , declarationTypes = context.declarationTypes
-                                                , moduleOriginLookup = context.moduleOriginLookup
-                                                }
-                                        )
-                                        (letDestructuringExpression
-                                            |> expressionTypeInfer
-                                                (context |> expressionContextToInPath pathInnermost)
-                                        )
+            case letIn.declarations of
+                [] ->
+                    Err "let-in without declarations is invalid syntax"
 
-                                Elm.Syntax.Expression.LetFunction letValueOrFunction ->
-                                    Debug.todo ":)"
+                letDeclaration0Node :: letDeclaration1Up ->
+                    let
+                        expressionVariablesIntroducedWithFromLetDestructurings : FastDict.Dict String (Type TypeVariableFromContext)
+                        expressionVariablesIntroducedWithFromLetDestructurings =
+                            (letDeclaration0Node :: letDeclaration1Up)
+                                |> List.foldl
+                                    (\(Elm.Syntax.Node.Node _ letDeclaration) soFar ->
+                                        { index = soFar.index + 1
+                                        , introducedExpressionVariables =
+                                            case letDeclaration of
+                                                Elm.Syntax.Expression.LetDestructuring patternNode _ ->
+                                                    case
+                                                        patternNode
+                                                            |> patternTypeInfer
+                                                                { path =
+                                                                    "pattern"
+                                                                        :: ("letDeclaration" ++ (soFar.index |> String.fromInt))
+                                                                        :: context.path
+                                                                , declarationTypes = context.declarationTypes
+                                                                , moduleOriginLookup = context.moduleOriginLookup
+                                                                }
+                                                    of
+                                                        Err _ ->
+                                                            soFar.introducedExpressionVariables
+
+                                                        Ok patternInferred ->
+                                                            FastDict.union
+                                                                patternInferred.introducedExpressionVariables
+                                                                soFar.introducedExpressionVariables
+
+                                                Elm.Syntax.Expression.LetFunction _ ->
+                                                    soFar.introducedExpressionVariables
+                                        }
+                                    )
+                                    { index = 0
+                                    , introducedExpressionVariables =
+                                        context.locallyIntroducedExpressionVariables
+                                    }
+                                |> .introducedExpressionVariables
+                    in
+                    resultAndThen3
+                        (\declaration0Inferred declaration1UpInferred resultInferred ->
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , node =
+                                        { range = fullRange
+                                        , value =
+                                            ExpressionLetIn
+                                                { declaration0 = declaration0Inferred.node
+                                                , declaration1Up =
+                                                    declaration1UpInferred.nodesReverse
+                                                        |> List.reverse
+                                                , result = resultInferred.node
+                                                }
+                                        , type_ = resultInferred.node.type_
+                                        }
+                                    }
+                                )
+                                (variableSubstitutionsMerge3 context.declarationTypes
+                                    declaration0Inferred.substitutions
+                                    declaration1UpInferred.substitutions
+                                    resultInferred.substitutions
+                                )
                         )
-                )
-                (letIn.expression
-                    |> expressionTypeInfer
-                        (context |> expressionContextToInPath "letInResult")
-                )
+                        (letDeclaration0Node
+                            |> letDeclarationTypeInfer
+                                { path =
+                                    "letDeclaration0" :: context.path
+                                , locallyIntroducedExpressionVariables =
+                                    expressionVariablesIntroducedWithFromLetDestructurings
+                                , moduleOriginLookup = context.moduleOriginLookup
+                                , declarationTypes = context.declarationTypes
+                                }
+                        )
+                        (letDeclaration1Up
+                            |> listFoldlWhileOkFrom
+                                { index = 1
+                                , substitutions = variableSubstitutionsNone
+                                , nodesReverse = []
+                                , introducedExpressionVariables = FastDict.empty
+                                }
+                                (\letDeclarationNode soFar ->
+                                    letDeclarationNode
+                                        |> letDeclarationTypeInfer
+                                            { path =
+                                                ("letDeclaration"
+                                                    ++ (soFar.index |> String.fromInt)
+                                                )
+                                                    :: context.path
+                                            , locallyIntroducedExpressionVariables =
+                                                expressionVariablesIntroducedWithFromLetDestructurings
+                                            , moduleOriginLookup = context.moduleOriginLookup
+                                            , declarationTypes = context.declarationTypes
+                                            }
+                                        |> Result.andThen
+                                            (\letDeclarationInferred ->
+                                                Result.map
+                                                    (\substitutionsWithLetDeclaration ->
+                                                        { index = soFar.index + 1
+                                                        , substitutions = substitutionsWithLetDeclaration
+                                                        , introducedExpressionVariables =
+                                                            FastDict.union
+                                                                letDeclarationInferred.introducedExpressionVariables
+                                                                soFar.introducedExpressionVariables
+                                                        , nodesReverse =
+                                                            letDeclarationInferred.node
+                                                                :: soFar.nodesReverse
+                                                        }
+                                                    )
+                                                    (variableSubstitutionsMerge context.declarationTypes
+                                                        letDeclarationInferred.substitutions
+                                                        soFar.substitutions
+                                                    )
+                                            )
+                                )
+                        )
+                        (letIn.expression
+                            |> expressionTypeInfer
+                                { path = "letInResult" :: context.path
+                                , locallyIntroducedExpressionVariables =
+                                    expressionVariablesIntroducedWithFromLetDestructurings
+                                , moduleOriginLookup = context.moduleOriginLookup
+                                , declarationTypes = context.declarationTypes
+                                }
+                        )
 
         Elm.Syntax.Expression.Operator _ ->
             Err "Elm.Syntax.Expression.Operator should not exist in a valid parse result"
 
         Elm.Syntax.Expression.GLSLExpression _ ->
             Err "glsl shader expressions not supported"
+
+
+letDeclarationTypeInfer :
+    { locallyIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+    , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+    , path : List String
+    , moduleOriginLookup : ModuleOriginLookup
+    }
+    -> Elm.Syntax.Node.Node Elm.Syntax.Expression.LetDeclaration
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , introducedExpressionVariables :
+                FastDict.Dict String (Type TypeVariableFromContext)
+            , node : Elm.Syntax.Node.Node LetDeclaration
+            }
+letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
+    case letDeclaration of
+        Elm.Syntax.Expression.LetDestructuring letDestructuringPattern letDestructuringExpression ->
+            resultAndThen2
+                (\patternInferred expressionInferred ->
+                    Result.andThen
+                        (\patternExpressionUnifedType ->
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , introducedExpressionVariables =
+                                        patternInferred.introducedExpressionVariables
+                                    , node =
+                                        Elm.Syntax.Node.Node letDeclarationRange
+                                            (LetDestructuring
+                                                { pattern =
+                                                    patternInferred.node
+                                                        |> typedNodeReplaceTypeBy
+                                                            patternExpressionUnifedType.type_
+                                                , expression =
+                                                    expressionInferred.node
+                                                        |> typedNodeReplaceTypeBy
+                                                            patternExpressionUnifedType.type_
+                                                }
+                                            )
+                                    }
+                                )
+                                (variableSubstitutionsMerge3 context.declarationTypes
+                                    patternInferred.substitutions
+                                    expressionInferred.substitutions
+                                    patternExpressionUnifedType.substitutions
+                                )
+                        )
+                        (typeUnify context.declarationTypes
+                            patternInferred.node.type_
+                            expressionInferred.node.type_
+                        )
+                )
+                (letDestructuringPattern
+                    |> patternTypeInfer
+                        { path = "pattern" :: context.path
+                        , declarationTypes = context.declarationTypes
+                        , moduleOriginLookup = context.moduleOriginLookup
+                        }
+                )
+                (letDestructuringExpression
+                    |> expressionTypeInfer
+                        (context |> expressionContextToInPath "expression")
+                )
+
+        Elm.Syntax.Expression.LetFunction letValueOrFunction ->
+            Debug.todo ":)"
 
 
 moduleNameToString : Elm.Syntax.ModuleName.ModuleName -> String
@@ -6650,34 +6753,42 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionLetIn expressionLetIn ->
-            resultAndThen2
-                (\declarationsSubstituted resultSubstituted ->
-                    variableSubstitutionsMerge declarationTypes
-                        resultSubstituted.substitutions
-                        declarationsSubstituted.substitutions
-                        |> Result.map
-                            (\fullSubstitutions ->
-                                { substitutions = fullSubstitutions
-                                , node =
-                                    { range = expression.range
-                                    , value =
-                                        ExpressionLetIn
-                                            { declarations =
-                                                declarationsSubstituted.nodesReverse
-                                                    |> List.reverse
-                                            , result = resultSubstituted.node
-                                            }
-                                    , type_ = resultSubstituted.node.type_
-                                    }
+            resultAndThen3
+                (\declaration0Substituted declaration1UpSubstituted resultSubstituted ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { substitutions = fullSubstitutions
+                            , node =
+                                { range = expression.range
+                                , value =
+                                    ExpressionLetIn
+                                        { declaration0 =
+                                            declaration0Substituted.node
+                                        , declaration1Up =
+                                            declaration1UpSubstituted.nodesReverse
+                                                |> List.reverse
+                                        , result = resultSubstituted.node
+                                        }
+                                , type_ = resultSubstituted.node.type_
                                 }
-                            )
+                            }
+                        )
+                        (variableSubstitutionsMerge3 declarationTypes
+                            declaration0Substituted.substitutions
+                            declaration1UpSubstituted.substitutions
+                            resultSubstituted.substitutions
+                        )
                 )
-                (expressionLetIn.declarations
+                (expressionLetIn.declaration0
+                    |> letDeclarationSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionLetIn.declaration1Up
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
                         }
-                        (\(Elm.Syntax.Node.Node declarationRange letDeclaration) soFar ->
+                        (\letDeclarationNode soFar ->
                             Result.andThen
                                 (\declarationSubstituted ->
                                     variableSubstitutionsMerge declarationTypes
@@ -6687,14 +6798,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                             (\fullSubstitutions ->
                                                 { substitutions = fullSubstitutions
                                                 , nodesReverse =
-                                                    Elm.Syntax.Node.Node declarationRange
-                                                        declarationSubstituted.letDeclaration
+                                                    declarationSubstituted.node
                                                         :: soFar.nodesReverse
                                                 }
                                             )
                                 )
-                                (letDeclaration
-                                    |> expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes
+                                (letDeclarationNode
+                                    |> letDeclarationSubstituteVariableByNotVariable declarationTypes
                                         replacement
                                 )
                         )
@@ -6705,20 +6815,20 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
 
-expressionLetDeclarationSubstituteVariableByNotVariable :
+letDeclarationSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
         }
-    -> LetDeclaration
+    -> Elm.Syntax.Node.Node LetDeclaration
     ->
         Result
             String
-            { letDeclaration : LetDeclaration
+            { node : Elm.Syntax.Node.Node LetDeclaration
             , substitutions : VariableSubstitutions
             }
-expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDeclaration =
+letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
     case letDeclaration of
         LetDestructuring letDestructuring ->
             resultAndThen2
@@ -6729,11 +6839,13 @@ expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes replace
                         |> Result.map
                             (\fullSubstitutions ->
                                 { substitutions = fullSubstitutions
-                                , letDeclaration =
-                                    LetDestructuring
-                                        { pattern = patternSubstituted.node
-                                        , expression = expressionSubstituted.node
-                                        }
+                                , node =
+                                    Elm.Syntax.Node.Node letDeclarationRange
+                                        (LetDestructuring
+                                            { pattern = patternSubstituted.node
+                                            , expression = expressionSubstituted.node
+                                            }
+                                        )
                                 }
                             )
                 )
@@ -6756,17 +6868,19 @@ expressionLetDeclarationSubstituteVariableByNotVariable declarationTypes replace
                         |> Result.map
                             (\fullSubstitutions ->
                                 { substitutions = fullSubstitutions
-                                , letDeclaration =
-                                    LetValueOrFunction
-                                        { arguments =
-                                            argumentsSubstituted.nodesReverse
-                                                |> List.reverse
-                                        , result = resultSubstituted.node
-                                        , type_ = typeSubstituted.type_
-                                        , signature = letValueOrFunction.signature
-                                        , nameRange = letValueOrFunction.nameRange
-                                        , name = letValueOrFunction.name
-                                        }
+                                , node =
+                                    Elm.Syntax.Node.Node letDeclarationRange
+                                        (LetValueOrFunction
+                                            { arguments =
+                                                argumentsSubstituted.nodesReverse
+                                                    |> List.reverse
+                                            , result = resultSubstituted.node
+                                            , type_ = typeSubstituted.type_
+                                            , signature = letValueOrFunction.signature
+                                            , nameRange = letValueOrFunction.nameRange
+                                            , name = letValueOrFunction.name
+                                            }
+                                        )
                                 }
                             )
                 )
@@ -7028,14 +7142,20 @@ expressionMapTypeVariables typeVariableChange expression =
 
         ExpressionLetIn expressionLetIn ->
             ExpressionLetIn
-                { declarations =
-                    expressionLetIn.declarations
+                { declaration0 =
+                    expressionLetIn.declaration0
+                        |> Elm.Syntax.Node.map
+                            (\letDeclaration ->
+                                letDeclaration |> letDeclarationMapTypeVariables typeVariableChange
+                            )
+                , declaration1Up =
+                    expressionLetIn.declaration1Up
                         |> List.map
                             (\letDeclarationNode ->
                                 letDeclarationNode
                                     |> Elm.Syntax.Node.map
                                         (\letDeclaration ->
-                                            letDeclaration |> expressionLetDeclarationMapTypeVariables typeVariableChange
+                                            letDeclaration |> letDeclarationMapTypeVariables typeVariableChange
                                         )
                             )
                 , result =
@@ -7044,11 +7164,11 @@ expressionMapTypeVariables typeVariableChange expression =
                 }
 
 
-expressionLetDeclarationMapTypeVariables :
+letDeclarationMapTypeVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
     -> LetDeclaration
     -> LetDeclaration
-expressionLetDeclarationMapTypeVariables typeVariableChange expressionLetDeclaration =
+letDeclarationMapTypeVariables typeVariableChange expressionLetDeclaration =
     case expressionLetDeclaration of
         LetDestructuring letDestructuring ->
             LetDestructuring

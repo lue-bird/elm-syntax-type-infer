@@ -3,6 +3,7 @@ module Tests exposing (suite)
 import Elm.Syntax.Expression
 import Elm.Syntax.Infix
 import Elm.Syntax.Node
+import Elm.Syntax.Pattern
 import ElmSyntaxTypeInfer
 import Expect
 import Test exposing (Test)
@@ -261,6 +262,38 @@ suite =
                                                 ]
                                             }
                                         )
+                                }
+                            )
+                        )
+            )
+        , Test.test "let (a) = 2.2 in a"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetDestructuring
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.ParenthesizedPattern
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "a")
+                                        )
+                                    )
+                                )
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 2.2)
+                                )
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { moduleOrigin = [ "Basics" ]
+                                , name = "Float"
+                                , arguments = []
                                 }
                             )
                         )
