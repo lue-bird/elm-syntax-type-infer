@@ -38,7 +38,7 @@ suite =
                                     exampleModuleOriginLookup
                                 |> .types
                         }
-                    |> Result.map (\typed -> typed.result.type_)
+                    |> Result.map .type_
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
