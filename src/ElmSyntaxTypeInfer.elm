@@ -2594,8 +2594,8 @@ type Expression
                 }
         }
     | ExpressionLambda
-        -- TODO split into parameter0 and parameter1Up
-        { arguments : List (TypedNode Pattern)
+        { parameter0 : TypedNode Pattern
+        , parameter1Up : List (TypedNode Pattern)
         , result : TypedNode Expression
         }
     | ExpressionLetIn
@@ -2604,7 +2604,8 @@ type Expression
         }
     | ExpressionCaseOf
         { matchedExpression : TypedNode Expression
-        , cases :
+        , -- TODO split into 0 and 1Up
+          cases :
             List
                 { pattern : TypedNode Pattern
                 , result : TypedNode Expression
@@ -4290,61 +4291,122 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
 
         Elm.Syntax.Expression.LambdaExpression lambda ->
-            Result.andThen
-                (\argumentsInferred ->
-                    Result.andThen
-                        (\resultInferred ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , node =
-                                        { range = fullRange
-                                        , value =
-                                            ExpressionLambda
-                                                { arguments =
-                                                    argumentsInferred.nodesReverse
-                                                        |> List.reverse
-                                                , result = resultInferred.node
+            case lambda.args of
+                [] ->
+                    Err "lambda without parameter patterns is invalid syntax"
+
+                parameter0 :: parameter1Up ->
+                    resultAndThen2
+                        (\parameter0Inferred parameter1UpInferred ->
+                            Result.andThen
+                                (\resultInferred ->
+                                    Result.map
+                                        (\fullSubstitutions ->
+                                            { substitutions = fullSubstitutions
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    ExpressionLambda
+                                                        { parameter0 = parameter0Inferred.node
+                                                        , parameter1Up =
+                                                            parameter1UpInferred.nodesReverse
+                                                                |> List.reverse
+                                                        , result = resultInferred.node
+                                                        }
+                                                , type_ =
+                                                    TypeNotVariable
+                                                        (TypeFunction
+                                                            { input = parameter0Inferred.node.type_
+                                                            , output =
+                                                                parameter1UpInferred.nodesReverse
+                                                                    |> List.foldl
+                                                                        (\argumentTypedNode output ->
+                                                                            TypeNotVariable
+                                                                                (TypeFunction
+                                                                                    { input = argumentTypedNode.type_
+                                                                                    , output = output
+                                                                                    }
+                                                                                )
+                                                                        )
+                                                                        resultInferred.node.type_
+                                                            }
+                                                        )
                                                 }
-                                        , type_ =
-                                            argumentsInferred.nodesReverse
-                                                |> List.foldl
-                                                    (\argumentTypedNode output ->
-                                                        TypeNotVariable
-                                                            (TypeFunction
-                                                                { input = argumentTypedNode.type_
-                                                                , output = output
-                                                                }
-                                                            )
-                                                    )
-                                                    resultInferred.node.type_
-                                        }
-                                    }
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge3 context.declarationTypes
+                                            parameter0Inferred.substitutions
+                                            parameter1UpInferred.substitutions
+                                            resultInferred.substitutions
+                                        )
                                 )
-                                (variableSubstitutionsMerge context.declarationTypes
-                                    argumentsInferred.substitutions
-                                    resultInferred.substitutions
+                                (lambda.expression
+                                    |> expressionTypeInfer
+                                        { path = context.path
+                                        , declarationTypes = context.declarationTypes
+                                        , moduleOriginLookup = context.moduleOriginLookup
+                                        , locallyIntroducedExpressionVariables =
+                                            FastDict.union
+                                                (FastDict.union
+                                                    parameter0Inferred.introducedExpressionVariables
+                                                    parameter1UpInferred.introducedExpressionVariables
+                                                )
+                                                context.locallyIntroducedExpressionVariables
+                                        }
                                 )
                         )
-                        (lambda.expression
-                            |> expressionTypeInfer
-                                { path = context.path
-                                , declarationTypes = context.declarationTypes
+                        (parameter0
+                            |> patternTypeInfer
+                                { path = "parameter0" :: context.path
                                 , moduleOriginLookup = context.moduleOriginLookup
-                                , locallyIntroducedExpressionVariables =
-                                    FastDict.union
-                                        argumentsInferred.introducedExpressionVariables
-                                        context.locallyIntroducedExpressionVariables
+                                , declarationTypes = context.declarationTypes
                                 }
                         )
-                )
-                (lambda.args
-                    |> parameterPatternsTypeInfer
-                        { path = context.path
-                        , declarationTypes = context.declarationTypes
-                        , moduleOriginLookup = context.moduleOriginLookup
-                        }
-                )
+                        (parameter1Up
+                            |> listFoldlWhileOkFrom
+                                { substitutions = variableSubstitutionsNone
+                                , introducedExpressionVariables = FastDict.empty
+                                , nodesReverse = []
+                                , index = 0
+                                }
+                                (\pattern soFar ->
+                                    pattern
+                                        |> patternTypeInfer
+                                            { path =
+                                                ("parameter" ++ (soFar.index |> String.fromInt))
+                                                    :: context.path
+                                            , declarationTypes = context.declarationTypes
+                                            , moduleOriginLookup = context.moduleOriginLookup
+                                            }
+                                        |> Result.andThen
+                                            (\patternInferred ->
+                                                variableSubstitutionsMerge context.declarationTypes
+                                                    soFar.substitutions
+                                                    patternInferred.substitutions
+                                                    |> Result.map
+                                                        (\substitutionsWithPattern ->
+                                                            { index = soFar.index + 1
+                                                            , substitutions = substitutionsWithPattern
+                                                            , nodesReverse =
+                                                                patternInferred.node
+                                                                    :: soFar.nodesReverse
+                                                            , introducedExpressionVariables =
+                                                                FastDict.union
+                                                                    patternInferred.introducedExpressionVariables
+                                                                    soFar.introducedExpressionVariables
+                                                            }
+                                                        )
+                                            )
+                                )
+                            |> Result.map
+                                (\folded ->
+                                    { substitutions = folded.substitutions
+                                    , introducedExpressionVariables =
+                                        folded.introducedExpressionVariables
+                                    , nodesReverse = folded.nodesReverse
+                                    }
+                                )
+                        )
 
         Elm.Syntax.Expression.CaseExpression caseOf ->
             resultAndThen2
@@ -5512,7 +5574,6 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                             , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
                             }
                         resultInferredSubstitutions =
-                            -- TODO this doesnt work, it needs to be merged
                             case resultInferred.node.type_ of
                                 TypeNotVariable resultInferredNotVariable ->
                                     { variableToType =
@@ -6458,10 +6519,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionLambda expressionLambda ->
-            resultAndThen3
-                (\argumentsSubstituted resultSubstituted typeSubstituted ->
-                    variableSubstitutionsMerge3 declarationTypes
-                        argumentsSubstituted.substitutions
+            resultAndThen4
+                (\parameter0Substituted parameter1UpSubstituted resultSubstituted typeSubstituted ->
+                    variableSubstitutionsMerge4 declarationTypes
+                        parameter0Substituted.substitutions
+                        parameter1UpSubstituted.substitutions
                         resultSubstituted.substitutions
                         typeSubstituted.substitutions
                         |> Result.map
@@ -6471,8 +6533,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     { range = expression.range
                                     , value =
                                         ExpressionLambda
-                                            { arguments =
-                                                argumentsSubstituted.nodesReverse
+                                            { parameter0 = parameter0Substituted.node
+                                            , parameter1Up =
+                                                parameter1UpSubstituted.nodesReverse
                                                     |> List.reverse
                                             , result = resultSubstituted.node
                                             }
@@ -6481,7 +6544,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 }
                             )
                 )
-                (expressionLambda.arguments
+                (expressionLambda.parameter0
+                    |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
+                (expressionLambda.parameter1Up
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
@@ -6926,8 +6993,11 @@ expressionMapTypeVariables typeVariableChange expression =
 
         ExpressionLambda expressionLambda ->
             ExpressionLambda
-                { arguments =
-                    expressionLambda.arguments
+                { parameter0 =
+                    expressionLambda.parameter0
+                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                , parameter1Up =
+                    expressionLambda.parameter1Up
                         |> List.map
                             (\argument ->
                                 argument |> patternTypedNodeMapTypeVariables typeVariableChange
