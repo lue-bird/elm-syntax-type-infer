@@ -298,6 +298,34 @@ suite =
                             )
                         )
             )
+        , Test.test "case 2.2 of (a) -> a"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ParenthesizedPattern
+                                    (Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.VarPattern "a")
+                                    )
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                          )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Floatable 2.2)
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { moduleOrigin = [ "Basics" ]
+                                , name = "Float"
+                                , arguments = []
+                                }
+                            )
+                        )
+            )
         ]
 
 
