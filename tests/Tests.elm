@@ -47,7 +47,7 @@ suite =
                                     , name = "List"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeVariable
-                                            ( [ "0", "result" ], "number" )
+                                            ( [ "0", "declarationResult" ], "number" )
                                         ]
                                     }
                                 )
@@ -116,7 +116,7 @@ suite =
                             (ElmSyntaxTypeInfer.TypeTriple
                                 { part0 =
                                     ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "0", "result" ], "number" )
+                                        ( [ "0", "declarationResult" ], "number" )
                                 , part1 =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeConstruct
@@ -127,7 +127,7 @@ suite =
                                         )
                                 , part2 =
                                     ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "2", "result" ], "number" )
+                                        ( [ "2", "declarationResult" ], "number" )
                                 }
                             )
                         )
@@ -160,7 +160,7 @@ suite =
                     ]
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeVariable
-                            ( [ "a", "called", "result", "_and", "number", "argument0", "result", "_and", "result", "_and", "result", "result" ]
+                            ( [ "a", "called", "declarationResult", "_and", "callResult", "declarationResult", "_and", "declarationResult", "_and", "number", "argument0", "declarationResult" ]
                             , "numberEquivalent"
                             )
                         )
@@ -243,7 +243,7 @@ suite =
                                             , name = "List"
                                             , arguments =
                                                 [ ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "argument0", "result", "_and", "a", "called", "result", "_and", "b", "called", "result" ]
+                                                    ( [ "a", "argument0", "declarationResult", "_and", "a", "called", "declarationResult", "_and", "b", "called", "declarationResult" ]
                                                     , "equivalent"
                                                     )
                                                 ]
@@ -256,7 +256,7 @@ suite =
                                             , name = "List"
                                             , arguments =
                                                 [ ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "argument0", "result", "_and", "a", "called", "result", "_and", "b", "called", "result" ]
+                                                    ( [ "a", "argument0", "declarationResult", "_and", "a", "called", "declarationResult", "_and", "b", "called", "declarationResult" ]
                                                     , "equivalent"
                                                     )
                                                 ]

@@ -4050,6 +4050,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     Err "empty application is invalid syntax"
 
                 [ subExpression ] ->
+                    -- never produced by elm-syntax
                     subExpression |> expressionTypeInfer context
 
                 called :: argument0 :: argument1Up ->
@@ -4058,7 +4059,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             let
                                 resultType : Type TypeVariableFromContext
                                 resultType =
-                                    TypeVariable ( context.path, "result" )
+                                    TypeVariable ( context.path, "callResult" )
 
                                 calledTypeInferredFromArguments : Type TypeVariableFromContext
                                 calledTypeInferredFromArguments =
@@ -4346,7 +4347,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                                 (lambda.expression
                                     |> expressionTypeInfer
-                                        { path = context.path
+                                        { path = "lambdaResult" :: context.path
                                         , declarationTypes = context.declarationTypes
                                         , moduleOriginLookup = context.moduleOriginLookup
                                         , locallyIntroducedExpressionVariables =
@@ -4855,7 +4856,7 @@ expressionInfixOperationTypeInfer context infixOperation =
             let
                 resultType : Type TypeVariableFromContext
                 resultType =
-                    TypeVariable ( context.path, "result" )
+                    TypeVariable ( context.path, "operationResult" )
             in
             typeUnify context.declarationTypes
                 operatorAsFunctionType
@@ -5686,7 +5687,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
 
                 resultTypeVariable : TypeVariableFromContext
                 resultTypeVariable =
-                    ( [], "result" )
+                    ( [], "declarationResult" )
 
                 type_ : Type TypeVariableFromContext
                 type_ =
@@ -5808,7 +5809,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                     |> expressionTypeInfer
                         { declarationTypes = declarationTypes
                         , locallyIntroducedExpressionVariables = arguments.introducedExpressionVariables
-                        , path = [ "result" ]
+                        , path = [ "declarationResult" ]
                         , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
                         }
                 )

@@ -39,7 +39,7 @@ Ok
             , name = "List"
             , arguments =
                 [ ElmSyntaxTypeInfer.TypeVariable
-                    ( [ "0", "result" ], "number" )
+                    ( [ "0", "declarationResult" ], "number" )
                 ]
             }
         )
