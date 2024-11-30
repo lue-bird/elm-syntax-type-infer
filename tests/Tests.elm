@@ -81,6 +81,58 @@ suite =
                             )
                         )
             )
+        , Test.test "[ .a, .b ]"
+            (\() ->
+                Elm.Syntax.Expression.ListExpr
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.RecordAccessFunction ".a")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.RecordAccessFunction ".b")
+                    ]
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { arguments =
+                                    [ ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeFunction
+                                            { input =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                        { fields =
+                                                            FastDict.fromList
+                                                                [ ( "b"
+                                                                  , ElmSyntaxTypeInfer.TypeVariable
+                                                                        ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
+                                                                        , "equivalent"
+                                                                        )
+                                                                  )
+                                                                , ( "a"
+                                                                  , ElmSyntaxTypeInfer.TypeVariable
+                                                                        ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
+                                                                        , "equivalent"
+                                                                        )
+                                                                  )
+                                                                ]
+                                                        , recordVariable =
+                                                            ( [ "_of", "recordWithA", "0", "declarationResult", "_and", "recordWithB", "1", "declarationResult" ]
+                                                            , "base"
+                                                            )
+                                                        }
+                                                    )
+                                            , output =
+                                                ElmSyntaxTypeInfer.TypeVariable
+                                                    ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
+                                                    , "equivalent"
+                                                    )
+                                            }
+                                        )
+                                    ]
+                                , moduleOrigin = [ "List" ]
+                                , name = "List"
+                                }
+                            )
+                        )
+            )
         , Test.test "unify integer and float in addition"
             (\() ->
                 Elm.Syntax.Expression.OperatorApplication
@@ -507,6 +559,48 @@ suite =
                             )
                         )
             )
+        , Test.test "argument pattern variable called in negate parenthesized, implicit import \\a -> a.field"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.RecordAccess
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.ParenthesizedExpression
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                        )
+                                    )
+                                )
+                                (Elm.Syntax.Node.empty "field")
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeRecordExtension
+                                            { recordVariable =
+                                                ( [ "lambdaResult", "declarationResult" ], "recordWithField" )
+                                            , fields =
+                                                FastDict.singleton "field"
+                                                    (ElmSyntaxTypeInfer.TypeVariable
+                                                        ( [ "lambdaResult", "declarationResult" ], "field" )
+                                                    )
+                                            }
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeVariable
+                                        ( [ "lambdaResult", "declarationResult" ], "field" )
+                                }
+                            )
+                        )
+            )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
@@ -765,6 +859,159 @@ suite =
                             )
                         )
             )
+        , Test.test "case 2 of 1 -> 1; n -> n"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Integer 2)
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.IntPattern 1)
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 2)
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "n")
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
+                          )
+                        ]
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { arguments = []
+                                , moduleOrigin = [ "Basics" ]
+                                , name = "Int"
+                                }
+                            )
+                        )
+            )
+        , Test.test "should fail: case [] of [ 1 ] -> 1; n -> n"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.IntPattern 1)
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 1)
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "n")
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
+        , Test.test "case [] of [ 1 ] -> [ 2 ]; n -> n"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.IntPattern 1)
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.ListExpr
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.Integer 2)
+                                    ]
+                                )
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "n")
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "List" ]
+                                    , name = "List"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Int"
+                                                , arguments = []
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "case [] of [ first, 1 ] -> [ first ]; n -> n"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.VarPattern "first")
+                                    , Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.IntPattern 1)
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.ListExpr
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [] "first")
+                                    ]
+                                )
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "n")
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "List" ]
+                                    , name = "List"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Int"
+                                                , arguments = []
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
         ]
 
 
@@ -773,6 +1020,19 @@ expressionExpectInferredType :
     -> Elm.Syntax.Expression.Expression
     -> Expect.Expectation
 expressionExpectInferredType expectedInferredType expression =
+    expression
+        |> expressionToInferredType
+        |> Expect.equal
+            (Ok expectedInferredType)
+
+
+expressionToInferredType :
+    Elm.Syntax.Expression.Expression
+    ->
+        Result
+            String
+            (ElmSyntaxTypeInfer.Type ElmSyntaxTypeInfer.TypeVariableFromContext)
+expressionToInferredType expression =
     { declaration =
         Elm.Syntax.Node.empty
             { expression =
@@ -793,8 +1053,6 @@ expressionExpectInferredType expectedInferredType expression =
                     |> .types
             }
         |> Result.map .type_
-        |> Expect.equal
-            (Ok expectedInferredType)
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup

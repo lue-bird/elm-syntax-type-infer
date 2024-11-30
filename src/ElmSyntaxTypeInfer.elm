@@ -3026,8 +3026,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = type_
                     }
                 , introducedExpressionVariables =
-                    FastDict.singleton variableName
-                        type_
+                    FastDict.singleton variableName type_
                 }
 
         Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
@@ -3040,7 +3039,8 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             PatternParenthesized inParens.node
                         , range = fullRange
                         }
-                    , introducedExpressionVariables = inParens.introducedExpressionVariables
+                    , introducedExpressionVariables =
+                        inParens.introducedExpressionVariables
                     }
                 )
                 (parenthesizedInParens
@@ -3064,7 +3064,8 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 }
                         , range = fullRange
                         }
-                    , introducedExpressionVariables = inner.introducedExpressionVariables
+                    , introducedExpressionVariables =
+                        inner.introducedExpressionVariables
                     }
                 )
                 (innerPatternNode
@@ -3096,7 +3097,8 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                     PatternParenthesized inParens.node
                                 , range = fullRange
                                 }
-                            , introducedExpressionVariables = inParens.introducedExpressionVariables
+                            , introducedExpressionVariables =
+                                inParens.introducedExpressionVariables
                             }
                         )
                         (parenthesizedInParens
@@ -3296,28 +3298,23 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 { range = fullRange
                                 , value =
                                     PatternListExact
-                                        (elementTypeAndSubstitutions.elementNodesReverse
-                                            |> listReverseAndMap
-                                                (\elementNode ->
-                                                    { range = elementNode.range
-                                                    , value = elementNode.value
-                                                    , type_ = elementTypeAndSubstitutions.elementType
-                                                    }
-                                                )
-                                        )
+                                        elementTypeAndSubstitutions.elementNodesReverse
                                 , type_ =
                                     typeListList elementTypeAndSubstitutions.elementType
                                 }
                             }
                         )
                         (Result.andThen
-                            (\headTypedNodeAndSubstitutions ->
+                            (\headInferred ->
                                 tail
                                     |> listFoldlWhileOkFrom
-                                        { substitutions = headTypedNodeAndSubstitutions.substitutions
-                                        , elementType = headTypedNodeAndSubstitutions.node.type_
-                                        , elementNodesReverse = []
-                                        , introducedExpressionVariables = FastDict.empty
+                                        { substitutions = headInferred.substitutions
+                                        , elementType = headInferred.node.type_
+                                        , elementNodesReverse =
+                                            [ headInferred.node
+                                            ]
+                                        , introducedExpressionVariables =
+                                            headInferred.introducedExpressionVariables
                                         , index = 1
                                         }
                                         (\elementNode soFar ->
@@ -3329,14 +3326,15 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                                 (\substitutionsWithElement ->
                                                                     { index = soFar.index + 1
                                                                     , elementNodesReverse =
-                                                                        { range = elementTypedNodeAndSubstitutions.node.range
-                                                                        , value = elementTypedNodeAndSubstitutions.node.value
-                                                                        }
+                                                                        elementTypedNodeAndSubstitutions.node
                                                                             :: soFar.elementNodesReverse
                                                                     , elementType = elementTypeWithCurrent.type_
                                                                     , substitutions = substitutionsWithElement
                                                                     , introducedExpressionVariables =
-                                                                        elementTypedNodeAndSubstitutions.introducedExpressionVariables
+                                                                        FastDict.union
+                                                                            elementTypedNodeAndSubstitutions.introducedExpressionVariables
+                                                                            soFar.introducedExpressionVariables
+                                                                            |> Debug.log "list introducedExpressionVariables"
                                                                     }
                                                                 )
                                                                 (variableSubstitutionsMerge3 context.declarationTypes
@@ -4098,15 +4096,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 { range = fullRange
                                 , value =
                                     ExpressionList
-                                        (elementTypeAndSubstitutions.elementNodesReverse
-                                            |> listReverseAndMap
-                                                (\elementNode ->
-                                                    { range = elementNode.range
-                                                    , value = elementNode.value
-                                                    , type_ = elementTypeAndSubstitutions.elementType
-                                                    }
-                                                )
-                                        )
+                                        elementTypeAndSubstitutions.elementNodesReverse
                                 , type_ =
                                     typeListList elementTypeAndSubstitutions.elementType
                                 }
@@ -4118,7 +4108,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     |> listFoldlWhileOkFrom
                                         { substitutions = headTypedNodeAndSubstitutions.substitutions
                                         , elementType = headTypedNodeAndSubstitutions.node.type_
-                                        , elementNodesReverse = []
+                                        , elementNodesReverse = [ headTypedNodeAndSubstitutions.node ]
                                         , index = 1
                                         }
                                         (\elementNode soFar ->
@@ -4130,9 +4120,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                                 (\substitutionsWithElement ->
                                                                     { index = soFar.index + 1
                                                                     , elementNodesReverse =
-                                                                        { range = elementTypedNodeAndSubstitutions.node.range
-                                                                        , value = elementTypedNodeAndSubstitutions.node.value
-                                                                        }
+                                                                        elementTypedNodeAndSubstitutions.node
                                                                             :: soFar.elementNodesReverse
                                                                     , elementType = elementTypeWithCurrent.type_
                                                                     , substitutions = substitutionsWithElement
