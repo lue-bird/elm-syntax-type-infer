@@ -3334,7 +3334,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                                         FastDict.union
                                                                             elementTypedNodeAndSubstitutions.introducedExpressionVariables
                                                                             soFar.introducedExpressionVariables
-                                                                            |> Debug.log "list introducedExpressionVariables"
                                                                     }
                                                                 )
                                                                 (variableSubstitutionsMerge3 context.declarationTypes
