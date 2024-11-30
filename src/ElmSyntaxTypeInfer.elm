@@ -1042,12 +1042,12 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                     }
                 )
                 (typeNotVariable
-                    |> typeNotVariableSubstituteVariable declarationTypes
+                    |> typeNotVariableSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
 
 
-typeNotVariableSubstituteVariable :
+typeNotVariableSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesInAvailableInModule
     ->
         { variable : TypeVariableFromContext
@@ -1060,7 +1060,7 @@ typeNotVariableSubstituteVariable :
             { type_ : TypeNotVariable TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
-typeNotVariableSubstituteVariable declarationTypes replacement typeNotVariable =
+typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
             Ok
@@ -1220,23 +1220,62 @@ typeNotVariableSubstituteVariable declarationTypes replacement typeNotVariable =
 
                     else
                         case replacement.type_ of
-                            TypeRecord replacementFields ->
-                                Result.andThen
-                                    (\recordSubstitutedRecordUnified ->
-                                        Result.map
-                                            (\fullSubstitutions ->
-                                                { substitutions = fullSubstitutions
-                                                , type_ = recordSubstitutedRecordUnified.type_
-                                                }
-                                            )
-                                            (variableSubstitutionsMerge declarationTypes
-                                                fieldsSubstituted.substitutions
-                                                recordSubstitutedRecordUnified.substitutions
-                                            )
+                            TypeRecord replacementRecordFields ->
+                                Result.map
+                                    (\fieldsMerged ->
+                                        { substitutions = fieldsMerged.substitutions
+                                        , type_ = TypeRecord fieldsMerged.types
+                                        }
                                     )
-                                    (typeRecordUnify declarationTypes
-                                        replacementFields
+                                    (FastDict.merge
+                                        (\name value soFarOrError ->
+                                            Result.map
+                                                (\soFar ->
+                                                    { substitutions = soFar.substitutions
+                                                    , types = soFar.types |> FastDict.insert name value
+                                                    }
+                                                )
+                                                soFarOrError
+                                        )
+                                        (\name valueSubstituted valueReplacement soFarOrError ->
+                                            Result.andThen
+                                                (\soFar ->
+                                                    Result.andThen
+                                                        (\valueUnified ->
+                                                            Result.map
+                                                                (\fullSubstitutions ->
+                                                                    { substitutions = fullSubstitutions
+                                                                    , types = soFar.types |> FastDict.insert name valueUnified.type_
+                                                                    }
+                                                                )
+                                                                (variableSubstitutionsMerge declarationTypes
+                                                                    valueUnified.substitutions
+                                                                    soFar.substitutions
+                                                                )
+                                                        )
+                                                        (typeUnify declarationTypes
+                                                            valueSubstituted
+                                                            valueReplacement
+                                                        )
+                                                )
+                                                soFarOrError
+                                        )
+                                        (\name value soFarOrError ->
+                                            Result.map
+                                                (\soFar ->
+                                                    { substitutions = soFar.substitutions
+                                                    , types = soFar.types |> FastDict.insert name value
+                                                    }
+                                                )
+                                                soFarOrError
+                                        )
                                         fieldsSubstituted.types
+                                        replacementRecordFields
+                                        (Ok
+                                            { substitutions = fieldsSubstituted.substitutions
+                                            , types = FastDict.empty
+                                            }
+                                        )
                                     )
 
                             TypeRecordExtension replacementRecordExtension ->
@@ -1915,10 +1954,6 @@ typeUnify declarationTypes a b =
         TypeVariable aVariable ->
             case b of
                 TypeVariable bVariable ->
-                    let
-                        _ =
-                            Debug.log "setting as equivalent " ( aVariable, bVariable )
-                    in
                     Ok
                         { type_ = TypeVariable aVariable
                         , substitutions =
@@ -2391,10 +2426,7 @@ typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields
                 (\fullSubstitutions ->
                     { substitutions = fullSubstitutions
                     , type_ =
-                        TypeRecordExtension
-                            { recordVariable = recordExtension.recordVariable
-                            , fields = fieldsUnified.fieldsUnified
-                            }
+                        TypeRecord fieldsUnified.fieldsUnified
                     }
                 )
                 (variableSubstitutionsMerge declarationTypes
@@ -2403,12 +2435,7 @@ typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields
                     , variableToType =
                         FastDict.singleton
                             recordExtension.recordVariable
-                            (TypeRecord
-                                (FastDict.diff
-                                    recordFields
-                                    recordExtension.fields
-                                )
-                            )
+                            (TypeRecord fieldsUnified.fieldsUnified)
                     }
                 )
         )
@@ -4325,7 +4352,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     fieldsInferred.nodesReverse
                                                         |> List.reverse
                                                 }
-                                        , type_ = typeUnified.type_ |> Debug.log "record update unified type"
+                                        , type_ = typeUnified.type_
                                         }
                                     }
                                 )
@@ -4336,7 +4363,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                         )
                         (typeUnify context.declarationTypes
-                            (recordVariableInferred.node.type_ |> Debug.log "record update variable type")
+                            recordVariableInferred.node.type_
                             (TypeNotVariable
                                 (TypeRecordExtension
                                     { recordVariable = ( context.path, "record" )
@@ -5817,6 +5844,9 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                             []
                             (typesAndOriginLookup.otherModuleDeclaredTypes
                                 |> (\r ->
+                                        -- TODO instead put them in
+                                        -- locallyIntroducedExpressionVariables for result type infer
+                                        -- bc elm doesn't type-check (hand-wave) polymorphic recursion
                                         { r
                                             | signatures =
                                                 r.signatures
@@ -6030,24 +6060,51 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables declarationTypes var
 
                         Ok substituted ->
                             case
-                                variableSubstitutionsMerge
-                                    declarationTypes
-                                    substituted.substitutions
-                                    { equivalentVariables = variableSubstitutions.equivalentVariables
-                                    , variableToType = remainingReplacements
-                                    }
+                                remainingReplacements
+                                    |> fastDictFoldlWhileOkFrom
+                                        variableSubstitutionsNone
+                                        (\remainingVariable remainingReplacementTypeNotVariable soFar ->
+                                            Result.andThen
+                                                (\replacementTypeSubstituted ->
+                                                    variableSubstitutionsMerge3 declarationTypes
+                                                        replacementTypeSubstituted.substitutions
+                                                        { equivalentVariables = []
+                                                        , variableToType =
+                                                            FastDict.singleton remainingVariable
+                                                                replacementTypeSubstituted.type_
+                                                        }
+                                                        soFar
+                                                )
+                                                (remainingReplacementTypeNotVariable
+                                                    |> typeNotVariableSubstituteVariableByNotVariable
+                                                        declarationTypes
+                                                        { variable = replacementVariable
+                                                        , type_ = replacementTypeNotVariable
+                                                        }
+                                                )
+                                        )
                             of
                                 Err error ->
                                     Err error
 
-                                Ok substitutionsAfterSubstitution ->
-                                    declarationValueOrFunctionSubstituteVariablesByNotVariables
-                                        declarationTypes
-                                        substitutionsAfterSubstitution
-                                        { arguments = substituted.arguments
-                                        , result = substituted.result
-                                        , type_ = substituted.type_
-                                        }
+                                Ok remainingVariableToTypeAndSubstitutions ->
+                                    case
+                                        variableSubstitutionsMerge
+                                            declarationTypes
+                                            substituted.substitutions
+                                            remainingVariableToTypeAndSubstitutions
+                                    of
+                                        Err error ->
+                                            Err error
+
+                                        Ok substitutionsAfterSubstitution ->
+                                            declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                                declarationTypes
+                                                substitutionsAfterSubstitution
+                                                { arguments = substituted.arguments
+                                                , result = substituted.result
+                                                , type_ = substituted.type_
+                                                }
 
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
             case
@@ -6179,7 +6236,7 @@ declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes repla
                             |> List.reverse
                     , result = resultInferred.node
                     , type_ =
-                        -- reconstructing the function is probably faster
+                        -- reconstructing the function at the end is faster
                         typeInferred.type_
                     , substitutions = fullSubstitutions
                     }

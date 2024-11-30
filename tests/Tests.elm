@@ -425,6 +425,88 @@ suite =
                             )
                         )
             )
+        , Test.test "argument pattern variable negated parenthesized \\(a) -> -(a)"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.ParenthesizedPattern
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "a")
+                                )
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Negation
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.ParenthesizedExpression
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                        )
+                                    )
+                                )
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeVariable
+                                        ( [ "a", "parameter0", "declarationResult", "_and", "numberNegated", "lambdaResult", "declarationResult" ]
+                                        , "numberEquivalent"
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeVariable
+                                        ( [ "a", "parameter0", "declarationResult", "_and", "numberNegated", "lambdaResult", "declarationResult" ]
+                                        , "numberEquivalent"
+                                        )
+                                }
+                            )
+                        )
+            )
+        , Test.test "argument pattern variable called in negate parenthesized, implicit import \\(a) -> Basics.negate (a)"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.ParenthesizedPattern
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "a")
+                                )
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Application
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "negate")
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.ParenthesizedExpression
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                        )
+                                    )
+                                ]
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeVariable
+                                        ( [ "a", "parameter0", "declarationResult", "_and", "callResult", "lambdaResult", "declarationResult", "_and", "number", "called", "lambdaResult", "declarationResult" ]
+                                        , "numberEquivalent"
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeVariable
+                                        ( [ "a", "parameter0", "declarationResult", "_and", "callResult", "lambdaResult", "declarationResult", "_and", "number", "called", "lambdaResult", "declarationResult" ]
+                                        , "numberEquivalent"
+                                        )
+                                }
+                            )
+                        )
+            )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
@@ -591,6 +673,98 @@ suite =
                             )
                         )
             )
+        , Test.test "record update union with record \\a -> [ { a | b = 1 }, { c = (), b = 2.2 } ]"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.RecordUpdateExpression
+                                        (Elm.Syntax.Node.empty "a")
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "b"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Integer 1)
+                                            )
+                                        ]
+                                    )
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.RecordExpr
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "c"
+                                            , Elm.Syntax.Node.empty
+                                                Elm.Syntax.Expression.UnitExpr
+                                            )
+                                        , Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "b"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                            )
+                                        ]
+                                    )
+                                ]
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeRecord
+                                            (FastDict.fromList
+                                                [ ( "c"
+                                                  , ElmSyntaxTypeInfer.TypeNotVariable
+                                                        ElmSyntaxTypeInfer.TypeUnit
+                                                  )
+                                                , ( "b"
+                                                  , ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { arguments = []
+                                                            , moduleOrigin = [ "Basics" ]
+                                                            , name = "Float"
+                                                            }
+                                                        )
+                                                  )
+                                                ]
+                                            )
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { moduleOrigin = [ "List" ]
+                                            , name = "List"
+                                            , arguments =
+                                                [ ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeRecord
+                                                        (FastDict.fromList
+                                                            [ ( "c"
+                                                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    ElmSyntaxTypeInfer.TypeUnit
+                                                              )
+                                                            , ( "b"
+                                                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    (ElmSyntaxTypeInfer.TypeConstruct
+                                                                        { arguments = []
+                                                                        , moduleOrigin = [ "Basics" ]
+                                                                        , name = "Float"
+                                                                        }
+                                                                    )
+                                                              )
+                                                            ]
+                                                        )
+                                                    )
+                                                ]
+                                            }
+                                        )
+                                }
+                            )
+                        )
+            )
         ]
 
 
@@ -619,7 +793,8 @@ expressionExpectInferredType expectedInferredType expression =
                     |> .types
             }
         |> Result.map .type_
-        |> Expect.equal (Ok expectedInferredType)
+        |> Expect.equal
+            (Ok expectedInferredType)
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
