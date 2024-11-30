@@ -1240,24 +1240,65 @@ typeNotVariableSubstituteVariable declarationTypes replacement typeNotVariable =
                                     )
 
                             TypeRecordExtension replacementRecordExtension ->
-                                Result.andThen
-                                    (\recordSubstitutedRecordExtensionUnified ->
-                                        Result.map
-                                            (\fullSubstitutions ->
-                                                { substitutions = fullSubstitutions
-                                                , type_ = recordSubstitutedRecordExtensionUnified.type_
+                                Result.map
+                                    (\fieldsMerged ->
+                                        { substitutions = fieldsMerged.substitutions
+                                        , type_ =
+                                            TypeRecordExtension
+                                                { recordVariable = replacement.variable
+                                                , fields = fieldsMerged.types
                                                 }
-                                            )
-                                            (variableSubstitutionsMerge declarationTypes
-                                                fieldsSubstituted.substitutions
-                                                recordSubstitutedRecordExtensionUnified.substitutions
-                                            )
-                                    )
-                                    (typeRecordExtensionUnifyWithRecord declarationTypes
-                                        { recordVariable = replacementRecordExtension.recordVariable
-                                        , fields = replacementRecordExtension.fields
                                         }
+                                    )
+                                    (FastDict.merge
+                                        (\name value soFarOrError ->
+                                            Result.map
+                                                (\soFar ->
+                                                    { substitutions = soFar.substitutions
+                                                    , types = soFar.types |> FastDict.insert name value
+                                                    }
+                                                )
+                                                soFarOrError
+                                        )
+                                        (\name valueSubstituted valueReplacement soFarOrError ->
+                                            Result.andThen
+                                                (\soFar ->
+                                                    Result.andThen
+                                                        (\valueUnified ->
+                                                            Result.map
+                                                                (\fullSubstitutions ->
+                                                                    { substitutions = fullSubstitutions
+                                                                    , types = soFar.types |> FastDict.insert name valueUnified.type_
+                                                                    }
+                                                                )
+                                                                (variableSubstitutionsMerge declarationTypes
+                                                                    valueUnified.substitutions
+                                                                    soFar.substitutions
+                                                                )
+                                                        )
+                                                        (typeUnify declarationTypes
+                                                            valueSubstituted
+                                                            valueReplacement
+                                                        )
+                                                )
+                                                soFarOrError
+                                        )
+                                        (\name value soFarOrError ->
+                                            Result.map
+                                                (\soFar ->
+                                                    { substitutions = soFar.substitutions
+                                                    , types = soFar.types |> FastDict.insert name value
+                                                    }
+                                                )
+                                                soFarOrError
+                                        )
                                         fieldsSubstituted.types
+                                        replacementRecordExtension.fields
+                                        (Ok
+                                            { substitutions = fieldsSubstituted.substitutions
+                                            , types = FastDict.empty
+                                            }
+                                        )
                                     )
 
                             _ ->
@@ -1860,19 +1901,24 @@ typeUnify declarationTypes a b =
                         }
 
                 TypeNotVariable bTypeNotVariable ->
-                    case typeNotVariableUnify declarationTypes aTypeNotVariable bTypeNotVariable of
-                        Err error ->
-                            Err error
-
-                        Ok unifiedNotVariable ->
-                            Ok
-                                { type_ = unifiedNotVariable.type_
-                                , substitutions = unifiedNotVariable.substitutions
-                                }
+                    Result.map
+                        (\unifiedNotVariable ->
+                            { type_ = unifiedNotVariable.type_
+                            , substitutions = unifiedNotVariable.substitutions
+                            }
+                        )
+                        (typeNotVariableUnify declarationTypes
+                            aTypeNotVariable
+                            bTypeNotVariable
+                        )
 
         TypeVariable aVariable ->
             case b of
                 TypeVariable bVariable ->
+                    let
+                        _ =
+                            Debug.log "setting as equivalent " ( aVariable, bVariable )
+                    in
                     Ok
                         { type_ = TypeVariable aVariable
                         , substitutions =
@@ -1886,7 +1932,7 @@ typeUnify declarationTypes a b =
 
                 TypeNotVariable bTypeNotVariable ->
                     Ok
-                        { type_ = TypeVariable aVariable
+                        { type_ = TypeNotVariable bTypeNotVariable
                         , substitutions =
                             { variableToType =
                                 FastDict.singleton aVariable
@@ -2617,7 +2663,8 @@ type Expression
         )
     | ExpressionRecordUpdate
         { recordVariable : TypedNode String
-        , fields :
+        , -- TODO split into 0 and 1Up
+          fields :
             List
                 { range : Elm.Syntax.Range.Range
                 , name : String
@@ -4278,17 +4325,18 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     fieldsInferred.nodesReverse
                                                         |> List.reverse
                                                 }
-                                        , type_ = typeUnified.type_
+                                        , type_ = typeUnified.type_ |> Debug.log "record update unified type"
                                         }
                                     }
                                 )
-                                (variableSubstitutionsMerge context.declarationTypes
+                                (variableSubstitutionsMerge3 context.declarationTypes
+                                    typeUnified.substitutions
                                     recordVariableInferred.substitutions
                                     fieldsInferred.substitutions
                                 )
                         )
                         (typeUnify context.declarationTypes
-                            recordVariableInferred.node.type_
+                            (recordVariableInferred.node.type_ |> Debug.log "record update variable type")
                             (TypeNotVariable
                                 (TypeRecordExtension
                                     { recordVariable = ( context.path, "record" )
@@ -7907,11 +7955,14 @@ equivalentVariablesCreateCondensedVariable set =
         [] ->
             Err "implementation bug: equivalent variables set is empty"
 
-        headVariable :: tailVariables ->
+        [ onlyVariable ] ->
+            Ok onlyVariable
+
+        variable0 :: variable1 :: variable2Up ->
             Result.map
                 (\unifiedConstraint ->
                     ( -- creating a new variable safely
-                      (headVariable :: tailVariables)
+                      (variable0 :: variable1 :: variable2Up)
                         |> List.map
                             (\( context, name ) ->
                                 name :: context
@@ -7923,9 +7974,8 @@ equivalentVariablesCreateCondensedVariable set =
                         |> typeVariableNameReplaceMaybeConstraint unifiedConstraint
                     )
                 )
-                (tailVariables
-                    |> listFoldlWhileOkFrom
-                        (headVariable |> typeVariableFromContextName |> typeVariableConstraint)
+                ((variable0 :: variable1 :: variable2Up)
+                    |> listFoldlWhileOkFrom Nothing
                         (\variable soFar ->
                             maybeTypeVariableConstraintMerge
                                 (variable |> typeVariableFromContextName |> typeVariableConstraint)
