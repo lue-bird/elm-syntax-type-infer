@@ -2690,8 +2690,13 @@ type Expression
         )
     | ExpressionRecordUpdate
         { recordVariable : TypedNode String
-        , -- TODO split into 0 and 1Up
-          fields :
+        , field0 :
+            { range : Elm.Syntax.Range.Range
+            , name : String
+            , nameRange : Elm.Syntax.Range.Range
+            , value : TypedNode Expression
+            }
+        , field1Up :
             List
                 { range : Elm.Syntax.Range.Range
                 , name : String
@@ -4319,95 +4324,124 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
 
         Elm.Syntax.Expression.RecordUpdateExpression (Elm.Syntax.Node.Node recordVariableRange recordVariable) fields ->
-            resultAndThen2
-                (\recordVariableInferred fieldsInferred ->
-                    Result.andThen
-                        (\typeUnified ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , node =
-                                        { range = fullRange
-                                        , value =
-                                            ExpressionRecordUpdate
-                                                { recordVariable =
-                                                    { range = recordVariableRange
-                                                    , value = recordVariable
-                                                    , type_ = typeUnified.type_
-                                                    }
-                                                , fields =
-                                                    fieldsInferred.nodesReverse
-                                                        |> List.reverse
-                                                }
-                                        , type_ = typeUnified.type_
-                                        }
-                                    }
-                                )
-                                (variableSubstitutionsMerge3 context.declarationTypes
-                                    typeUnified.substitutions
-                                    recordVariableInferred.substitutions
-                                    fieldsInferred.substitutions
-                                )
-                        )
-                        (typeUnify context.declarationTypes
-                            recordVariableInferred.node.type_
-                            (TypeNotVariable
-                                (TypeRecordExtension
-                                    { recordVariable = ( context.path, "record" )
-                                    , fields =
-                                        fieldsInferred.nodesReverse
-                                            |> List.foldl
-                                                (\fieldInferred soFar ->
-                                                    soFar
-                                                        |> FastDict.insert fieldInferred.name
-                                                            fieldInferred.value.type_
-                                                )
-                                                FastDict.empty
-                                    }
-                                )
-                            )
-                        )
-                )
-                (Elm.Syntax.Node.Node
-                    recordVariableRange
-                    (Elm.Syntax.Expression.FunctionOrValue [] recordVariable)
-                    |> expressionTypeInfer
-                        (context |> expressionContextToInPath "record")
-                )
-                (fields
-                    |> listFoldlWhileOkFrom
-                        { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
-                        }
-                        (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node nameRange name, valueNode )) soFar ->
+            case fields of
+                [] ->
+                    Err "record update without fields is invalid syntax"
+
+                (Elm.Syntax.Node.Node field0Range ( Elm.Syntax.Node.Node field0NameRange field0Name, field0ValueNode )) :: field1Up ->
+                    resultAndThen3
+                        (\recordVariableInferred field0Inferred field1UpInferred ->
                             Result.andThen
-                                (\valueInferred ->
+                                (\typeUnified ->
                                     Result.map
-                                        (\substitutionsWithField ->
-                                            { substitutions = substitutionsWithField
-                                            , nodesReverse =
-                                                { range = fieldRange
-                                                , name = name
-                                                , nameRange = nameRange
-                                                , value = valueInferred.node
+                                        (\fullSubstitutions ->
+                                            { substitutions = fullSubstitutions
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    ExpressionRecordUpdate
+                                                        { recordVariable =
+                                                            { range = recordVariableRange
+                                                            , value = recordVariable
+                                                            , type_ = typeUnified.type_
+                                                            }
+                                                        , field0 = field0Inferred.node
+                                                        , field1Up =
+                                                            field1UpInferred.nodesReverse
+                                                                |> List.reverse
+                                                        }
+                                                , type_ = typeUnified.type_
                                                 }
-                                                    :: soFar.nodesReverse
                                             }
                                         )
-                                        (variableSubstitutionsMerge context.declarationTypes
-                                            soFar.substitutions
-                                            valueInferred.substitutions
+                                        (variableSubstitutionsMerge4 context.declarationTypes
+                                            typeUnified.substitutions
+                                            recordVariableInferred.substitutions
+                                            field0Inferred.substitutions
+                                            field1UpInferred.substitutions
                                         )
                                 )
-                                (valueNode
-                                    |> expressionTypeInfer
-                                        (context
-                                            |> expressionContextToInPath
-                                                ("field" ++ stringFirstCharToUpper name)
+                                (typeUnify context.declarationTypes
+                                    recordVariableInferred.node.type_
+                                    (TypeNotVariable
+                                        (TypeRecordExtension
+                                            { recordVariable = ( context.path, "record" )
+                                            , fields =
+                                                field1UpInferred.nodesReverse
+                                                    |> List.foldl
+                                                        (\fieldInferred soFar ->
+                                                            soFar
+                                                                |> FastDict.insert fieldInferred.name
+                                                                    fieldInferred.value.type_
+                                                        )
+                                                        (FastDict.singleton
+                                                            field0Inferred.node.name
+                                                            field0Inferred.node.value.type_
+                                                        )
+                                            }
+                                        )
+                                    )
+                                )
+                        )
+                        (Elm.Syntax.Node.Node
+                            recordVariableRange
+                            (Elm.Syntax.Expression.FunctionOrValue [] recordVariable)
+                            |> expressionTypeInfer
+                                (context |> expressionContextToInPath "record")
+                        )
+                        (Result.map
+                            (\valueInferred ->
+                                { substitutions = valueInferred.substitutions
+                                , node =
+                                    { range = field0Range
+                                    , name = field0Name
+                                    , nameRange = field0NameRange
+                                    , value = valueInferred.node
+                                    }
+                                }
+                            )
+                            (field0ValueNode
+                                |> expressionTypeInfer
+                                    (context
+                                        |> expressionContextToInPath
+                                            ("field" ++ stringFirstCharToUpper field0Name)
+                                    )
+                            )
+                        )
+                        (field1Up
+                            |> listFoldlWhileOkFrom
+                                { substitutions = variableSubstitutionsNone
+                                , nodesReverse = []
+                                }
+                                (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node nameRange name, valueNode )) soFar ->
+                                    Result.andThen
+                                        (\valueInferred ->
+                                            Result.map
+                                                (\substitutionsWithField ->
+                                                    { substitutions = substitutionsWithField
+                                                    , nodesReverse =
+                                                        { range = fieldRange
+                                                        , name = name
+                                                        , nameRange = nameRange
+                                                        , value = valueInferred.node
+                                                        }
+                                                            :: soFar.nodesReverse
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge context.declarationTypes
+                                                    soFar.substitutions
+                                                    valueInferred.substitutions
+                                                )
+                                        )
+                                        (valueNode
+                                            |> expressionTypeInfer
+                                                (context
+                                                    |> expressionContextToInPath
+                                                        ("field" ++ stringFirstCharToUpper name)
+                                                )
                                         )
                                 )
                         )
-                )
 
         Elm.Syntax.Expression.LambdaExpression lambda ->
             case lambda.args of
@@ -5831,9 +5865,6 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                             []
                             (typesAndOriginLookup.otherModuleDeclaredTypes
                                 |> (\r ->
-                                        -- TODO instead put them in
-                                        -- locallyIntroducedExpressionVariables for result type infer
-                                        -- bc elm doesn't type-check (hand-wave) polymorphic recursion
                                         { r
                                             | signatures =
                                                 r.signatures
@@ -6788,8 +6819,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionRecordUpdate expressionRecordUpdate ->
-            resultAndThen2
-                (\fieldsSubstituted fullTypeSubstituted ->
+            resultAndThen3
+                (\field0Substituted field1UpSubstituted fullTypeSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -6802,20 +6833,38 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                             , range = expressionRecordUpdate.recordVariable.range
                                             , type_ = fullTypeSubstituted.type_
                                             }
-                                        , fields =
-                                            fieldsSubstituted.nodesReverse
+                                        , field0 = field0Substituted.node
+                                        , field1Up =
+                                            field1UpSubstituted.nodesReverse
                                                 |> List.reverse
                                         }
                                 , type_ = fullTypeSubstituted.type_
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge declarationTypes
-                            fieldsSubstituted.substitutions
+                        (variableSubstitutionsMerge3 declarationTypes
+                            field0Substituted.substitutions
+                            field1UpSubstituted.substitutions
                             fullTypeSubstituted.substitutions
                         )
                 )
-                (expressionRecordUpdate.fields
+                (Result.map
+                    (\fieldValueSubstituted ->
+                        { substitutions = fieldValueSubstituted.substitutions
+                        , node =
+                            { range = expressionRecordUpdate.field0.range
+                            , name = expressionRecordUpdate.field0.name
+                            , nameRange = expressionRecordUpdate.field0.nameRange
+                            , value = fieldValueSubstituted.node
+                            }
+                        }
+                    )
+                    (expressionRecordUpdate.field0.value
+                        |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                            replacement
+                    )
+                )
+                (expressionRecordUpdate.field1Up
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
@@ -7356,8 +7405,17 @@ expressionMapTypeVariables typeVariableChange expression =
                         expressionRecordUpdate.recordVariable.type_
                             |> typeMapVariables typeVariableChange
                     }
-                , fields =
-                    expressionRecordUpdate.fields
+                , field0 =
+                    { range = expressionRecordUpdate.field0.range
+                    , name = expressionRecordUpdate.field0.name
+                    , nameRange = expressionRecordUpdate.field0.nameRange
+                    , value =
+                        expressionRecordUpdate.field0.value
+                            |> expressionTypedNodeMapTypeVariables
+                                typeVariableChange
+                    }
+                , field1Up =
+                    expressionRecordUpdate.field1Up
                         |> List.map
                             (\field ->
                                 { range = field.range
