@@ -56,17 +56,14 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   finish current implementation (TODO comments)
+-   add more tests, especially let-in
+-   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
--   mutually recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`) can run into an infinite loop
--   somehow "elevate" let declaration types to "module declaration level".
-    Do _not_ let usage influence their types
-    (forall type variables).
-    To infer (mutually) recursive let declarations:
-    substituting in the type of a (let) declaration also substitutes its "descendants"
-    but not the other way around
+-   verify (mutually) recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`)
+    cannot run into an infinite loop
 -   type infer record type alias constructor function reference expression.
     Requires storing `Maybe (List String)` field order in module type alias declaration types
+-   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
 
 ### performance problems?
 
