@@ -3840,7 +3840,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     case context.partiallyInferredDeclarationTypes |> FastDict.get name of
                                         Nothing ->
                                             Err
-                                                ("No locally introduced expression variables or un-annotated declaration found with the name "
+                                                ("No locally introduced expression variable or un-annotated declaration found with the name "
                                                     ++ name
                                                 )
 
@@ -6645,7 +6645,15 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables state declarationVal
                                     )
                                     soFar
                         )
-                        (\_ _ soFar -> soFar)
+                        (\typeVariableFromPartiallyInferredDeclaration uses soFar ->
+                            { substitutionsOfTypeVariablesFromPartiallyInferredDeclarations =
+                                soFar.substitutionsOfTypeVariablesFromPartiallyInferredDeclarations
+                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                    |> FastDict.insert typeVariableFromPartiallyInferredDeclaration
+                                        uses
+                            }
+                        )
                         state.substitutions.variableToType
                         state.usesOfTypeVariablesFromPartiallyInferredDeclarations
                         { substitutionsOfTypeVariablesFromPartiallyInferredDeclarations =
@@ -6842,42 +6850,43 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables state declarationVal
                                     state.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                         |> FastDict.foldl
                                             (\partiallyInferredVariableUncondensed usesUncondensed soFar ->
-                                                case variableToCondensedLookup |> FastDict.get partiallyInferredVariableUncondensed of
-                                                    Nothing ->
-                                                        soFar
+                                                let
+                                                    usesCondensed : FastSet.Set TypeVariableFromContext
+                                                    usesCondensed =
+                                                        usesUncondensed
+                                                            |> FastSet.foldl
+                                                                (\useUncondensed usesCondensedSoFar ->
+                                                                    case variableToCondensedLookup |> FastDict.get useUncondensed of
+                                                                        Nothing ->
+                                                                            usesCondensedSoFar
 
-                                                    Just partiallyInferredVariableCondensed ->
-                                                        let
-                                                            usesCondensed : FastSet.Set TypeVariableFromContext
-                                                            usesCondensed =
-                                                                usesUncondensed
-                                                                    |> FastSet.foldl
-                                                                        (\useUncondensed usesCondensedSoFar ->
-                                                                            case variableToCondensedLookup |> FastDict.get useUncondensed of
-                                                                                Nothing ->
-                                                                                    usesCondensedSoFar
-
-                                                                                Just useCondensed ->
-                                                                                    usesCondensedSoFar
-                                                                                        |> FastSet.insert useCondensed
-                                                                        )
-                                                                        FastSet.empty
-                                                        in
-                                                        soFar
-                                                            |> FastDict.update
-                                                                partiallyInferredVariableCondensed
-                                                                (\maybeUsesCondensedSoFar ->
-                                                                    Just
-                                                                        (case maybeUsesCondensedSoFar of
-                                                                            Nothing ->
-                                                                                usesCondensed
-
-                                                                            Just usesCondensedSoFar ->
-                                                                                FastSet.union
-                                                                                    usesCondensed
-                                                                                    usesCondensedSoFar
-                                                                        )
+                                                                        Just useCondensed ->
+                                                                            usesCondensedSoFar
+                                                                                |> FastSet.insert useCondensed
                                                                 )
+                                                                FastSet.empty
+                                                in
+                                                soFar
+                                                    |> FastDict.update
+                                                        (case variableToCondensedLookup |> FastDict.get partiallyInferredVariableUncondensed of
+                                                            Nothing ->
+                                                                partiallyInferredVariableUncondensed
+
+                                                            Just partiallyInferredVariableCondensed ->
+                                                                partiallyInferredVariableCondensed
+                                                        )
+                                                        (\maybeUsesCondensedSoFar ->
+                                                            Just
+                                                                (case maybeUsesCondensedSoFar of
+                                                                    Nothing ->
+                                                                        usesCondensed
+
+                                                                    Just usesCondensedSoFar ->
+                                                                        FastSet.union
+                                                                            usesCondensed
+                                                                            usesCondensedSoFar
+                                                                )
+                                                        )
                                             )
                                             FastDict.empty
                             in

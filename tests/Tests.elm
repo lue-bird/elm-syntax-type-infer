@@ -517,7 +517,7 @@ suite =
                             )
                         )
             )
-        , Test.test "argument pattern variable called in negate parenthesized, implicit import \\(a) -> Basics.negate (a)"
+        , Test.test "argument pattern variable called in Basics.negate parenthesized, implicit import \\(a) -> Basics.negate (a)"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
@@ -559,7 +559,7 @@ suite =
                             )
                         )
             )
-        , Test.test "argument pattern variable called in negate parenthesized, implicit import \\a -> a.field"
+        , Test.test "argument pattern variable accessed field, implicit import \\a -> a.field"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
@@ -1162,6 +1162,86 @@ suite =
                                         ]
                                     }
                                 )
+                            )
+                        )
+            )
+        , Test.test "single un-annotated let declaration let a = 2.2 in a"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                        }
+                                , signature = Nothing
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { moduleOrigin = [ "Basics" ]
+                                , name = "Float"
+                                , arguments = []
+                                }
+                            )
+                        )
+            )
+        , Test.test "transitive un-annotated let declaration let a = 2.2; b = a in b"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                        }
+                                , signature = Nothing
+                                , documentation = Nothing
+                                }
+                            )
+                        , Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "b"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                        }
+                                , signature = Nothing
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "b")
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { moduleOrigin = [ "Basics" ]
+                                , name = "Float"
+                                , arguments = []
+                                }
                             )
                         )
             )
