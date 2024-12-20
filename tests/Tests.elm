@@ -401,7 +401,7 @@ suite =
                             )
                         )
             )
-        , Test.test "argument pattern variable nuified with Float \\(a) -> [ a, 2.2 ]"
+        , Test.test "argument pattern variable unified with Float \\(a) -> [ a, 2.2 ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
@@ -649,7 +649,7 @@ suite =
                             )
                         )
             )
-        , Test.test "record update union with same record veriable \\(a) -> [ { a | a = (), b = 1 }, { a | c = (), b = 2.2 } ]"
+        , Test.test "record update union with same record variable \\(a) -> [ { a | a = (), b = 1 }, { a | c = (), b = 2.2 } ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
