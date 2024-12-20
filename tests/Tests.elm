@@ -48,7 +48,7 @@ suite =
                                     , name = "List"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeVariable
-                                            ( [ "0", "declarationResult" ], "number" )
+                                            "number"
                                         ]
                                     }
                                 )
@@ -101,29 +101,17 @@ suite =
                                                         { fields =
                                                             FastDict.fromList
                                                                 [ ( "b"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable
-                                                                        ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
-                                                                        , "equivalent"
-                                                                        )
+                                                                  , ElmSyntaxTypeInfer.TypeVariable "a"
                                                                   )
                                                                 , ( "a"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable
-                                                                        ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
-                                                                        , "equivalent"
-                                                                        )
+                                                                  , ElmSyntaxTypeInfer.TypeVariable "a"
                                                                   )
                                                                 ]
-                                                        , recordVariable =
-                                                            ( [ "_of", "recordWithA", "0", "declarationResult", "_and", "recordWithB", "1", "declarationResult" ]
-                                                            , "base"
-                                                            )
+                                                        , recordVariable = "base"
                                                         }
                                                     )
                                             , output =
-                                                ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "0", "declarationResult", "_and", "b", "1", "declarationResult" ]
-                                                    , "equivalent"
-                                                    )
+                                                ElmSyntaxTypeInfer.TypeVariable "a"
                                             }
                                         )
                                     ]
@@ -168,8 +156,7 @@ suite =
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeTriple
                                 { part0 =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "0", "declarationResult" ], "number" )
+                                    ElmSyntaxTypeInfer.TypeVariable "number"
                                 , part1 =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeConstruct
@@ -179,8 +166,7 @@ suite =
                                             }
                                         )
                                 , part2 =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "2", "declarationResult" ], "number" )
+                                    ElmSyntaxTypeInfer.TypeVariable "number"
                                 }
                             )
                         )
@@ -212,11 +198,7 @@ suite =
                         (Elm.Syntax.Expression.Integer 1)
                     ]
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeVariable
-                            ( [ "a", "called", "declarationResult", "_and", "callResult", "declarationResult", "_and", "declarationResult", "_and", "number", "argument0", "declarationResult" ]
-                            , "numberEquivalent"
-                            )
-                        )
+                        (ElmSyntaxTypeInfer.TypeVariable "number")
             )
         , Test.test "Basics.identity called with float (qualified from implicit import)"
             (\() ->
@@ -295,10 +277,7 @@ suite =
                                             { moduleOrigin = [ "List" ]
                                             , name = "List"
                                             , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "argument0", "declarationResult", "_and", "a", "called", "declarationResult", "_and", "b", "called", "declarationResult" ]
-                                                    , "equivalent"
-                                                    )
+                                                [ ElmSyntaxTypeInfer.TypeVariable "a"
                                                 ]
                                             }
                                         )
@@ -308,10 +287,7 @@ suite =
                                             { moduleOrigin = [ "List" ]
                                             , name = "List"
                                             , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "argument0", "declarationResult", "_and", "a", "called", "declarationResult", "_and", "b", "called", "declarationResult" ]
-                                                    , "equivalent"
-                                                    )
+                                                [ ElmSyntaxTypeInfer.TypeVariable "a"
                                                 ]
                                             }
                                         )
@@ -404,7 +380,7 @@ suite =
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
-                                    ElmSyntaxTypeInfer.TypeVariable ( [ "parameter0", "declarationResult" ], "a" )
+                                    ElmSyntaxTypeInfer.TypeVariable "a"
                                 , output =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeConstruct
@@ -504,15 +480,9 @@ suite =
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "a", "parameter0", "declarationResult", "_and", "numberNegated", "lambdaResult", "declarationResult" ]
-                                        , "numberEquivalent"
-                                        )
+                                    ElmSyntaxTypeInfer.TypeVariable "number"
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "a", "parameter0", "declarationResult", "_and", "numberNegated", "lambdaResult", "declarationResult" ]
-                                        , "numberEquivalent"
-                                        )
+                                    ElmSyntaxTypeInfer.TypeVariable "number"
                                 }
                             )
                         )
@@ -547,14 +517,10 @@ suite =
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
                                     ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "a", "parameter0", "declarationResult", "_and", "callResult", "lambdaResult", "declarationResult", "_and", "number", "called", "lambdaResult", "declarationResult" ]
-                                        , "numberEquivalent"
-                                        )
+                                        "number"
                                 , output =
                                     ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "a", "parameter0", "declarationResult", "_and", "callResult", "lambdaResult", "declarationResult", "_and", "number", "called", "lambdaResult", "declarationResult" ]
-                                        , "numberEquivalent"
-                                        )
+                                        "number"
                                 }
                             )
                         )
@@ -585,18 +551,16 @@ suite =
                                 { input =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable =
-                                                ( [ "lambdaResult", "declarationResult" ], "recordWithField" )
+                                            { recordVariable = "recordWithField"
                                             , fields =
                                                 FastDict.singleton "field"
                                                     (ElmSyntaxTypeInfer.TypeVariable
-                                                        ( [ "lambdaResult", "declarationResult" ], "field" )
+                                                        "field"
                                                     )
                                             }
                                         )
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "lambdaResult", "declarationResult" ], "field" )
+                                    ElmSyntaxTypeInfer.TypeVariable "field"
                                 }
                             )
                         )
@@ -626,20 +590,14 @@ suite =
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        ( [ "a", "parameter0", "declarationResult", "_and", "number", "1", "lambdaResult", "declarationResult" ]
-                                        , "numberEquivalent"
-                                        )
+                                    ElmSyntaxTypeInfer.TypeVariable "number"
                                 , output =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeConstruct
                                             { moduleOrigin = [ "List" ]
                                             , name = "List"
                                             , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable
-                                                    ( [ "a", "parameter0", "declarationResult", "_and", "number", "1", "lambdaResult", "declarationResult" ]
-                                                    , "numberEquivalent"
-                                                    )
+                                                [ ElmSyntaxTypeInfer.TypeVariable "number"
                                                 ]
                                             }
                                         )
@@ -744,10 +702,7 @@ suite =
                                 { input =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable =
-                                                ( [ "_of", "record", "0", "lambdaResult", "declarationResult", "_and", "record", "1", "lambdaResult", "declarationResult" ]
-                                                , "base"
-                                                )
+                                            { recordVariable = "base"
                                             , fields =
                                                 FastDict.fromList
                                                     [ ( "a"
@@ -778,10 +733,7 @@ suite =
                                             , arguments =
                                                 [ ElmSyntaxTypeInfer.TypeNotVariable
                                                     (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                        { recordVariable =
-                                                            ( [ "_of", "record", "0", "lambdaResult", "declarationResult", "_and", "record", "1", "lambdaResult", "declarationResult" ]
-                                                            , "base"
-                                                            )
+                                                        { recordVariable = "base"
                                                         , fields =
                                                             FastDict.fromList
                                                                 [ ( "a"
@@ -1249,7 +1201,7 @@ suite =
 
 
 expressionExpectInferredType :
-    ElmSyntaxTypeInfer.Type ElmSyntaxTypeInfer.TypeVariableFromContext
+    ElmSyntaxTypeInfer.Type String
     -> Elm.Syntax.Expression.Expression
     -> Expect.Expectation
 expressionExpectInferredType expectedInferredType expression =
@@ -1264,7 +1216,7 @@ expressionToInferredType :
     ->
         Result
             String
-            (ElmSyntaxTypeInfer.Type ElmSyntaxTypeInfer.TypeVariableFromContext)
+            (ElmSyntaxTypeInfer.Type String)
 expressionToInferredType expression =
     { declaration =
         Elm.Syntax.Node.empty
@@ -1285,7 +1237,10 @@ expressionToInferredType expression =
                         exampleModuleOriginLookup
                     |> .types
             }
-        |> Result.map .type_
+        |> Result.map
+            (\declarationInferred ->
+                declarationInferred.type_
+            )
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup

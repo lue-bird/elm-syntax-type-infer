@@ -29,6 +29,7 @@ import ElmSyntaxTypeInfer
             []
                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                     exampleModuleOriginLookup
+                |> .types
         }
     |> Result.map .type_
 -->
@@ -38,9 +39,7 @@ Ok
             { moduleOrigin = [ "List" ]
             , name = "List"
             , arguments =
-                [ ElmSyntaxTypeInfer.TypeVariable
-                    ( [ "0", "declarationResult" ], "number" )
-                ]
+                [ ElmSyntaxTypeInfer.TypeVariable "number" ]
             }
         )
     )
@@ -51,11 +50,12 @@ exampleModuleOriginLookup =
     []
         |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
             ElmSyntaxTypeInfer.elmCoreTypes
-        |> .types
 ```
 
 ## TODO
 
+- convert arguments : List pattern → parameters : List pattern for let and module-level
+- add module origin to record update
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
