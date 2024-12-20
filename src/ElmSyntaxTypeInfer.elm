@@ -2831,7 +2831,7 @@ type LetDeclaration typeVariable
                 }
         , nameRange : Elm.Syntax.Range.Range
         , name : String
-        , arguments : List (TypedNode (Pattern typeVariable) typeVariable)
+        , parameters : List (TypedNode (Pattern typeVariable) typeVariable)
         , result : TypedNode (Expression typeVariable) typeVariable
         , type_ : Type typeVariable
         }
@@ -2875,7 +2875,7 @@ type Pattern typeVariable
             -- `[]` for no qualification
             Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , arguments : List (TypedNode (Pattern typeVariable) typeVariable)
+        , parameters : List (TypedNode (Pattern typeVariable) typeVariable)
         }
 
 
@@ -3454,7 +3454,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             )
                         )
 
-        Elm.Syntax.Pattern.NamedPattern qualified arguments ->
+        Elm.Syntax.Pattern.NamedPattern qualified parameters ->
             case context.moduleOriginLookup.references |> FastDict.get ( qualified.moduleName, qualified.name ) of
                 Nothing ->
                     Err
@@ -3510,12 +3510,15 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                         , variantParameters = variant.variantParameters
                                         , choiceTypeName = variant.choiceTypeName
                                         , choiceTypeParameters = variant.choiceTypeParameters
-                                        , arguments = arguments
+                                        , parameters = parameters
                                         }
 
 
 patternVariantTypeInfer :
-    { moduleOriginLookup : ModuleOriginLookup, path : List String, declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule }
+    { moduleOriginLookup : ModuleOriginLookup
+    , path : List String
+    , declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+    }
     ->
         { fullRange : Elm.Syntax.Range.Range
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
@@ -3524,7 +3527,7 @@ patternVariantTypeInfer :
         , choiceTypeName : String
         , choiceTypeParameters : List String
         , variantParameters : List (Type String)
-        , arguments : List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
+        , parameters : List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
         }
     ->
         Result
@@ -3549,7 +3552,7 @@ patternVariantTypeInfer context patternVariant =
                         { moduleOrigin = patternVariant.moduleOrigin
                         , qualification = patternVariant.qualification
                         , name = patternVariant.name
-                        , arguments =
+                        , parameters =
                             argumentsUnified.nodesReverse
                                 |> List.reverse
                         }
@@ -3577,7 +3580,7 @@ patternVariantTypeInfer context patternVariant =
                 }
             )
             patternVariant.variantParameters
-            patternVariant.arguments
+            patternVariant.parameters
             |> listFoldlWhileOkFrom
                 { substitutions = variableSubstitutionsNone
                 , introducedExpressionVariables =
@@ -5436,7 +5439,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                                                         }
                                                         , nameRange = implementation.name |> Elm.Syntax.Node.range
                                                         , name = name
-                                                        , arguments =
+                                                        , parameters =
                                                             argumentsInferred.nodesReverse
                                                                 |> List.reverse
                                                         , result = resultInferred.node
@@ -6403,9 +6406,13 @@ expressionDeclarations :
     ->
         Result
             String
-            { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
-            , node : Expression TypeVariableFromContext
-            }
+            (FastDict.Dict
+                String
+                { parameters :
+                    List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+                , node : Expression TypeVariableFromContext
+                }
+            )
 expressionDeclarations typesAndOriginLookup syntaxDeclarationExpression =
     Debug.todo ""
 
@@ -6435,7 +6442,7 @@ expressionDeclaration :
     ->
         Result
             String
-            { arguments : List (TypedNode (Pattern String) String)
+            { parameters : List (TypedNode (Pattern String) String)
             , result : TypedNode (Expression String) String
             , type_ : Type String
             }
@@ -6456,7 +6463,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
             implementation.name |> Elm.Syntax.Node.value
     in
     Result.andThen
-        (\arguments ->
+        (\parameters ->
             let
                 resultTypeVariable : TypeVariableFromContext
                 resultTypeVariable =
@@ -6464,7 +6471,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
 
                 type_ : Type TypeVariableFromContext
                 type_ =
-                    arguments.nodesReverse
+                    parameters.nodesReverse
                         |> List.foldl
                             (\argumentTypedNode soFar ->
                                 TypeNotVariable
@@ -6513,8 +6520,8 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                 (\argumentAndResultSubstitutions ->
                                     { result = resultInferred.node
                                     , type_ = type_
-                                    , arguments =
-                                        arguments.nodesReverse |> List.reverse
+                                    , parameters =
+                                        parameters.nodesReverse |> List.reverse
                                     }
                                         |> declarationValueOrFunctionSubstituteVariablesByNotVariables
                                             { declarationTypes = declarationTypes
@@ -6528,7 +6535,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                 )
                                 (variableSubstitutionsMerge declarationTypes
                                     resultInferredSubstitutions
-                                    arguments.substitutions
+                                    parameters.substitutions
                                 )
 
                         Just (Elm.Syntax.Node.Node _ signature) ->
@@ -6538,8 +6545,8 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                         (\argumentAndResultAndTypeUnifySubstitutions ->
                                             { result = resultInferred.node
                                             , type_ = typeUnifiedWithSignatureType.type_
-                                            , arguments =
-                                                arguments.nodesReverse |> List.reverse
+                                            , parameters =
+                                                parameters.nodesReverse |> List.reverse
                                             }
                                                 |> declarationValueOrFunctionSubstituteVariablesByNotVariables
                                                     { declarationTypes = declarationTypes
@@ -6553,7 +6560,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                                         )
                                         (variableSubstitutionsMerge3 declarationTypes
                                             resultInferredSubstitutions
-                                            arguments.substitutions
+                                            parameters.substitutions
                                             typeUnifiedWithSignatureType.substitutions
                                         )
                                 )
@@ -6580,7 +6587,7 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
                             -- https://github.com/elm/compiler/issues/2275
                             -- so instead of putting it in partiallyInferredDeclarationTypes
                             -- we treat it as an introduced variable (sharing the same type variables)
-                            arguments.introducedExpressionVariables
+                            parameters.introducedExpressionVariables
                                 |> FastDict.insert name type_
                         , partiallyInferredDeclarationTypes = FastDict.empty
                         , containingDeclarationName = name
@@ -6599,12 +6606,12 @@ expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
 
 
 declarationValueOrFunctionDisambiguateTypeVariables :
-    { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+    { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
     , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
     , type_ : Type TypeVariableFromContext
     }
     ->
-        { arguments : List (TypedNode (Pattern String) String)
+        { parameters : List (TypedNode (Pattern String) String)
         , result : TypedNode (Expression String) String
         , type_ : Type String
         }
@@ -6637,14 +6644,14 @@ listRemoveLast list =
 
 
 declarationValueOrFunctionContainedTypeVariables :
-    { arguments : List (TypedNode (Pattern comparableTypeVariable) comparableTypeVariable)
+    { parameters : List (TypedNode (Pattern comparableTypeVariable) comparableTypeVariable)
     , result : TypedNode (Expression comparableTypeVariable) comparableTypeVariable
     , type_ : Type comparableTypeVariable
     }
     -> FastSet.Set comparableTypeVariable
 declarationValueOrFunctionContainedTypeVariables declarationValueOrFunction =
     FastSet.union
-        (declarationValueOrFunction.arguments
+        (declarationValueOrFunction.parameters
             |> List.foldl
                 (\parameter soFar ->
                     FastSet.union
@@ -6724,7 +6731,7 @@ patternContainedTypeVariables pattern =
                 |> listMapAndFastSetsUnify patternTypedNodeContainedTypeVariables
 
         PatternVariant patternVariant ->
-            patternVariant.arguments
+            patternVariant.parameters
                 |> listMapAndFastSetsUnify patternTypedNodeContainedTypeVariables
 
         PatternRecord fields ->
@@ -6928,7 +6935,7 @@ letDeclarationContainedTypeVariables letDeclaration =
                     |> typeContainedVariables
                 )
                 (FastSet.union
-                    (letValueOrFunctionDeclaration.arguments
+                    (letValueOrFunctionDeclaration.parameters
                         |> listMapAndFastSetsUnify
                             patternTypedNodeContainedTypeVariables
                     )
@@ -6952,21 +6959,21 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 declarationValueOrFunctionCondenseEquivalentVariables :
     List (FastSet.Set TypeVariableFromContext)
     ->
-        { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+        { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
         , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
         , type_ : Type TypeVariableFromContext
         }
     ->
         Result
             String
-            { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+            { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
             , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
             , type_ : Type TypeVariableFromContext
             }
 declarationValueOrFunctionCondenseEquivalentVariables equivalentVariables declarationValueOrFunctionAndEquivalentVariables =
     Result.map
         (\lookupCondensedVariable ->
-            { arguments = declarationValueOrFunctionAndEquivalentVariables.arguments
+            { parameters = declarationValueOrFunctionAndEquivalentVariables.parameters
             , result = declarationValueOrFunctionAndEquivalentVariables.result
             , type_ = declarationValueOrFunctionAndEquivalentVariables.type_
             }
@@ -7011,14 +7018,14 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables :
     , substitutions : VariableSubstitutions
     }
     ->
-        { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+        { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
         , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
         , type_ : Type TypeVariableFromContext
         }
     ->
         Result
             String
-            { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+            { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
             , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
             , type_ : Type TypeVariableFromContext
             }
@@ -7121,7 +7128,7 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables state declarationVal
             else
                 case state.substitutions.variableToType |> FastDict.popMin of
                     Nothing ->
-                        { arguments = declarationValueOrFunctionSoFar.arguments
+                        { parameters = declarationValueOrFunctionSoFar.parameters
                         , result = declarationValueOrFunctionSoFar.result
                         , type_ =
                             -- creating the type only at this stage would be faster
@@ -7188,7 +7195,7 @@ declarationValueOrFunctionSubstituteVariablesByNotVariables state declarationVal
                                                         state.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                                     , substitutions = substitutionsAfterSubstitution
                                                     }
-                                                    { arguments = substituted.arguments
+                                                    { parameters = substituted.parameters
                                                     , result = substituted.result
                                                     , type_ = substituted.type_
                                                     }
@@ -7355,14 +7362,14 @@ declarationValueOrFunctionSubstituteVariableByNotVariable :
         , type_ : TypeNotVariable TypeVariableFromContext
         }
     ->
-        { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+        { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
         , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
         , type_ : Type TypeVariableFromContext
         }
     ->
         Result
             String
-            { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+            { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
             , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
             , type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
@@ -7372,7 +7379,7 @@ declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes repla
         (\argumentsInferred resultInferred typeInferred ->
             Result.map
                 (\fullSubstitutions ->
-                    { arguments =
+                    { parameters =
                         argumentsInferred.nodesReverse
                             |> List.reverse
                     , result = resultInferred.node
@@ -7388,7 +7395,7 @@ declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes repla
                     typeInferred.substitutions
                 )
         )
-        (declarationValueOrFunctionSoFar.arguments
+        (declarationValueOrFunctionSoFar.parameters
             |> listFoldlWhileOkFrom
                 { substitutions = variableSubstitutionsNone
                 , nodesReverse = []
@@ -7428,18 +7435,18 @@ declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes repla
 declarationValueOrFunctionMapTypeVariables :
     (TypeVariableFromContext -> changedVariable)
     ->
-        { arguments : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
+        { parameters : List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
         , result : TypedNode (Expression TypeVariableFromContext) TypeVariableFromContext
         , type_ : Type TypeVariableFromContext
         }
     ->
-        { arguments : List (TypedNode (Pattern changedVariable) changedVariable)
+        { parameters : List (TypedNode (Pattern changedVariable) changedVariable)
         , result : TypedNode (Expression changedVariable) changedVariable
         , type_ : Type changedVariable
         }
 declarationValueOrFunctionMapTypeVariables variableChange declarationValueOrFunctionSoFar =
-    { arguments =
-        declarationValueOrFunctionSoFar.arguments
+    { parameters =
+        declarationValueOrFunctionSoFar.parameters
             |> List.map
                 (\argument ->
                     argument |> patternTypedNodeMapTypeVariables variableChange
@@ -8307,7 +8314,7 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.
                             , node =
                                 Elm.Syntax.Node.Node letDeclarationRange
                                     (LetValueOrFunctionDeclaration
-                                        { arguments =
+                                        { parameters =
                                             argumentsSubstituted.nodesReverse
                                                 |> List.reverse
                                         , result = resultSubstituted.node
@@ -8325,7 +8332,7 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.
                             typeSubstituted.substitutions
                         )
                 )
-                (letValueOrFunction.arguments
+                (letValueOrFunction.parameters
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
@@ -8643,8 +8650,8 @@ letDeclarationMapTypeVariables typeVariableChange expressionLetDeclaration =
                 { signature = letValueOrFunction.signature
                 , nameRange = letValueOrFunction.nameRange
                 , name = letValueOrFunction.name
-                , arguments =
-                    letValueOrFunction.arguments
+                , parameters =
+                    letValueOrFunction.parameters
                         |> List.map
                             (\argument ->
                                 argument |> patternTypedNodeMapTypeVariables typeVariableChange
@@ -8998,7 +9005,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         { qualification = patternVariant.qualification
                                         , name = patternVariant.name
                                         , moduleOrigin = patternVariant.moduleOrigin
-                                        , arguments =
+                                        , parameters =
                                             elementsSubstituted.nodesReverse
                                                 |> List.reverse
                                         }
@@ -9011,7 +9018,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             typeSubstituted.substitutions
                         )
                 )
-                (patternVariant.arguments
+                (patternVariant.parameters
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
@@ -9169,8 +9176,8 @@ patternMapTypeVariables typeVariableChange pattern =
                 { qualification = patternVariant.qualification
                 , name = patternVariant.name
                 , moduleOrigin = patternVariant.moduleOrigin
-                , arguments =
-                    patternVariant.arguments
+                , parameters =
+                    patternVariant.parameters
                         |> List.map
                             (\argument ->
                                 argument

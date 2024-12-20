@@ -54,7 +54,6 @@ exampleModuleOriginLookup =
 
 ## TODO
 
-- convert arguments : List pattern → parameters : List pattern for let and module-level
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
