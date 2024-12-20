@@ -2655,27 +2655,6 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
         )
 
 
-listIntersperseElementAndConcat : a -> List (List a) -> List a
-listIntersperseElementAndConcat inBetweenElement lists =
-    case lists of
-        [] ->
-            []
-
-        [ onlyList ] ->
-            onlyList
-
-        list0 :: list1 :: list2Up ->
-            list0
-                ++ ((list1 :: list2Up)
-                        |> List.foldr
-                            (\list rightSoFar ->
-                                (inBetweenElement :: list)
-                                    ++ rightSoFar
-                            )
-                            []
-                   )
-
-
 {-| A part in the syntax tree
 
   - its [range](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Range#Range) in the source
@@ -5223,36 +5202,6 @@ usesOfTypeVariablesFromPartiallyInferredDeclarationsMergeInsert partialVariable 
             )
 
 
-usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge4 :
-    FastDict.Dict
-        TypeVariableFromContext
-        (FastSet.Set TypeVariableFromContext)
-    ->
-        FastDict.Dict
-            TypeVariableFromContext
-            (FastSet.Set TypeVariableFromContext)
-    ->
-        FastDict.Dict
-            TypeVariableFromContext
-            (FastSet.Set TypeVariableFromContext)
-    ->
-        FastDict.Dict
-            TypeVariableFromContext
-            (FastSet.Set TypeVariableFromContext)
-    ->
-        FastDict.Dict
-            TypeVariableFromContext
-            (FastSet.Set TypeVariableFromContext)
-usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge4 a b c d =
-    usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge
-        (usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge3
-            a
-            b
-            c
-        )
-        d
-
-
 usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge3 :
     FastDict.Dict
         TypeVariableFromContext
@@ -6628,11 +6577,6 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
             )
 
 
-listRemoveLast : List a -> List a
-listRemoveLast list =
-    list |> List.take ((list |> List.length) - 1)
-
-
 declarationValueOrFunctionContainedTypeVariables :
     { parameters : List (TypedNode (Pattern comparableTypeVariable) comparableTypeVariable)
     , result : TypedNode (Expression comparableTypeVariable) comparableTypeVariable
@@ -6689,7 +6633,7 @@ patternContainedTypeVariables pattern =
         PatternInt _ ->
             FastSet.empty
 
-        PatternVariable name ->
+        PatternVariable _ ->
             FastSet.empty
 
         PatternParenthesized inParens ->
@@ -9871,7 +9815,7 @@ nameDisambiguateBy alreadyExists currentName =
         currentName
 
 
-fastDictAny : (value -> Bool) -> FastDict.Dict key value -> Bool
+fastDictAny : (value -> Bool) -> FastDict.Dict key_ value -> Bool
 fastDictAny valueIsFound dict =
     dict
         |> FastDict.restructure False
