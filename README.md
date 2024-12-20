@@ -54,6 +54,7 @@ exampleModuleOriginLookup =
 
 ## TODO
 
+-   unexpose expressionDeclaration
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
