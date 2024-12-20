@@ -111,21 +111,6 @@ and `"argument0"` referring to the applied argument index.
 We could work with some kind of name disambiguation system
 but preserving names and context is usually nicer
 for the final inferred variable names.
-
-Why would you care?
-[Types](#Type) inferred from [`expressionDeclaration`](#expressionDeclaration)
-or [`expressionDeclarations`](#expressionDeclarations)
-still contain these [`TypeVariableFromContext`](#TypeVariableFromContext)s
-instead of just strings to preserve all that juicy information.
-So you need to convert these yourself, like with something like
-
-    typeVariableFromContextToString : ElmSyntaxTypeInfer.TypeVariableFromContext -> String
-    typeVariableFromContextToString ( context, name ) =
-        -- make sure the constraint like number is preserved
-        name ++ (context |> List.map (\part -> "_" ++ part) |> String.concat)
-
-(If you'd like to see something like this exposed,
-[open an issue](https://github.com/lue-bird/elm-syntax-type-infer/issues/new))
         
 Performance note: `ContextVariable` is a tuple to allow for internal use as a dict key.
 
@@ -6624,7 +6609,9 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
                     |> declarationValueOrFunctionContainedTypeVariables
                     |> FastSet.map
                         (\( context, name ) ->
-                            ( context |> listRemoveLast, name )
+                            ( context |> List.reverse |> List.drop 1
+                            , name
+                            )
                         )
                 )
     in
@@ -6632,7 +6619,10 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
         |> declarationValueOrFunctionMapTypeVariables
             (\( context, name ) ->
                 disambiguationLookup
-                    |> FastDict.get ( context |> listRemoveLast, name )
+                    |> FastDict.get
+                        ( context |> List.reverse |> List.drop 1
+                        , name
+                        )
                     |> Maybe.withDefault
                         "thisIsABugInDisambiguationPleaseReportToElmSyntaxTypeInfer"
             )
@@ -9795,52 +9785,65 @@ disambiguateInto soFar variables =
                                 soFarVariableAsString == toDisambiguate
                             )
 
-                variableWithMinimalContextAsString : String
-                variableWithMinimalContextAsString =
-                    ( context, name )
-                        |> variableFromContextFindUnambiguousWithLeastContext
-                            alreadyExists
-                            (\() ->
-                                variable
-                                    |> typeVariableFromContextToName
-                                    |> nameDisambiguateBy alreadyExists
-                            )
+                variableAsDisambiguatedString : String
+                variableAsDisambiguatedString =
+                    case ( context, name ) |> variableFromContextFindUnambiguousWithLeastContext alreadyExists of
+                        Just nameWithMinimalContextAsString ->
+                            nameWithMinimalContextAsString
+
+                        Nothing ->
+                            variable
+                                |> typeVariableFromContextToName
+                                |> nameDisambiguateBy alreadyExists
             in
             disambiguateInto
                 (soFar
                     |> FastDict.insert variable
-                        variableWithMinimalContextAsString
+                        variableAsDisambiguatedString
                 )
                 remainingVariables
 
 
 variableFromContextFindUnambiguousWithLeastContext :
     (String -> Bool)
-    -> (() -> String)
     -> TypeVariableFromContext
-    -> String
-variableFromContextFindUnambiguousWithLeastContext alreadyExists nameIfAlreadyExists variable =
+    -> Maybe String
+variableFromContextFindUnambiguousWithLeastContext alreadyExists variable =
+    -- IGNORE TCO
+    -- elm's tail call elimination does not account for closure dependencies
+    -- so nameIfAlreadyExists will refer to a mutated variableAsString
+    -- https://github.com/elm/compiler/issues/2017
+    -- https://ellie-app.com/t7MMYPSJsNGa1
     let
-        ( context, name ) =
-            variable
-
         variableAsString : String
         variableAsString =
             variable |> typeVariableFromContextToName
     in
     if alreadyExists variableAsString then
-        nameIfAlreadyExists ()
+        Nothing
 
     else
-        case context of
-            [] ->
-                name
+        let
+            ( context, name ) =
+                variable
+        in
+        Just
+            (case context of
+                [] ->
+                    name
 
-            _ :: nextContext ->
-                variableFromContextFindUnambiguousWithLeastContext
-                    alreadyExists
-                    (\() -> variableAsString)
-                    ( nextContext, name )
+                _ :: nextContext ->
+                    case
+                        ( nextContext, name )
+                            |> variableFromContextFindUnambiguousWithLeastContext
+                                alreadyExists
+                    of
+                        Just nameWithLeastContext ->
+                            nameWithLeastContext
+
+                        Nothing ->
+                            variableAsString
+            )
 
 
 typeVariableFromContextToName : TypeVariableFromContext -> String
@@ -9849,7 +9852,6 @@ typeVariableFromContextToName ( context, name ) =
         |> String.replace "_" ""
     )
         ++ (context
-                |> List.reverse
                 |> List.map
                     (\part ->
                         part

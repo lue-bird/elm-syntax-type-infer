@@ -142,7 +142,7 @@ suite =
                             )
                         )
             )
-        , Test.test "(independent) integers and float in triple"
+        , Test.test "(independent) integers and float in triple ( 1, 2.2, 3 )"
             (\() ->
                 Elm.Syntax.Expression.TupledExpression
                     [ Elm.Syntax.Node.empty
@@ -166,7 +166,7 @@ suite =
                                             }
                                         )
                                 , part2 =
-                                    ElmSyntaxTypeInfer.TypeVariable "number"
+                                    ElmSyntaxTypeInfer.TypeVariable "number2"
                                 }
                             )
                         )
