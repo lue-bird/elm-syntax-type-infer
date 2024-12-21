@@ -55,7 +55,6 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   convert all Elm.Syntax.Node.Node like type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation or for let declarations to separate fields
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop

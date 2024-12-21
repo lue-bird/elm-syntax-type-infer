@@ -2761,8 +2761,15 @@ type Expression typeVariable
         , result : TypedNode (Expression typeVariable) typeVariable
         }
     | ExpressionLetIn
-        { declaration0 : Elm.Syntax.Node.Node (LetDeclaration typeVariable)
-        , declaration1Up : List (Elm.Syntax.Node.Node (LetDeclaration typeVariable))
+        { declaration0 :
+            { range : Elm.Syntax.Range.Range
+            , declaration : LetDeclaration typeVariable
+            }
+        , declaration1Up :
+            List
+                { range : Elm.Syntax.Range.Range
+                , declaration : LetDeclaration typeVariable
+                }
         , result : TypedNode (Expression typeVariable) typeVariable
         }
     | ExpressionCaseOf
@@ -2792,7 +2799,8 @@ type LetDeclaration typeVariable
             Maybe
                 { range : Elm.Syntax.Range.Range
                 , nameRange : Elm.Syntax.Range.Range
-                , type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
+                , type_ : Elm.Syntax.TypeAnnotation.TypeAnnotation
+                , typeRange : Elm.Syntax.Range.Range
                 }
         , nameRange : Elm.Syntax.Range.Range
         , name : String
@@ -5279,7 +5287,10 @@ letDeclarationTypeInfer :
                 FastDict.Dict
                     TypeVariableFromContext
                     (FastSet.Set TypeVariableFromContext)
-            , node : Elm.Syntax.Node.Node (LetDeclaration TypeVariableFromContext)
+            , node :
+                { range : Elm.Syntax.Range.Range
+                , declaration : LetDeclaration TypeVariableFromContext
+                }
             }
 letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
     case letDeclaration of
@@ -5296,8 +5307,9 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                         expressionInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                     , node =
-                                        Elm.Syntax.Node.Node letDeclarationRange
-                                            (LetDestructuring
+                                        { range = letDeclarationRange
+                                        , declaration =
+                                            LetDestructuring
                                                 { pattern =
                                                     patternInferred.node
                                                         |> typedNodeReplaceTypeBy
@@ -5307,7 +5319,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                                         |> typedNodeReplaceTypeBy
                                                             patternExpressionUnifiedType.type_
                                                 }
-                                            )
+                                        }
                                     }
                                 )
                                 (variableSubstitutionsMerge3 context.declarationTypes
@@ -5358,8 +5370,9 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
                                             , node =
-                                                Elm.Syntax.Node.Node letDeclarationRange
-                                                    (LetValueOrFunctionDeclaration
+                                                { range = letDeclarationRange
+                                                , declaration =
+                                                    LetValueOrFunctionDeclaration
                                                         { signature =
                                                             case letValueOrFunction.signature of
                                                                 Nothing ->
@@ -5370,7 +5383,12 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                                                         { range = signatureRange
                                                                         , nameRange =
                                                                             letValueOrFunctionSignature.name |> Elm.Syntax.Node.range
-                                                                        , type_ = letValueOrFunctionSignature.typeAnnotation
+                                                                        , type_ =
+                                                                            letValueOrFunctionSignature.typeAnnotation
+                                                                                |> Elm.Syntax.Node.value
+                                                                        , typeRange =
+                                                                            letValueOrFunctionSignature.typeAnnotation
+                                                                                |> Elm.Syntax.Node.range
                                                                         }
                                                         , nameRange = implementation.name |> Elm.Syntax.Node.range
                                                         , name = name
@@ -5380,7 +5398,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                                         , result = resultInferred.node
                                                         , type_ = letDeclarationTypeUnified.type_
                                                         }
-                                                    )
+                                                }
                                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                                 resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                             , introducedExpressionVariables = FastDict.empty
@@ -6846,15 +6864,15 @@ expressionContainedTypeVariables expression =
 
         ExpressionLetIn expressionLetIn ->
             FastSet.union
-                (expressionLetIn.declaration0
-                    |> Elm.Syntax.Node.value
+                (expressionLetIn.declaration0.declaration
                     |> letDeclarationContainedTypeVariables
                 )
                 (FastSet.union
                     (expressionLetIn.declaration1Up
                         |> listMapAndFastSetsUnify
-                            (\(Elm.Syntax.Node.Node _ letDeclaration) ->
-                                letDeclaration |> letDeclarationContainedTypeVariables
+                            (\letDeclaration ->
+                                letDeclaration.declaration
+                                    |> letDeclarationContainedTypeVariables
                             )
                     )
                     (expressionLetIn.result
@@ -8186,15 +8204,21 @@ letDeclarationSubstituteVariableByNotVariable :
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
         }
-    -> Elm.Syntax.Node.Node (LetDeclaration TypeVariableFromContext)
+    ->
+        { range : Elm.Syntax.Range.Range
+        , declaration : LetDeclaration TypeVariableFromContext
+        }
     ->
         Result
             String
-            { node : Elm.Syntax.Node.Node (LetDeclaration TypeVariableFromContext)
+            { node :
+                { range : Elm.Syntax.Range.Range
+                , declaration : LetDeclaration TypeVariableFromContext
+                }
             , substitutions : VariableSubstitutions
             }
-letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
-    case letDeclaration of
+letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDeclarationAndRange =
+    case letDeclarationAndRange.declaration of
         LetDestructuring letDestructuring ->
             resultAndThen2
                 (\patternSubstituted expressionSubstituted ->
@@ -8202,12 +8226,13 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                Elm.Syntax.Node.Node letDeclarationRange
-                                    (LetDestructuring
+                                { range = letDeclarationAndRange.range
+                                , declaration =
+                                    LetDestructuring
                                         { pattern = patternSubstituted.node
                                         , expression = expressionSubstituted.node
                                         }
-                                    )
+                                }
                             }
                         )
                         (variableSubstitutionsMerge declarationTypes
@@ -8231,8 +8256,9 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                Elm.Syntax.Node.Node letDeclarationRange
-                                    (LetValueOrFunctionDeclaration
+                                { range = letDeclarationAndRange.range
+                                , declaration =
+                                    LetValueOrFunctionDeclaration
                                         { parameters =
                                             argumentsSubstituted.nodesReverse
                                                 |> List.reverse
@@ -8242,7 +8268,7 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement (Elm.
                                         , nameRange = letValueOrFunction.nameRange
                                         , name = letValueOrFunction.name
                                         }
-                                    )
+                                }
                             }
                         )
                         (variableSubstitutionsMerge3 declarationTypes
@@ -8527,20 +8553,20 @@ expressionMapTypeVariables typeVariableChange expression =
         ExpressionLetIn expressionLetIn ->
             ExpressionLetIn
                 { declaration0 =
-                    expressionLetIn.declaration0
-                        |> Elm.Syntax.Node.map
-                            (\letDeclaration ->
-                                letDeclaration |> letDeclarationMapTypeVariables typeVariableChange
-                            )
+                    { range = expressionLetIn.declaration0.range
+                    , declaration =
+                        expressionLetIn.declaration0.declaration
+                            |> letDeclarationMapTypeVariables typeVariableChange
+                    }
                 , declaration1Up =
                     expressionLetIn.declaration1Up
                         |> List.map
-                            (\letDeclarationNode ->
-                                letDeclarationNode
-                                    |> Elm.Syntax.Node.map
-                                        (\letDeclaration ->
-                                            letDeclaration |> letDeclarationMapTypeVariables typeVariableChange
-                                        )
+                            (\letDeclarationAndRange ->
+                                { range = letDeclarationAndRange.range
+                                , declaration =
+                                    letDeclarationAndRange.declaration
+                                        |> letDeclarationMapTypeVariables typeVariableChange
+                                }
                             )
                 , result =
                     expressionLetIn.result
