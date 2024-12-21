@@ -7,22 +7,23 @@ import Elm.Syntax.Expression
 import ElmSyntaxTypeInfer
 
 
-{ declaration =
-    Elm.Syntax.Node.empty
-        { expression =
-            Elm.Syntax.Node.empty
-                (Elm.Syntax.Expression.ListExpr
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 1)
-                    ]
-                )
-        , name = Elm.Syntax.Node.empty "majorVersions"
-        , arguments = []
-        }
-, signature = Nothing
-, documentation = Nothing
-}
-    |> ElmSyntaxTypeInfer.declarationExpression
+[ { declaration =
+        Elm.Syntax.Node.empty
+            { expression =
+                Elm.Syntax.Node.empty
+                    (Elm.Syntax.Expression.ListExpr
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Integer 1)
+                        ]
+                    )
+            , name = Elm.Syntax.Node.empty "majorVersions"
+            , arguments = []
+            }
+  , signature = Nothing
+  , documentation = Nothing
+  }
+]
+    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
         , moduleOriginLookup = exampleModuleOriginLookup
         , otherModuleDeclaredTypes =
@@ -31,10 +32,10 @@ import ElmSyntaxTypeInfer
                     exampleModuleOriginLookup
                 |> .types
         }
-    |> Result.map .type_
+    |> Result.map (List.map .type_)
 -->
 Ok
-    (ElmSyntaxTypeInfer.TypeNotVariable
+    [ ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
             { moduleOrigin = [ "List" ]
             , name = "List"
@@ -42,7 +43,7 @@ Ok
                 [ ElmSyntaxTypeInfer.TypeVariable "number" ]
             }
         )
-    )
+    ]
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
@@ -54,7 +55,7 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   unexpose expressionDeclaration
+-   convert all Elm.Syntax.Node.Node like type_ : Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation or for let declarations to separate fields
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop

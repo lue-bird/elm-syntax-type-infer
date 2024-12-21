@@ -1,7 +1,7 @@
 module ElmSyntaxTypeInfer exposing
     ( ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
     , importsToModuleOriginLookup, ModuleOriginLookup
-    , expressionDeclaration, expressionDeclarations
+    , valueOrFunctionDeclarations
     , TypedNode, Expression(..), LetDeclaration(..), Base10Or16(..), Pattern(..)
     , Type(..), TypeNotVariable(..)
     )
@@ -18,7 +18,7 @@ of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) t
 
 ## syntax
 
-@docs expressionDeclaration, expressionDeclarations
+@docs valueOrFunctionDeclarations
 @docs TypedNode, Expression, LetDeclaration, Base10Or16, Pattern
 @docs Type, TypeNotVariable
 
@@ -33,6 +33,7 @@ import Elm.Syntax.ModuleName
 import Elm.Syntax.Node
 import Elm.Syntax.Pattern
 import Elm.Syntax.Range
+import Elm.Syntax.Signature
 import Elm.Syntax.TypeAnnotation
 import Elm.Type
 import FastDict
@@ -6328,7 +6329,7 @@ expressionContextToInPath innermostPathDescription context =
 value/[`Elm.Syntax.Expression.Function`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Function) declarations
 in a module.
 -}
-expressionDeclarations :
+valueOrFunctionDeclarations :
     { importedTypes :
         FastDict.Dict
             Elm.Syntax.ModuleName.ModuleName
@@ -6340,15 +6341,205 @@ expressionDeclarations :
     ->
         Result
             String
-            (FastDict.Dict
-                String
-                { parameters :
-                    List (TypedNode (Pattern TypeVariableFromContext) TypeVariableFromContext)
-                , node : Expression TypeVariableFromContext
+            (List
+                { name : String
+                , nameRange : Elm.Syntax.Range.Range
+                , documentation :
+                    Maybe
+                        { content : String
+                        , range : Elm.Syntax.Range.Range
+                        }
+                , signature :
+                    Maybe
+                        { range : Elm.Syntax.Range.Range
+                        , nameRange : Elm.Syntax.Range.Range
+                        , type_ : Elm.Syntax.TypeAnnotation.TypeAnnotation
+                        , typeRange : Elm.Syntax.Range.Range
+                        }
+                , parameters :
+                    List (TypedNode (Pattern String) String)
+                , result : TypedNode (Expression String) String
+                , type_ : Type String
                 }
             )
-expressionDeclarations typesAndOriginLookup syntaxDeclarationExpression =
-    Debug.todo ""
+valueOrFunctionDeclarations typesAndOriginLookup syntaxDeclarationExpressions =
+    syntaxDeclarationExpressions
+        |> listMapAndCombineOk
+            (\syntaxDeclarationExpression ->
+                -- TODO handle partials across declarations
+                -- TODO connect partials to actual type (typeLocal)
+                let
+                    implementation : Elm.Syntax.Expression.FunctionImplementation
+                    implementation =
+                        syntaxDeclarationExpression.declaration |> Elm.Syntax.Node.value
+
+                    declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
+                    declarationTypes =
+                        typesAndOriginLookup.importedTypes
+                            |> FastDict.insert []
+                                typesAndOriginLookup.otherModuleDeclaredTypes
+
+                    name : String
+                    name =
+                        implementation.name |> Elm.Syntax.Node.value
+                in
+                Result.map
+                    (\inferred ->
+                        { name = name
+                        , nameRange = implementation.name |> Elm.Syntax.Node.range
+                        , documentation =
+                            case syntaxDeclarationExpression.documentation of
+                                Nothing ->
+                                    Nothing
+
+                                Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
+                                    Just
+                                        { range = documentationRange
+                                        , content = documentationContent
+                                        }
+                        , signature =
+                            case syntaxDeclarationExpression.signature of
+                                Nothing ->
+                                    Nothing
+
+                                Just (Elm.Syntax.Node.Node signatureRange signature) ->
+                                    Just
+                                        { range = signatureRange
+                                        , nameRange = signature.name |> Elm.Syntax.Node.range
+                                        , type_ = signature.typeAnnotation |> Elm.Syntax.Node.value
+                                        , typeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
+                                        }
+                        , parameters = inferred.parameters
+                        , result = inferred.result
+                        , type_ = inferred.type_
+                        }
+                    )
+                    (Result.andThen
+                        (\parameters ->
+                            let
+                                resultTypeVariable : TypeVariableFromContext
+                                resultTypeVariable =
+                                    ( [ name ], "declarationResult" )
+
+                                localType : Type TypeVariableFromContext
+                                localType =
+                                    parameters.nodesReverse
+                                        |> List.foldl
+                                            (\argumentTypedNode soFar ->
+                                                TypeNotVariable
+                                                    (TypeFunction
+                                                        { input = argumentTypedNode.type_
+                                                        , output = soFar
+                                                        }
+                                                    )
+                                            )
+                                            (TypeVariable resultTypeVariable)
+                            in
+                            Result.andThen
+                                (\resultInferred ->
+                                    Result.andThen
+                                        (\typeUnifiedWithSignatureType ->
+                                            let
+                                                resultInferredSubstitutions :
+                                                    { variableToType :
+                                                        FastDict.Dict
+                                                            TypeVariableFromContext
+                                                            (TypeNotVariable TypeVariableFromContext)
+                                                    , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
+                                                    }
+                                                resultInferredSubstitutions =
+                                                    case resultInferred.node.type_ of
+                                                        TypeNotVariable resultInferredNotVariable ->
+                                                            { variableToType =
+                                                                resultInferred.substitutions.variableToType
+                                                                    |> FastDict.insert resultTypeVariable
+                                                                        resultInferredNotVariable
+                                                            , equivalentVariables =
+                                                                resultInferred.substitutions.equivalentVariables
+                                                            }
+
+                                                        TypeVariable resultInferredVariable ->
+                                                            { variableToType =
+                                                                resultInferred.substitutions.variableToType
+                                                            , equivalentVariables =
+                                                                equivalentVariablesMergeWithSetOf2
+                                                                    resultTypeVariable
+                                                                    resultInferredVariable
+                                                                    resultInferred.substitutions.equivalentVariables
+                                                            }
+                                            in
+                                            Result.andThen
+                                                (\argumentAndResultAndTypeUnifySubstitutions ->
+                                                    { result = resultInferred.node
+                                                    , type_ = typeUnifiedWithSignatureType.type_
+                                                    , parameters =
+                                                        parameters.nodesReverse |> List.reverse
+                                                    }
+                                                        |> declarationValueOrFunctionSubstituteVariablesByNotVariables
+                                                            { declarationTypes = declarationTypes
+                                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                            , substitutions =
+                                                                argumentAndResultAndTypeUnifySubstitutions
+                                                            }
+                                                        |> Result.map
+                                                            declarationValueOrFunctionDisambiguateTypeVariables
+                                                )
+                                                (variableSubstitutionsMerge3 declarationTypes
+                                                    resultInferredSubstitutions
+                                                    parameters.substitutions
+                                                    typeUnifiedWithSignatureType.substitutions
+                                                )
+                                        )
+                                        (case syntaxDeclarationExpression.signature of
+                                            Nothing ->
+                                                Ok
+                                                    { type_ = localType
+                                                    , substitutions = variableSubstitutionsNone
+                                                    }
+
+                                            Just (Elm.Syntax.Node.Node _ signature) ->
+                                                Result.andThen
+                                                    (\signatureType ->
+                                                        typeUnify declarationTypes
+                                                            localType
+                                                            (signatureType
+                                                                |> typeMapVariables
+                                                                    (\variable -> ( [ name ], variable ))
+                                                            )
+                                                    )
+                                                    (signature.typeAnnotation
+                                                        |> Elm.Syntax.Node.value
+                                                        |> syntaxToType typesAndOriginLookup.moduleOriginLookup
+                                                    )
+                                        )
+                                )
+                                (implementation.expression
+                                    |> expressionTypeInfer
+                                        { declarationTypes = declarationTypes
+                                        , locallyIntroducedExpressionVariables =
+                                            -- elm declarations do not allow "polymorphic recursion"
+                                            -- https://github.com/elm/compiler/issues/2275
+                                            -- so instead of putting it in partiallyInferredDeclarationTypes
+                                            -- we treat it as an introduced variable (sharing the same type variables)
+                                            parameters.introducedExpressionVariables
+                                                |> FastDict.insert name localType
+                                        , partiallyInferredDeclarationTypes = FastDict.empty
+                                        , containingDeclarationName = name
+                                        , path = [ "declarationResult", name ]
+                                        , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
+                                        }
+                                )
+                        )
+                        (implementation.arguments
+                            |> parameterPatternsTypeInfer
+                                { declarationTypes = declarationTypes
+                                , path = [ name ]
+                                , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
+                                }
+                        )
+                    )
+            )
 
 
 type alias ModuleLevelDeclarationTypesInAvailableInModule =
@@ -6356,187 +6547,6 @@ type alias ModuleLevelDeclarationTypesInAvailableInModule =
         -- `[]` means declared in the same module
         Elm.Syntax.ModuleName.ModuleName
         ModuleTypes
-
-
-{-| Infer types of a
-value/[`Elm.Syntax.Expression.Function`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Function) declaration.
-
-Usually you'll have more than one such declaration,
-in which case you can use [`expressionDeclarations`](#expressionDeclarations)
--}
-expressionDeclaration :
-    { importedTypes :
-        FastDict.Dict
-            Elm.Syntax.ModuleName.ModuleName
-            ModuleTypes
-    , otherModuleDeclaredTypes : ModuleTypes
-    , moduleOriginLookup : ModuleOriginLookup
-    }
-    -> Elm.Syntax.Expression.Function
-    ->
-        Result
-            String
-            { parameters : List (TypedNode (Pattern String) String)
-            , result : TypedNode (Expression String) String
-            , type_ : Type String
-            }
-expressionDeclaration typesAndOriginLookup syntaxDeclarationExpression =
-    let
-        implementation : Elm.Syntax.Expression.FunctionImplementation
-        implementation =
-            syntaxDeclarationExpression.declaration |> Elm.Syntax.Node.value
-
-        declarationTypes : ModuleLevelDeclarationTypesInAvailableInModule
-        declarationTypes =
-            typesAndOriginLookup.importedTypes
-                |> FastDict.insert []
-                    typesAndOriginLookup.otherModuleDeclaredTypes
-
-        name : String
-        name =
-            implementation.name |> Elm.Syntax.Node.value
-    in
-    Result.andThen
-        (\parameters ->
-            let
-                resultTypeVariable : TypeVariableFromContext
-                resultTypeVariable =
-                    ( [ name ], "declarationResult" )
-
-                type_ : Type TypeVariableFromContext
-                type_ =
-                    parameters.nodesReverse
-                        |> List.foldl
-                            (\argumentTypedNode soFar ->
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = argumentTypedNode.type_
-                                        , output = soFar
-                                        }
-                                    )
-                            )
-                            (TypeVariable resultTypeVariable)
-            in
-            Result.andThen
-                (\resultInferred ->
-                    let
-                        resultInferredSubstitutions :
-                            { variableToType :
-                                FastDict.Dict
-                                    TypeVariableFromContext
-                                    (TypeNotVariable TypeVariableFromContext)
-                            , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
-                            }
-                        resultInferredSubstitutions =
-                            case resultInferred.node.type_ of
-                                TypeNotVariable resultInferredNotVariable ->
-                                    { variableToType =
-                                        resultInferred.substitutions.variableToType
-                                            |> FastDict.insert resultTypeVariable
-                                                resultInferredNotVariable
-                                    , equivalentVariables =
-                                        resultInferred.substitutions.equivalentVariables
-                                    }
-
-                                TypeVariable resultInferredVariable ->
-                                    { variableToType =
-                                        resultInferred.substitutions.variableToType
-                                    , equivalentVariables =
-                                        equivalentVariablesMergeWithSetOf2
-                                            resultTypeVariable
-                                            resultInferredVariable
-                                            resultInferred.substitutions.equivalentVariables
-                                    }
-                    in
-                    case syntaxDeclarationExpression.signature of
-                        Nothing ->
-                            Result.andThen
-                                (\argumentAndResultSubstitutions ->
-                                    { result = resultInferred.node
-                                    , type_ = type_
-                                    , parameters =
-                                        parameters.nodesReverse |> List.reverse
-                                    }
-                                        |> declarationValueOrFunctionSubstituteVariablesByNotVariables
-                                            { declarationTypes = declarationTypes
-                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                            , substitutions =
-                                                argumentAndResultSubstitutions
-                                            }
-                                        |> Result.map
-                                            declarationValueOrFunctionDisambiguateTypeVariables
-                                )
-                                (variableSubstitutionsMerge declarationTypes
-                                    resultInferredSubstitutions
-                                    parameters.substitutions
-                                )
-
-                        Just (Elm.Syntax.Node.Node _ signature) ->
-                            Result.andThen
-                                (\typeUnifiedWithSignatureType ->
-                                    Result.andThen
-                                        (\argumentAndResultAndTypeUnifySubstitutions ->
-                                            { result = resultInferred.node
-                                            , type_ = typeUnifiedWithSignatureType.type_
-                                            , parameters =
-                                                parameters.nodesReverse |> List.reverse
-                                            }
-                                                |> declarationValueOrFunctionSubstituteVariablesByNotVariables
-                                                    { declarationTypes = declarationTypes
-                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                                        resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                    , substitutions =
-                                                        argumentAndResultAndTypeUnifySubstitutions
-                                                    }
-                                                |> Result.map
-                                                    declarationValueOrFunctionDisambiguateTypeVariables
-                                        )
-                                        (variableSubstitutionsMerge3 declarationTypes
-                                            resultInferredSubstitutions
-                                            parameters.substitutions
-                                            typeUnifiedWithSignatureType.substitutions
-                                        )
-                                )
-                                (Result.andThen
-                                    (\signatureType ->
-                                        typeUnify declarationTypes
-                                            type_
-                                            (signatureType
-                                                |> typeMapVariables
-                                                    (\variable -> ( [ name ], variable ))
-                                            )
-                                    )
-                                    (signature.typeAnnotation
-                                        |> Elm.Syntax.Node.value
-                                        |> syntaxToType typesAndOriginLookup.moduleOriginLookup
-                                    )
-                                )
-                )
-                (implementation.expression
-                    |> expressionTypeInfer
-                        { declarationTypes = declarationTypes
-                        , locallyIntroducedExpressionVariables =
-                            -- elm declarations do not allow "polymorphic recursion"
-                            -- https://github.com/elm/compiler/issues/2275
-                            -- so instead of putting it in partiallyInferredDeclarationTypes
-                            -- we treat it as an introduced variable (sharing the same type variables)
-                            parameters.introducedExpressionVariables
-                                |> FastDict.insert name type_
-                        , partiallyInferredDeclarationTypes = FastDict.empty
-                        , containingDeclarationName = name
-                        , path = [ "declarationResult", name ]
-                        , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
-                        }
-                )
-        )
-        (implementation.arguments
-            |> parameterPatternsTypeInfer
-                { declarationTypes = declarationTypes
-                , path = [ name ]
-                , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
-                }
-        )
 
 
 declarationValueOrFunctionDisambiguateTypeVariables :

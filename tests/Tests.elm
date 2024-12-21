@@ -15,22 +15,23 @@ suite =
     Test.describe "ElmSyntaxTypeInfer"
         [ Test.test "readme example"
             (\() ->
-                { declaration =
-                    Elm.Syntax.Node.empty
-                        { expression =
-                            Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.ListExpr
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.Integer 1)
-                                    ]
-                                )
-                        , name = Elm.Syntax.Node.empty "majorVersions"
-                        , arguments = []
-                        }
-                , signature = Nothing
-                , documentation = Nothing
-                }
-                    |> ElmSyntaxTypeInfer.expressionDeclaration
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.ListExpr
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Integer 1)
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "majorVersions"
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -39,10 +40,10 @@ suite =
                                     exampleModuleOriginLookup
                                 |> .types
                         }
-                    |> Result.map .type_
+                    |> Result.map (List.map .type_)
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
+                            [ ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
                                     { moduleOrigin = [ "List" ]
                                     , name = "List"
@@ -52,7 +53,7 @@ suite =
                                         ]
                                     }
                                 )
-                            )
+                            ]
                         )
             )
         , Test.test "unify integer and float in list"
@@ -1213,22 +1214,20 @@ expressionExpectInferredType expectedInferredType expression =
 
 expressionToInferredType :
     Elm.Syntax.Expression.Expression
-    ->
-        Result
-            String
-            (ElmSyntaxTypeInfer.Type String)
+    -> Result String (ElmSyntaxTypeInfer.Type String)
 expressionToInferredType expression =
-    { declaration =
-        Elm.Syntax.Node.empty
-            { expression =
-                Elm.Syntax.Node.empty expression
-            , name = Elm.Syntax.Node.empty "majorVersions"
-            , arguments = []
-            }
-    , signature = Nothing
-    , documentation = Nothing
-    }
-        |> ElmSyntaxTypeInfer.expressionDeclaration
+    [ { declaration =
+            Elm.Syntax.Node.empty
+                { expression =
+                    Elm.Syntax.Node.empty expression
+                , name = Elm.Syntax.Node.empty "majorVersions"
+                , arguments = []
+                }
+      , signature = Nothing
+      , documentation = Nothing
+      }
+    ]
+        |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
             { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
             , moduleOriginLookup = exampleModuleOriginLookup
             , otherModuleDeclaredTypes =
@@ -1237,9 +1236,14 @@ expressionToInferredType expression =
                         exampleModuleOriginLookup
                     |> .types
             }
-        |> Result.map
-            (\declarationInferred ->
-                declarationInferred.type_
+        |> Result.andThen
+            (\declarationsInferred ->
+                case declarationsInferred of
+                    [ declarationInferred ] ->
+                        Ok declarationInferred.type_
+
+                    _ ->
+                        Err "not exactly 1 resulting inferred declaration"
             )
 
 
