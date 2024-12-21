@@ -1198,6 +1198,30 @@ suite =
                             )
                         )
             )
+        , Test.test "self-referential a union with list of a \\a -> [ a, [ a ] ] should fail"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.ListExpr
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                        ]
+                                    )
+                                ]
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
         ]
 
 

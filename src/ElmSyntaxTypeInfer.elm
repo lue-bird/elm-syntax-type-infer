@@ -7310,67 +7310,224 @@ declarationValueOrFunctionSubstituteVariableByNotVariable :
             , substitutions : VariableSubstitutions
             }
 declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
-    resultAndThen3
-        (\argumentsInferred resultInferred typeInferred ->
-            Result.map
-                (\fullSubstitutions ->
-                    { declaration =
-                        { name = declarationValueOrFunctionSoFar.name
-                        , nameRange = declarationValueOrFunctionSoFar.nameRange
-                        , documentation = declarationValueOrFunctionSoFar.documentation
-                        , signature = declarationValueOrFunctionSoFar.signature
-                        , parameters =
-                            argumentsInferred.nodesReverse
-                                |> List.reverse
-                        , result = resultInferred.node
-                        , type_ =
-                            -- reconstructing the function at the end is faster
-                            typeInferred.type_
-                        }
-                    , substitutions = fullSubstitutions
-                    }
-                )
-                (variableSubstitutionsMerge3 declarationTypes
-                    argumentsInferred.substitutions
-                    resultInferred.substitutions
-                    typeInferred.substitutions
-                )
-        )
-        (declarationValueOrFunctionSoFar.parameters
-            |> listFoldlWhileOkFrom
-                { substitutions = variableSubstitutionsNone
-                , nodesReverse = []
+    if replacement.type_ |> typeNotVariableContainedVariables |> FastSet.member replacement.variable then
+        if replacement.type_ |> typeNotVariableIsEquivalentToTypeVariable declarationTypes then
+            -- is ok when type_ is an identity type alias
+            Ok
+                { declaration = declarationValueOrFunctionSoFar
+                , substitutions = variableSubstitutionsNone
                 }
-                (\patternTypedNode soFar ->
-                    Result.andThen
-                        (\patternSubstituted ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , nodesReverse =
-                                        patternSubstituted.node
-                                            :: soFar.nodesReverse
-                                    }
-                                )
-                                (variableSubstitutionsMerge declarationTypes
-                                    patternSubstituted.substitutions
-                                    soFar.substitutions
-                                )
-                        )
-                        (patternTypedNode
-                            |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
-                                replacement
-                        )
+
+        else
+            Err
+                ("cannot unify the variable "
+                    ++ (replacement.variable |> typeVariableFromContextToName)
+                    ++ " with the type "
+                    ++ (replacement.type_ |> typeNotVariablePrintRoughly)
+                    ++ " because that type contains the type variable itself."
                 )
-        )
-        (declarationValueOrFunctionSoFar.result
-            |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
-                replacement
-        )
-        (declarationValueOrFunctionSoFar.type_
-            |> typeSubstituteVariableByNotVariable declarationTypes
-                replacement
-        )
+
+    else
+        resultAndThen3
+            (\argumentsInferred resultInferred typeInferred ->
+                Result.map
+                    (\fullSubstitutions ->
+                        { declaration =
+                            { name = declarationValueOrFunctionSoFar.name
+                            , nameRange = declarationValueOrFunctionSoFar.nameRange
+                            , documentation = declarationValueOrFunctionSoFar.documentation
+                            , signature = declarationValueOrFunctionSoFar.signature
+                            , parameters =
+                                argumentsInferred.nodesReverse
+                                    |> List.reverse
+                            , result = resultInferred.node
+                            , type_ =
+                                -- reconstructing the function at the end is faster
+                                typeInferred.type_
+                            }
+                        , substitutions = fullSubstitutions
+                        }
+                    )
+                    (variableSubstitutionsMerge3 declarationTypes
+                        argumentsInferred.substitutions
+                        resultInferred.substitutions
+                        typeInferred.substitutions
+                    )
+            )
+            (declarationValueOrFunctionSoFar.parameters
+                |> listFoldlWhileOkFrom
+                    { substitutions = variableSubstitutionsNone
+                    , nodesReverse = []
+                    }
+                    (\patternTypedNode soFar ->
+                        Result.andThen
+                            (\patternSubstituted ->
+                                Result.map
+                                    (\fullSubstitutions ->
+                                        { substitutions = fullSubstitutions
+                                        , nodesReverse =
+                                            patternSubstituted.node
+                                                :: soFar.nodesReverse
+                                        }
+                                    )
+                                    (variableSubstitutionsMerge declarationTypes
+                                        patternSubstituted.substitutions
+                                        soFar.substitutions
+                                    )
+                            )
+                            (patternTypedNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    replacement
+                            )
+                    )
+            )
+            (declarationValueOrFunctionSoFar.result
+                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+            )
+            (declarationValueOrFunctionSoFar.type_
+                |> typeSubstituteVariableByNotVariable declarationTypes
+                    replacement
+            )
+
+
+typeNotVariableIsEquivalentToTypeVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> TypeNotVariable variable_
+    -> Bool
+typeNotVariableIsEquivalentToTypeVariable declarationTypes typeNotVariable =
+    case typeNotVariable of
+        TypeConstruct typeConstruct ->
+            case declarationTypes |> FastDict.get typeConstruct.moduleOrigin of
+                Nothing ->
+                    False
+
+                Just originModule ->
+                    case originModule.typeAliases |> FastDict.get typeConstruct.name of
+                        Nothing ->
+                            False
+
+                        Just typeAlias ->
+                            typeAlias.type_ |> typeIsEquivalentToTypeVariable declarationTypes
+
+        TypeUnit ->
+            False
+
+        TypeTuple _ ->
+            False
+
+        TypeTriple _ ->
+            False
+
+        TypeRecord _ ->
+            False
+
+        TypeRecordExtension _ ->
+            False
+
+        TypeFunction _ ->
+            False
+
+
+typeIsEquivalentToTypeVariable :
+    ModuleLevelDeclarationTypesInAvailableInModule
+    -> Type variable_
+    -> Bool
+typeIsEquivalentToTypeVariable declarationTypes type_ =
+    case type_ of
+        TypeVariable _ ->
+            True
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariable
+                |> typeNotVariableIsEquivalentToTypeVariable declarationTypes
+
+
+typePrintRoughly : Type TypeVariableFromContext -> String
+typePrintRoughly type_ =
+    case type_ of
+        TypeVariable variable ->
+            variable |> typeVariableFromContextToName
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariablePrintRoughly typeNotVariable
+
+
+typeNotVariablePrintRoughly : TypeNotVariable TypeVariableFromContext -> String
+typeNotVariablePrintRoughly typeNotVariable =
+    case typeNotVariable of
+        TypeUnit ->
+            "()"
+
+        TypeFunction typeFunction ->
+            "("
+                ++ (typeFunction.input |> typePrintRoughly)
+                ++ ") -> ("
+                ++ (typeFunction.output |> typePrintRoughly)
+                ++ ")"
+
+        TypeTuple parts ->
+            "( "
+                ++ (parts.part0 |> typePrintRoughly)
+                ++ ", "
+                ++ (parts.part1 |> typePrintRoughly)
+                ++ " )"
+
+        TypeTriple parts ->
+            "( "
+                ++ (parts.part0 |> typePrintRoughly)
+                ++ ", "
+                ++ (parts.part1 |> typePrintRoughly)
+                ++ ", "
+                ++ (parts.part2 |> typePrintRoughly)
+                ++ " )"
+
+        TypeConstruct typeConstruct ->
+            (typeConstruct.moduleOrigin
+                |> String.join "."
+            )
+                ++ "."
+                ++ typeConstruct.name
+                ++ " "
+                ++ (typeConstruct.arguments
+                        |> List.map
+                            (\argument ->
+                                "(" ++ (argument |> typePrintRoughly) ++ ")"
+                            )
+                        |> String.join ", "
+                   )
+
+        TypeRecord fields ->
+            "{ "
+                ++ (fields
+                        |> FastDict.toList
+                        |> List.map
+                            (\( fieldName, fieldValue ) ->
+                                fieldName
+                                    ++ " : "
+                                    ++ (fieldValue |> typePrintRoughly)
+                            )
+                        |> String.join ", "
+                   )
+                ++ " }"
+
+        TypeRecordExtension typeRecordExtension ->
+            "{ "
+                ++ (typeRecordExtension.recordVariable
+                        |> typeVariableFromContextToName
+                   )
+                ++ " | "
+                ++ (typeRecordExtension.fields
+                        |> FastDict.toList
+                        |> List.map
+                            (\( fieldName, fieldValue ) ->
+                                fieldName
+                                    ++ " : "
+                                    ++ (fieldValue |> typePrintRoughly)
+                            )
+                        |> String.join ", "
+                   )
+                ++ " }"
 
 
 declarationValueOrFunctionMapTypeVariables :

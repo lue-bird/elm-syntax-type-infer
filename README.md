@@ -58,8 +58,6 @@ exampleModuleOriginLookup =
 -   add more tests, especially let-in
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
--   verify (mutually) recursive types (e.g. substituting `a -> { x : b }` and `b -> { x : a }`)
-    cannot run into an infinite loop
 -   type infer record type alias constructor function reference expression.
     Requires storing `Maybe (List String)` field order in module type alias declaration types
 -   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
