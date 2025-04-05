@@ -4,6 +4,7 @@ import Elm.Syntax.Expression
 import Elm.Syntax.Infix
 import Elm.Syntax.Node
 import Elm.Syntax.Pattern
+import Elm.Syntax.TypeAnnotation
 import ElmSyntaxTypeInfer
 import Expect
 import FastDict
@@ -1215,6 +1216,50 @@ suite =
                                                 (Elm.Syntax.Expression.Floatable 2.2)
                                         }
                                 , signature = Nothing
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeConstruct
+                                { moduleOrigin = [ "Basics" ]
+                                , name = "Float"
+                                , arguments = []
+                                }
+                            )
+                        )
+            )
+        , Test.test "single incorrectly annotated let declaration let a : Int ; a = 2.2 in a"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "a"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [ "Basics" ], "Int" ))
+                                                        []
+                                                    )
+                                            }
+                                        )
                                 , documentation = Nothing
                                 }
                             )
