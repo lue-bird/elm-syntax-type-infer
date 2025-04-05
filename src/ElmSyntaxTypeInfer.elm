@@ -4641,11 +4641,10 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     Err "case-of without case branches is invalid syntax"
 
                 ( case0Pattern, case0Result ) :: case1Up ->
-                    -- TODO !! we should not unify case pattern and result
                     resultAndThen3
                         (\matchedInferred case0Inferred case1UpInferred ->
                             Result.andThen
-                                (\unifiedType ->
+                                (\unifiedTypes ->
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
@@ -4664,7 +4663,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             case1UpInferred.nodesReverse
                                                                 |> List.reverse
                                                         }
-                                                , type_ = unifiedType.type_
+                                                , type_ = unifiedTypes.resultType
                                                 }
                                             }
                                         )
@@ -4672,39 +4671,46 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             matchedInferred.substitutions
                                             case0Inferred.substitutions
                                             case1UpInferred.substitutions
-                                            unifiedType.substitutions
+                                            unifiedTypes.substitutions
                                         )
                                 )
                                 (Result.andThen
-                                    (\matchedExpressionCase0UnifiedType ->
+                                    (\matchedExpressionCase0PatternUnifiedType ->
                                         case1UpInferred.nodesReverse
                                             |> listFoldlWhileOkFrom
-                                                matchedExpressionCase0UnifiedType
+                                                { resultType = case0Inferred.node.result.type_
+                                                , matchedType = matchedExpressionCase0PatternUnifiedType.type_
+                                                , substitutions = matchedExpressionCase0PatternUnifiedType.substitutions
+                                                }
                                                 (\caseInferred soFar ->
-                                                    Result.andThen
-                                                        (\typeUnifiedWithCase ->
+                                                    resultAndThen2
+                                                        (\matchedTypeUnifiedWithCasePattern resultTypeUnifiedWithCaseResult ->
                                                             Result.map
                                                                 (\substitutionsWithCase ->
                                                                     { substitutions = substitutionsWithCase
-                                                                    , type_ = typeUnifiedWithCase.type_
+                                                                    , matchedType = matchedTypeUnifiedWithCasePattern.type_
+                                                                    , resultType = resultTypeUnifiedWithCaseResult.type_
                                                                     }
                                                                 )
-                                                                (variableSubstitutionsMerge context.declarationTypes
-                                                                    typeUnifiedWithCase.substitutions
+                                                                (variableSubstitutionsMerge3 context.declarationTypes
                                                                     soFar.substitutions
+                                                                    matchedTypeUnifiedWithCasePattern.substitutions
+                                                                    resultTypeUnifiedWithCaseResult.substitutions
                                                                 )
                                                         )
-                                                        (typeUnify3 context.declarationTypes
+                                                        (typeUnify context.declarationTypes
+                                                            soFar.matchedType
                                                             caseInferred.pattern.type_
+                                                        )
+                                                        (typeUnify context.declarationTypes
+                                                            soFar.resultType
                                                             caseInferred.result.type_
-                                                            soFar.type_
                                                         )
                                                 )
                                     )
-                                    (typeUnify3 context.declarationTypes
+                                    (typeUnify context.declarationTypes
                                         matchedInferred.node.type_
                                         case0Inferred.node.pattern.type_
-                                        case0Inferred.node.result.type_
                                     )
                                 )
                         )
