@@ -1266,7 +1266,10 @@ expressionToInferredType expression =
                     [ declarationInferred ] ->
                         Ok declarationInferred.type_
 
-                    _ ->
+                    [] ->
+                        Err "not exactly 1 resulting inferred declaration"
+
+                    _ :: _ :: _ ->
                         Err "not exactly 1 resulting inferred declaration"
             )
 

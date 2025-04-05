@@ -55,7 +55,8 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   add more tests, especially let-in
+-   !! introduce a semi-local type. IE local types except (!) in lambda where we use a unified type of local types for pattern variables
+-   add more tests, especially let-in https://github.com/jfmengels/elm-review-common/blob/infer-type-annotations-for-let-in/tests/NoMissingTypeAnnotationInLetInTest.elm#L569
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
 -   type infer record type alias constructor function reference expression.
