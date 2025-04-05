@@ -1,7 +1,5 @@
 module Generate exposing (main)
 
-{-| -}
-
 import Elm
 import Elm.Docs
 import Elm.Syntax.ModuleName
@@ -11,6 +9,8 @@ import FastDict
 import Gen.CodeGen.Generate
 import Gen.ElmSyntaxTypeInfer
 import Gen.FastDict
+import Gen.List
+import Gen.Maybe
 import Json.Decode
 import Json.Encode
 
@@ -72,6 +72,22 @@ moduleInterfaceAsTypesToExpression moduleInterface =
 
                                                 Ok type_ ->
                                                     type_ |> typeToExpression
+                                          )
+                                        , ( "recordFieldOrder"
+                                          , case typeAliasInterface.tipe of
+                                                Elm.Type.Record fields Nothing ->
+                                                    Gen.Maybe.make_.just
+                                                        (Elm.list
+                                                            (fields
+                                                                |> List.map
+                                                                    (\( name, _ ) ->
+                                                                        Elm.string name
+                                                                    )
+                                                            )
+                                                        )
+
+                                                _ ->
+                                                    Gen.Maybe.make_.nothing
                                           )
                                         ]
                                     )

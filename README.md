@@ -59,8 +59,7 @@ exampleModuleOriginLookup =
 -   add more tests, especially let-in https://github.com/jfmengels/elm-review-common/blob/infer-type-annotations-for-let-in/tests/NoMissingTypeAnnotationInLetInTest.elm#L569
 -   implement multi-expression-declarations type infer
 -   (mutually) recursive type aliases can run into an infinite loop
--   type infer record type alias constructor function reference expression.
-    Requires storing `Maybe (List String)` field order in module type alias declaration types
+-   type infer record type alias constructor function reference expression
 -   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
 
 ### performance problems?

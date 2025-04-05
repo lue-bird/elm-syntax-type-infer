@@ -52,6 +52,7 @@ type alias ModuleTypes =
             String
             { parameters : List String
             , type_ : Type String
+            , recordFieldOrder : Maybe (List String)
             }
     , choiceTypes :
         FastDict.Dict
@@ -9850,7 +9851,10 @@ moduleInterfaceToTypes moduleInterface =
             , types :
                 FastDict.Dict
                     String
-                    { type_ : Type String, parameters : List String }
+                    { type_ : Type String
+                    , parameters : List String
+                    , recordFieldOrder : Maybe (List String)
+                    }
             }
         typeAliases =
             moduleInterface.aliases
@@ -9873,6 +9877,25 @@ moduleInterfaceToTypes moduleInterface =
                                             typeAliasDeclarationInterface.name
                                             { type_ = type_
                                             , parameters = typeAliasDeclarationInterface.args
+                                            , recordFieldOrder =
+                                                case typeAliasDeclarationInterface.tipe of
+                                                    Elm.Type.Record fields Nothing ->
+                                                        Just (fields |> List.map (\( name, _ ) -> name))
+
+                                                    Elm.Type.Record _ (Just _) ->
+                                                        Nothing
+
+                                                    Elm.Type.Var _ ->
+                                                        Nothing
+
+                                                    Elm.Type.Lambda _ _ ->
+                                                        Nothing
+
+                                                    Elm.Type.Tuple _ ->
+                                                        Nothing
+
+                                                    Elm.Type.Type _ _ ->
+                                                        Nothing
                                             }
                                 }
                     )
@@ -10156,6 +10179,34 @@ moduleDeclarationsToTypes moduleOriginLookup declarations =
                                                     declarationTypeAlias.generics
                                                         |> List.map Elm.Syntax.Node.value
                                                 , type_ = type_
+                                                , recordFieldOrder =
+                                                    case declarationTypeAlias.typeAnnotation |> Elm.Syntax.Node.value of
+                                                        Elm.Syntax.TypeAnnotation.Record fields ->
+                                                            Just
+                                                                (fields
+                                                                    |> List.map
+                                                                        (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ name, _ )) ->
+                                                                            name
+                                                                        )
+                                                                )
+
+                                                        Elm.Syntax.TypeAnnotation.GenericType _ ->
+                                                            Nothing
+
+                                                        Elm.Syntax.TypeAnnotation.Typed _ _ ->
+                                                            Nothing
+
+                                                        Elm.Syntax.TypeAnnotation.Unit ->
+                                                            Nothing
+
+                                                        Elm.Syntax.TypeAnnotation.Tupled _ ->
+                                                            Nothing
+
+                                                        Elm.Syntax.TypeAnnotation.GenericRecord _ _ ->
+                                                            Nothing
+
+                                                        Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation _ _ ->
+                                                            Nothing
                                                 }
                                     , choiceTypes = soFar.types.choiceTypes
                                     }
@@ -16895,6 +16946,7 @@ elmCoreTypesGeneratedFromDocsJson =
                                     , arguments = []
                                     }
                                 )
+                        , recordFieldOrder = Nothing
                         }
                       )
                     ]
@@ -21010,6 +21062,7 @@ elmCoreTypesGeneratedFromDocsJson =
                                         ]
                                     }
                                 )
+                        , recordFieldOrder = Nothing
                         }
                       )
                     ]
