@@ -911,6 +911,88 @@ suite =
                     |> expressionToInferredType
                     |> Expect.err
             )
+        , Test.test "bad matched + pattern unification should fail: case [] of [ 1 ] -> 1; 0 -> 0"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.IntPattern 1)
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 1)
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.IntPattern 0)
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 0)
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
+        , Test.test "bad matched + pattern unification should fail: case [] of [ \"\" ] -> 1; [ 0 ] -> 0"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.StringPattern "")
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 1)
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.IntPattern 0)
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 0)
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
+        , Test.test "bad matched + pattern unification should fail: case [] of [ \"\" ] -> 1; _ -> \"\""
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.ListPattern
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Pattern.StringPattern "")
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 1)
+                          )
+                        , ( Elm.Syntax.Node.empty
+                                Elm.Syntax.Pattern.AllPattern
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Literal "")
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
         , Test.test "case [] of [ 1 ] -> [ 2 ]; n -> n"
             (\() ->
                 Elm.Syntax.Expression.CaseExpression
