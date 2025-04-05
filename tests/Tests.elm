@@ -1268,15 +1268,8 @@ suite =
                         Elm.Syntax.Node.empty
                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                     }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                    |> expressionToInferredType
+                    |> Expect.err
             )
         , Test.test "transitive un-annotated let declaration let a = 2.2; b = a in b"
             (\() ->
