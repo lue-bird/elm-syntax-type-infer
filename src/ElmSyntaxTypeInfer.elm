@@ -1960,16 +1960,9 @@ typeUnify declarationTypes a b =
                         }
 
                 TypeNotVariable bTypeNotVariable ->
-                    Result.map
-                        (\unifiedNotVariable ->
-                            { type_ = unifiedNotVariable.type_
-                            , substitutions = unifiedNotVariable.substitutions
-                            }
-                        )
-                        (typeNotVariableUnify declarationTypes
-                            aTypeNotVariable
-                            bTypeNotVariable
-                        )
+                    typeNotVariableUnify declarationTypes
+                        aTypeNotVariable
+                        bTypeNotVariable
 
         TypeVariable aVariable ->
             case b of
