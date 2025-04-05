@@ -2172,7 +2172,7 @@ typeNotVariableUnify declarationTypes a b =
                                 { qualification = aTypeConstruct.moduleOrigin
                                 , name = aTypeConstruct.name
                                 }
-                            ++ "cannot be unified be with a choice type with a different name"
+                            ++ " cannot be unified be with a choice type with a different name"
                         )
 
                 TypeTuple aTuple ->
@@ -2408,6 +2408,9 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
 
                 Just aOriginModuleTypes ->
                     case aOriginModuleTypes.typeAliases |> FastDict.get typeConstructToExpand.name of
+                        Nothing ->
+                            Nothing
+
                         Just originAliasDeclaration ->
                             Result.andThen
                                 (\typeConstructExpandedWithArguments ->
@@ -2464,9 +2467,6 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
                                         )
                                 )
                                 |> Just
-
-                        Nothing ->
-                            Nothing
 
         TypeUnit ->
             Nothing
