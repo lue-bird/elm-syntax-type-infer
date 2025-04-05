@@ -1234,6 +1234,67 @@ suite =
                             )
                         )
             )
+        , Test.test "single un-annotated let declaration getting its type from unification: \\a -> let b = [ a, 2.2 ] in a"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetExpression
+                                { declarations =
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.LetFunction
+                                            { declaration =
+                                                Elm.Syntax.Node.empty
+                                                    { name = Elm.Syntax.Node.empty "b"
+                                                    , arguments = []
+                                                    , expression =
+                                                        Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.ListExpr
+                                                                [ Elm.Syntax.Node.empty
+                                                                    (Elm.Syntax.Expression.Floatable 2.2)
+                                                                , Elm.Syntax.Node.empty
+                                                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                                                ]
+                                                            )
+                                                    }
+                                            , signature = Nothing
+                                            , documentation = Nothing
+                                            }
+                                        )
+                                    ]
+                                , expression =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                }
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { moduleOrigin = [ "Basics" ]
+                                            , name = "Float"
+                                            , arguments = []
+                                            }
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { moduleOrigin = [ "Basics" ]
+                                            , name = "Float"
+                                            , arguments = []
+                                            }
+                                        )
+                                }
+                            )
+                        )
+            )
         , Test.test "single incorrectly annotated let declaration let a : Int ; a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
