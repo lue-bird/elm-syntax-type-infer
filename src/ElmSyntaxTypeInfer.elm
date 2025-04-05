@@ -6621,7 +6621,6 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxDeclarationExpressions =
 
 
 type alias ValueOrFunctionDeclaration type_ =
-    -- TODO switch to TypedNode
     { name : String
     , nameRange : Elm.Syntax.Range.Range
     , documentation :
