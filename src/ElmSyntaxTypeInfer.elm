@@ -1384,7 +1384,19 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
                                         )
                                     )
 
-                            _ ->
+                            TypeUnit ->
+                                Err "cannot unify record extension type variable with types other than record/record extension"
+
+                            TypeConstruct _ ->
+                                Err "cannot unify record extension type variable with types other than record/record extension"
+
+                            TypeTuple _ ->
+                                Err "cannot unify record extension type variable with types other than record/record extension"
+
+                            TypeTriple _ ->
+                                Err "cannot unify record extension type variable with types other than record/record extension"
+
+                            TypeFunction _ ->
                                 Err "cannot unify record extension type variable with types other than record/record extension"
                 )
                 (typeRecordExtension.fields
@@ -2062,10 +2074,40 @@ typeNotVariableUnify declarationTypes a b =
                             else
                                 Nothing
 
-                        _ ->
+                        TypeUnit ->
                             Nothing
 
-                _ ->
+                        TypeTuple _ ->
+                            Nothing
+
+                        TypeTriple _ ->
+                            Nothing
+
+                        TypeRecord _ ->
+                            Nothing
+
+                        TypeRecordExtension _ ->
+                            Nothing
+
+                        TypeFunction _ ->
+                            Nothing
+
+                TypeUnit ->
+                    Nothing
+
+                TypeTuple _ ->
+                    Nothing
+
+                TypeTriple _ ->
+                    Nothing
+
+                TypeRecord _ ->
+                    Nothing
+
+                TypeRecordExtension _ ->
+                    Nothing
+
+                TypeFunction _ ->
                     Nothing
 
         maybeUnifiedWithTypeConstruct :
@@ -2147,7 +2189,22 @@ typeNotVariableUnify declarationTypes a b =
                                 , substitutions = variableSubstitutionsNone
                                 }
 
-                        _ ->
+                        TypeConstruct _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                        TypeTuple _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                        TypeTriple _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                        TypeRecord _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                        TypeRecordExtension _ ->
+                            Err "unit (`()`) cannot be unified with types other than unit"
+
+                        TypeFunction _ ->
                             Err "unit (`()`) cannot be unified with types other than unit"
 
                 TypeConstruct aTypeConstruct ->
@@ -2185,7 +2242,22 @@ typeNotVariableUnify declarationTypes a b =
                                 (typeUnify declarationTypes aTuple.part0 bTuple.part0)
                                 (typeUnify declarationTypes aTuple.part1 bTuple.part1)
 
-                        _ ->
+                        TypeUnit ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                        TypeConstruct _ ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                        TypeTriple _ ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                        TypeRecord _ ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                        TypeRecordExtension _ ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                        TypeFunction _ ->
                             Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
 
                 TypeTriple aTriple ->
@@ -2216,7 +2288,22 @@ typeNotVariableUnify declarationTypes a b =
                                 (typeUnify declarationTypes aTriple.part1 bTriple.part1)
                                 (typeUnify declarationTypes aTriple.part1 bTriple.part1)
 
-                        _ ->
+                        TypeUnit ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                        TypeConstruct _ ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                        TypeTuple _ ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                        TypeRecord _ ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                        TypeRecordExtension _ ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                        TypeFunction _ ->
                             Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
 
                 TypeRecord aRecord ->
@@ -2242,7 +2329,19 @@ typeNotVariableUnify declarationTypes a b =
                                     aRecord
                                 )
 
-                        _ ->
+                        TypeUnit ->
+                            Err "record cannot be unified with types other than record or record extension"
+
+                        TypeConstruct _ ->
+                            Err "record cannot be unified with types other than record or record extension"
+
+                        TypeTuple _ ->
+                            Err "record cannot be unified with types other than record or record extension"
+
+                        TypeTriple _ ->
+                            Err "record cannot be unified with types other than record or record extension"
+
+                        TypeFunction _ ->
                             Err "record cannot be unified with types other than record or record extension"
 
                 TypeRecordExtension aRecordExtension ->
@@ -2271,7 +2370,19 @@ typeNotVariableUnify declarationTypes a b =
                                     bRecordExtension
                                 )
 
-                        _ ->
+                        TypeUnit ->
+                            Err "record extension cannot be unified with types other than record or record extension"
+
+                        TypeConstruct _ ->
+                            Err "record extension cannot be unified with types other than record or record extension"
+
+                        TypeTuple _ ->
+                            Err "record extension cannot be unified with types other than record or record extension"
+
+                        TypeTriple _ ->
+                            Err "record extension cannot be unified with types other than record or record extension"
+
+                        TypeFunction _ ->
                             Err "record extension cannot be unified with types other than record or record extension"
 
                 TypeFunction aFunction ->
@@ -2299,7 +2410,22 @@ typeNotVariableUnify declarationTypes a b =
                                 (typeUnify declarationTypes aFunction.input bFunction.input)
                                 (typeUnify declarationTypes aFunction.output bFunction.output)
 
-                        _ ->
+                        TypeUnit ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+                        TypeConstruct _ ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+                        TypeTuple _ ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+                        TypeTriple _ ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+                        TypeRecord _ ->
+                            Err "function (`... -> ...`) cannot be unified with types other than function"
+
+                        TypeRecordExtension _ ->
                             Err "function (`... -> ...`) cannot be unified with types other than function"
 
 
@@ -2384,7 +2510,22 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
                         Nothing ->
                             Nothing
 
-        _ ->
+        TypeUnit ->
+            Nothing
+
+        TypeTuple _ ->
+            Nothing
+
+        TypeTriple _ ->
+            Nothing
+
+        TypeRecord _ ->
+            Nothing
+
+        TypeRecordExtension _ ->
+            Nothing
+
+        TypeFunction _ ->
             Nothing
 
 
