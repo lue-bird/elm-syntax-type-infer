@@ -1934,41 +1934,6 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
                         tail
 
 
-typeUnify3 :
-    ModuleLevelDeclarationTypesAvailableInModule
-    -> Type TypeVariableFromContext
-    -> Type TypeVariableFromContext
-    -> Type TypeVariableFromContext
-    ->
-        Result
-            String
-            { type_ : Type TypeVariableFromContext
-            , substitutions : VariableSubstitutions
-            }
-typeUnify3 declarationTypes a b c =
-    Result.andThen
-        (\abUnified ->
-            Result.andThen
-                (\abcUnified ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , type_ = abcUnified.type_
-                            }
-                        )
-                        (variableSubstitutionsMerge declarationTypes
-                            abUnified.substitutions
-                            abcUnified.substitutions
-                        )
-                )
-                (typeUnify declarationTypes
-                    abUnified.type_
-                    c
-                )
-        )
-        (typeUnify declarationTypes a b)
-
-
 typeUnify :
     ModuleLevelDeclarationTypesAvailableInModule
     -> Type TypeVariableFromContext
@@ -3430,7 +3395,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 , introducedExpressionVariables =
                     recordFields
                         |> List.foldl
-                            (\(Elm.Syntax.Node.Node fieldRange fieldName) soFar ->
+                            (\(Elm.Syntax.Node.Node _ fieldName) soFar ->
                                 soFar
                                     |> FastDict.insert fieldName
                                         ( context.path, fieldName )
