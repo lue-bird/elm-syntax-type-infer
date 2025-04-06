@@ -1472,6 +1472,73 @@ suite =
                             )
                         )
             )
+        , Test.test "curried call: Tuple.pair \"\""
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { arguments = []
+                                                            , moduleOrigin = [ "String" ]
+                                                            , name = "String"
+                                                            }
+                                                        )
+                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "curried appendable prefix operation: (++) \"\""
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.PrefixOperator "++")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { arguments = []
+                                                , moduleOrigin = [ "String" ]
+                                                , name = "String"
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { arguments = []
+                                                , moduleOrigin = [ "String" ]
+                                                , name = "String"
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
