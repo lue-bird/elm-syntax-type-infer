@@ -1,5 +1,6 @@
 module Tests exposing (suite)
 
+import Elm.Syntax.Declaration
 import Elm.Syntax.Expression
 import Elm.Syntax.Infix
 import Elm.Syntax.Node
@@ -1505,6 +1506,64 @@ suite =
                             )
                         )
             )
+        , Test.test "fully applied imported call: Process.sleep 1.1"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Process" ] "sleep")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Floatable 1.1)
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Task" ]
+                                    , name = "Task"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeVariable "x"
+                                        , ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "fully applied imported call with incorrectly typed argument: Process.sleep \"\""
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Process" ] "sleep")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.err
+            )
         , Test.test "curried appendable prefix operation: (++) \"\""
             (\() ->
                 Elm.Syntax.Expression.Application
@@ -1768,7 +1827,7 @@ suite =
                             )
                         )
             )
-        , Test.test "unifying different type aliases to the same type from annotated let: let noop : Platform.ProcessId -> Process.Id ; noop id = id in ()"
+        , Test.test "unifying different imported type aliases to the same type from annotated let: let noop : Platform.ProcessId -> Process.Id ; noop id = id in ()"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
                     { declarations =
@@ -1824,6 +1883,83 @@ suite =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                ElmSyntaxTypeInfer.TypeUnit
+                            )
+                        )
+            )
+        , Test.test "unifying different local (and imported) type aliases to the same type from annotated let: let noop : String -> StringToo ; noop id = id in ()"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "noop"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Pattern.VarPattern "id")
+                                            ]
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.FunctionOrValue [] "id")
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "noop"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty ( [], "String" ))
+                                                                []
+                                                            )
+                                                        )
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty ( [], "StringToo" ))
+                                                                []
+                                                            )
+                                                        )
+                                                    )
+                                            }
+                                        )
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.TupledExpression [])
+                    }
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "StringToo"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                            []
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2069,7 +2205,7 @@ expressionToInferredType expression =
         |> Result.andThen toSingleInferredDeclaration
 
 
-toSingleInferredDeclaration : List { a | type_ : type_ } -> Result String type_
+toSingleInferredDeclaration : List { inferred_ | type_ : type_ } -> Result String type_
 toSingleInferredDeclaration declarationsInferred =
     case declarationsInferred of
         [ declarationInferred ] ->
