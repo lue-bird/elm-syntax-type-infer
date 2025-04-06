@@ -994,6 +994,35 @@ suite =
                     |> expressionToInferredType
                     |> Expect.err
             )
+        , Test.test "fully connected case in and output type: case [] of n -> n"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr [])
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "n")
+                          , Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "List" ]
+                                    , name = "List"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeVariable "element"
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "case [] of [ 1 ] -> [ 2 ]; n -> n"
             (\() ->
                 Elm.Syntax.Expression.CaseExpression
@@ -1196,6 +1225,74 @@ suite =
                                                 }
                                             )
                                         ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "infer matched via variant patterns: \\order -> case order of Basics.LT -> -1 ; EQ -> 0 ; GT -> 1"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "order")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.CaseExpression
+                                { expression =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [] "order")
+                                , cases =
+                                    [ ( Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.NamedPattern
+                                                { moduleName = [ "Basics" ]
+                                                , name = "LT"
+                                                }
+                                                []
+                                            )
+                                      , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Integer -1)
+                                      )
+                                    , ( Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.NamedPattern
+                                                { moduleName = []
+                                                , name = "EQ"
+                                                }
+                                                []
+                                            )
+                                      , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Integer 0)
+                                      )
+                                    , ( Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.NamedPattern
+                                                { moduleName = []
+                                                , name = "GT"
+                                                }
+                                                []
+                                            )
+                                      , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Integer 1)
+                                      )
+                                    ]
+                                }
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { arguments = []
+                                                , moduleOrigin = [ "Basics" ]
+                                                , name = "Order"
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable "number"
                                     }
                                 )
                             )
