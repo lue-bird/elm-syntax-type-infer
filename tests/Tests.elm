@@ -1632,6 +1632,72 @@ suite =
                             )
                         )
             )
+        , Test.test "unifying different type aliases to the same type from annotated let: let noop : Platform.ProcessId -> Process.Id ; noop id = id in ()"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "noop"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Pattern.VarPattern "id")
+                                            ]
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.FunctionOrValue [] "id")
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "noop"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty ( [ "Platform" ], "ProcessId" ))
+                                                                []
+                                                            )
+                                                        )
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty ( [ "Process" ], "Id" ))
+                                                                []
+                                                            )
+                                                        )
+                                                    )
+                                            }
+                                        )
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.TupledExpression [])
+                    }
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                ElmSyntaxTypeInfer.TypeUnit
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration getting its type from unification with annotated let: \\a -> let b : Float ; b = a ; c = a in a"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
@@ -1834,21 +1900,27 @@ expressionExpectInferredType expectedInferredType expression =
             (Ok expectedInferredType)
 
 
+expressionWrapInExampleDeclaration :
+    Elm.Syntax.Expression.Expression
+    -> Elm.Syntax.Expression.Function
+expressionWrapInExampleDeclaration expression =
+    { declaration =
+        Elm.Syntax.Node.empty
+            { expression =
+                Elm.Syntax.Node.empty expression
+            , name = Elm.Syntax.Node.empty "majorVersions"
+            , arguments = []
+            }
+    , signature = Nothing
+    , documentation = Nothing
+    }
+
+
 expressionToInferredType :
     Elm.Syntax.Expression.Expression
     -> Result String (ElmSyntaxTypeInfer.Type String)
 expressionToInferredType expression =
-    [ { declaration =
-            Elm.Syntax.Node.empty
-                { expression =
-                    Elm.Syntax.Node.empty expression
-                , name = Elm.Syntax.Node.empty "majorVersions"
-                , arguments = []
-                }
-      , signature = Nothing
-      , documentation = Nothing
-      }
-    ]
+    [ expressionWrapInExampleDeclaration expression ]
         |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
             { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
             , moduleOriginLookup = exampleModuleOriginLookup
@@ -1858,18 +1930,32 @@ expressionToInferredType expression =
                         exampleModuleOriginLookup
                     |> .types
             }
-        |> Result.andThen
-            (\declarationsInferred ->
-                case declarationsInferred of
-                    [ declarationInferred ] ->
-                        Ok declarationInferred.type_
+        |> Result.andThen toSingleInferredDeclaration
 
-                    [] ->
-                        Err "no resulting inferred declaration"
 
-                    _ :: _ :: _ ->
-                        Err "not exactly 1 resulting inferred declaration"
-            )
+toSingleInferredDeclaration : List { a | type_ : type_ } -> Result String type_
+toSingleInferredDeclaration declarationsInferred =
+    case declarationsInferred of
+        [ declarationInferred ] ->
+            Ok declarationInferred.type_
+
+        [] ->
+            Err "no resulting inferred declaration"
+
+        _ :: _ :: _ ->
+            Err "not exactly 1 resulting inferred declaration"
+
+
+exampleModuleOriginLookupImportingProcess : ElmSyntaxTypeInfer.ModuleOriginLookup
+exampleModuleOriginLookupImportingProcess =
+    [ Elm.Syntax.Node.empty
+        { moduleName = Elm.Syntax.Node.empty [ "Process" ]
+        , moduleAlias = Nothing
+        , exposingList = Nothing
+        }
+    ]
+        |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+            ElmSyntaxTypeInfer.elmCoreTypes
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
