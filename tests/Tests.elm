@@ -1539,6 +1539,75 @@ suite =
                             )
                         )
             )
+        , Test.test "fully applied appendable prefix operation with different types: (++) \"\" []"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.PrefixOperator "++")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.ListExpr [])
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
+        , Test.test "fully applied appendable prefix operation with unifiable list types: (++) [ \"\" ] []"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.PrefixOperator "++")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.ListExpr
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Literal "")
+                            ]
+                        )
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.ListExpr [])
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "List" ]
+                                    , name = "List"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { arguments = []
+                                                , moduleOrigin = [ "String" ]
+                                                , name = "String"
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "fully applied appendable prefix operation with non-unifiable list types: (++) [ \"\" ] [ 0 ]"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.PrefixOperator "++")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.ListExpr
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Literal "")
+                            ]
+                        )
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.ListExpr
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Integer 0)
+                            ]
+                        )
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.err
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
