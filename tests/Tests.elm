@@ -1427,6 +1427,51 @@ suite =
                             )
                         )
             )
+        , Test.test "extract tuple parts in destructuring of call: let ( x, y ) = Tuple.pair \"\" 1.1 in x"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetDestructuring
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.TuplePattern
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "x")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "y")
+                                        ]
+                                    )
+                                )
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Floatable 1.1)
+                                        ]
+                                    )
+                                )
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "x")
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "String" ]
+                                    , name = "String"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
