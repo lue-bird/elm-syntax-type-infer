@@ -11225,9 +11225,6 @@ elmCoreTypesGeneratedFromDocsJson =
                                                 [ TypeNotVariable
                                                     (TypeTuple
                                                         { part0 =
-                                                            TypeVariable
-                                                                "a"
-                                                        , part1 =
                                                             TypeNotVariable
                                                                 (TypeConstruct
                                                                     { moduleOrigin =
@@ -11239,6 +11236,9 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         []
                                                                     }
                                                                 )
+                                                        , part1 =
+                                                            TypeVariable
+                                                                "a"
                                                         }
                                                     )
                                                 ]
@@ -13068,10 +13068,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "v"
+                                                                "comparable"
                                                         , part1 =
                                                             TypeVariable
-                                                                "comparable"
+                                                                "v"
                                                         }
                                                     )
                                                 ]
@@ -13765,10 +13765,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "v"
+                                                                "k"
                                                         , part1 =
                                                             TypeVariable
-                                                                "k"
+                                                                "v"
                                                         }
                                                     )
                                                 ]
@@ -15695,10 +15695,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "b"
+                                                                "a"
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                "b"
                                                         }
                                                     )
                                                 ]
@@ -15715,7 +15715,7 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                "a"
                                                             ]
                                                         }
                                                     )
@@ -15727,7 +15727,7 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                "b"
                                                             ]
                                                         }
                                                     )
@@ -16457,6 +16457,9 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 TypeNotVariable
                                                                     (TypeTuple
                                                                         { part0 =
+                                                                            TypeVariable
+                                                                                "model"
+                                                                        , part1 =
                                                                             TypeNotVariable
                                                                                 (TypeConstruct
                                                                                     { moduleOrigin =
@@ -16471,9 +16474,6 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                         ]
                                                                                     }
                                                                                 )
-                                                                        , part1 =
-                                                                            TypeVariable
-                                                                                "model"
                                                                         }
                                                                     )
                                                             }
@@ -16519,6 +16519,9 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                             TypeNotVariable
                                                                                 (TypeTuple
                                                                                     { part0 =
+                                                                                        TypeVariable
+                                                                                            "model"
+                                                                                    , part1 =
                                                                                         TypeNotVariable
                                                                                             (TypeConstruct
                                                                                                 { moduleOrigin =
@@ -16533,9 +16536,6 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                     ]
                                                                                                 }
                                                                                             )
-                                                                                    , part1 =
-                                                                                        TypeVariable
-                                                                                            "model"
                                                                                     }
                                                                                 )
                                                                         }
@@ -20025,10 +20025,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                             TypeNotVariable
                                                                 (TypeConstruct
                                                                     { moduleOrigin =
-                                                                        [ "String"
+                                                                        [ "Char"
                                                                         ]
                                                                     , name =
-                                                                        "String"
+                                                                        "Char"
                                                                     , arguments =
                                                                         []
                                                                     }
@@ -20037,10 +20037,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                             TypeNotVariable
                                                                 (TypeConstruct
                                                                     { moduleOrigin =
-                                                                        [ "Char"
+                                                                        [ "String"
                                                                         ]
                                                                     , name =
-                                                                        "Char"
+                                                                        "String"
                                                                     , arguments =
                                                                         []
                                                                     }
@@ -21061,10 +21061,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeTuple
                                             { part0 =
                                                 TypeVariable
-                                                    "b"
+                                                    "a"
                                             , part1 =
                                                 TypeVariable
-                                                    "a"
+                                                    "b"
                                             }
                                         )
                                 , output = TypeVariable "a"
@@ -21107,10 +21107,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 (TypeTuple
                                                                     { part0 =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            "a"
                                                                     , part1 =
                                                                         TypeVariable
-                                                                            "a"
+                                                                            "b"
                                                                     }
                                                                 )
                                                         , output =
@@ -21118,10 +21118,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 (TypeTuple
                                                                     { part0 =
                                                                         TypeVariable
-                                                                            "y"
+                                                                            "x"
                                                                     , part1 =
                                                                         TypeVariable
-                                                                            "x"
+                                                                            "y"
                                                                     }
                                                                 )
                                                         }
@@ -21153,10 +21153,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "b"
+                                                                "a"
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                "b"
                                                         }
                                                     )
                                             , output =
@@ -21164,10 +21164,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "b"
+                                                                "x"
                                                         , part1 =
                                                             TypeVariable
-                                                                "x"
+                                                                "b"
                                                         }
                                                     )
                                             }
@@ -21197,10 +21197,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "b"
+                                                                "a"
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                "b"
                                                         }
                                                     )
                                             , output =
@@ -21208,10 +21208,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "y"
+                                                                "a"
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                "y"
                                                         }
                                                     )
                                             }
@@ -21234,10 +21234,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "b"
+                                                                "a"
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                "b"
                                                         }
                                                     )
                                             }
@@ -21253,10 +21253,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeTuple
                                             { part0 =
                                                 TypeVariable
-                                                    "b"
+                                                    "a"
                                             , part1 =
                                                 TypeVariable
-                                                    "a"
+                                                    "b"
                                             }
                                         )
                                 , output = TypeVariable "b"

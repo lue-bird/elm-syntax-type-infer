@@ -266,8 +266,8 @@ interfaceToType typeInterface =
                             ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeTuple { part0 = part0, part1 = part1 })
                         )
-                        (tuplePart1 |> interfaceToType)
                         (tuplePart0 |> interfaceToType)
+                        (tuplePart1 |> interfaceToType)
 
                 [ triplePart0, triplePart1, triplePart2 ] ->
                     Result.map3
