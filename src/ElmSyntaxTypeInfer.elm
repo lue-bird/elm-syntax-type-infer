@@ -1467,20 +1467,40 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
 
 typeNotVariableIsNumber : TypeNotVariable variable_ -> Bool
 typeNotVariableIsNumber type_ =
-    (type_
-        == TypeConstruct
-            { moduleOrigin = [ "Basics" ]
-            , name = "Int"
-            , arguments = []
-            }
-    )
-        || (type_
-                == TypeConstruct
-                    { moduleOrigin = [ "Basics" ]
-                    , name = "Float"
-                    , arguments = []
-                    }
-           )
+    case type_ of
+        TypeConstruct typeConstruct ->
+            case typeConstruct.moduleOrigin of
+                [ "Basics" ] ->
+                    case typeConstruct.name of
+                        "Int" ->
+                            True
+
+                        "Float" ->
+                            True
+
+                        _ ->
+                            False
+
+                _ ->
+                    False
+
+        TypeUnit ->
+            False
+
+        TypeTuple _ ->
+            False
+
+        TypeTriple _ ->
+            False
+
+        TypeRecord _ ->
+            False
+
+        TypeRecordExtension _ ->
+            False
+
+        TypeFunction _ ->
+            False
 
 
 typeNotVariableIsAppendable : TypeNotVariable variable_ -> Bool
