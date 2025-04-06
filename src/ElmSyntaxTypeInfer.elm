@@ -5574,11 +5574,11 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                     resultInferred.node.type_
                     in
                     Result.andThen
-                        (\fullSubstitutions ->
+                        (\fullSubstitutionsIgnoringAnnotation ->
                             case letValueOrFunction.signature of
                                 Nothing ->
                                     Ok
-                                        { substitutions = fullSubstitutions
+                                        { substitutions = fullSubstitutionsIgnoringAnnotation
                                         , node =
                                             { range = letDeclarationRange
                                             , declaration =
@@ -5602,38 +5602,45 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 Just (Elm.Syntax.Node.Node signatureRange letValueOrFunctionSignature) ->
                                     Result.andThen
                                         (\annotationAsType ->
-                                            Result.map
+                                            Result.andThen
                                                 (\typeUnifiedWithAnnotation ->
-                                                    { substitutions = fullSubstitutions
-                                                    , node =
-                                                        { range = letDeclarationRange
-                                                        , declaration =
-                                                            LetValueOrFunctionDeclaration
-                                                                { signature =
-                                                                    Just
-                                                                        { range = signatureRange
-                                                                        , nameRange =
-                                                                            letValueOrFunctionSignature.name |> Elm.Syntax.Node.range
-                                                                        , annotationType =
-                                                                            letValueOrFunctionSignature.typeAnnotation
-                                                                                |> Elm.Syntax.Node.value
-                                                                        , annotationTypeRange =
-                                                                            letValueOrFunctionSignature.typeAnnotation
-                                                                                |> Elm.Syntax.Node.range
+                                                    Result.map
+                                                        (\fullSubstitutions ->
+                                                            { substitutions = fullSubstitutions
+                                                            , node =
+                                                                { range = letDeclarationRange
+                                                                , declaration =
+                                                                    LetValueOrFunctionDeclaration
+                                                                        { signature =
+                                                                            Just
+                                                                                { range = signatureRange
+                                                                                , nameRange =
+                                                                                    letValueOrFunctionSignature.name |> Elm.Syntax.Node.range
+                                                                                , annotationType =
+                                                                                    letValueOrFunctionSignature.typeAnnotation
+                                                                                        |> Elm.Syntax.Node.value
+                                                                                , annotationTypeRange =
+                                                                                    letValueOrFunctionSignature.typeAnnotation
+                                                                                        |> Elm.Syntax.Node.range
+                                                                                }
+                                                                        , nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                                        , name = name
+                                                                        , parameters =
+                                                                            argumentsInferred.nodesReverse
+                                                                                |> List.reverse
+                                                                        , result = resultInferred.node
+                                                                        , type_ = typeUnifiedWithAnnotation.type_
                                                                         }
-                                                                , nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                                , name = name
-                                                                , parameters =
-                                                                    argumentsInferred.nodesReverse
-                                                                        |> List.reverse
-                                                                , result = resultInferred.node
-                                                                , type_ = typeUnifiedWithAnnotation.type_
                                                                 }
-                                                        }
-                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                                        resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                    , introducedExpressionVariables = FastDict.empty
-                                                    }
+                                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                            , introducedExpressionVariables = FastDict.empty
+                                                            }
+                                                        )
+                                                        (variableSubstitutionsMerge context.declarationTypes
+                                                            fullSubstitutionsIgnoringAnnotation
+                                                            typeUnifiedWithAnnotation.substitutions
+                                                        )
                                                 )
                                                 (typeUnify context.declarationTypes
                                                     letDeclarationPartiallyInferredType
