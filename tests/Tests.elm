@@ -1298,6 +1298,88 @@ suite =
                             )
                         )
             )
+        , Test.test "infer via variant pattern argument and using as pattern: \\maybe -> case maybe of Just 0 as just0 -> just0 ; other -> other"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "maybe")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.CaseExpression
+                                { expression =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [] "maybe")
+                                , cases =
+                                    [ ( Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.AsPattern
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Pattern.NamedPattern
+                                                        { moduleName = []
+                                                        , name = "Just"
+                                                        }
+                                                        [ Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Pattern.IntPattern 0)
+                                                        ]
+                                                    )
+                                                )
+                                                (Elm.Syntax.Node.empty "just0")
+                                            )
+                                      , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "just0")
+                                      )
+                                    , ( Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "other")
+                                      , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "other")
+                                      )
+                                    ]
+                                }
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Maybe" ]
+                                                , name = "Maybe"
+                                                , arguments =
+                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "Basics" ]
+                                                            , name = "Int"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                    ]
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Maybe" ]
+                                                , name = "Maybe"
+                                                , arguments =
+                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "Basics" ]
+                                                            , name = "Int"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                    ]
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
