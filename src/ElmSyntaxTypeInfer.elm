@@ -854,8 +854,17 @@ syntaxToType moduleOriginLookup syntaxType =
             case moduleOriginLookup.references |> FastDict.get ( qualification, unqualifiedName ) of
                 Nothing ->
                     Err
-                        ("could not find imported/local declaration for "
-                            ++ qualifiedToString { qualification = qualification, name = unqualifiedName }
+                        (case qualification of
+                            [] ->
+                                "could not find imported/local declaration for "
+                                    ++ unqualifiedName
+
+                            qualificationPart0 :: qualificationPart1Up ->
+                                "could not find imported declaration for "
+                                    ++ qualifiedToString
+                                        { qualification = qualificationPart0 :: qualificationPart1Up
+                                        , name = unqualifiedName
+                                        }
                         )
 
                 Just originModule ->
