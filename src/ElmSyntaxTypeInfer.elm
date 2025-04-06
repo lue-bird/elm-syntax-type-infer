@@ -3215,25 +3215,59 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 )
 
         Elm.Syntax.Pattern.AsPattern innerPatternNode (Elm.Syntax.Node.Node variableNameRange variableName) ->
-            Result.map
+            Result.andThen
                 (\inner ->
-                    { substitutions = inner.substitutions
-                    , node =
-                        { range = fullRange
-                        , value =
-                            PatternAs
-                                { pattern = inner.node
-                                , variable =
-                                    { value = variableName
-                                    , range = variableNameRange
-                                    , type_ = inner.node.type_
+                    let
+                        resultNode : TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+                        resultNode =
+                            { range = fullRange
+                            , value =
+                                PatternAs
+                                    { pattern = inner.node
+                                    , variable =
+                                        { value = variableName
+                                        , range = variableNameRange
+                                        , type_ = inner.node.type_
+                                        }
                                     }
+                            , type_ = inner.node.type_
+                            }
+                    in
+                    case inner.node.type_ of
+                        TypeVariable innerNodeTypeVariable ->
+                            Ok
+                                { substitutions = inner.substitutions
+                                , node = resultNode
+                                , introducedExpressionVariables =
+                                    inner.introducedExpressionVariables
+                                        |> FastDict.insert variableName
+                                            innerNodeTypeVariable
                                 }
-                        , type_ = inner.node.type_
-                        }
-                    , introducedExpressionVariables =
-                        inner.introducedExpressionVariables
-                    }
+
+                        TypeNotVariable innerNodeTypeNotVariable ->
+                            let
+                                introducedVariableTypeVariable : TypeVariableFromContext
+                                introducedVariableTypeVariable =
+                                    ( context.path, variableName )
+                            in
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { substitutions = fullSubstitutions
+                                    , node = resultNode
+                                    , introducedExpressionVariables =
+                                        inner.introducedExpressionVariables
+                                            |> FastDict.insert variableName
+                                                introducedVariableTypeVariable
+                                    }
+                                )
+                                (variableSubstitutionsMerge context.declarationTypes
+                                    inner.substitutions
+                                    { equivalentVariables = []
+                                    , variableToType =
+                                        FastDict.singleton introducedVariableTypeVariable
+                                            innerNodeTypeNotVariable
+                                    }
+                                )
                 )
                 (innerPatternNode
                     |> patternTypeInfer context
