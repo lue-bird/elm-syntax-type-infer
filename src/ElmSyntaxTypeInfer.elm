@@ -6596,6 +6596,62 @@ valueOrFunctionDeclarations :
                 }
             )
 valueOrFunctionDeclarations typesAndOriginLookup syntaxDeclarationExpressions =
+    let
+        moduleOriginLookup : ModuleOriginLookup
+        moduleOriginLookup =
+            { keepOperatorIsExposedFromParserAdvanced =
+                typesAndOriginLookup.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced
+            , ignoreOperatorIsExposedFromParserAdvanced =
+                typesAndOriginLookup.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
+            , references =
+                typesAndOriginLookup.moduleOriginLookup.references
+                    |> FastDict.union
+                        (syntaxDeclarationExpressions
+                            |> listMapToFastDict
+                                (\valueOrFunctionDeclaration ->
+                                    { key =
+                                        ( []
+                                        , valueOrFunctionDeclaration.declaration
+                                            |> Elm.Syntax.Node.value
+                                            |> .name
+                                            |> Elm.Syntax.Node.value
+                                        )
+                                    , value = []
+                                    }
+                                )
+                        )
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.signatures
+                            |> fastDictMapToFastDict
+                                (\signatureName _ ->
+                                    { key = ( [], signatureName ), value = [] }
+                                )
+                        )
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
+                            |> fastDictMapToFastDict
+                                (\typeAliasName _ ->
+                                    { key = ( [], typeAliasName ), value = [] }
+                                )
+                        )
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                            |> FastDict.foldl
+                                (\choiceTypeName info soFar ->
+                                    soFar
+                                        |> FastDict.insert ( [], choiceTypeName ) []
+                                        |> FastDict.union
+                                            (info.variants
+                                                |> fastDictMapToFastDict
+                                                    (\variantName _ ->
+                                                        { key = ( [], variantName ), value = [] }
+                                                    )
+                                            )
+                                )
+                                FastDict.empty
+                        )
+            }
+    in
     syntaxDeclarationExpressions
         |> listMapAndCombineOk
             (\syntaxDeclarationExpression ->
@@ -6726,7 +6782,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxDeclarationExpressions =
                                     , partiallyInferredDeclarationTypes = FastDict.empty
                                     , containingDeclarationName = name
                                     , path = [ "declarationResult", name ]
-                                    , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
+                                    , moduleOriginLookup = moduleOriginLookup
                                     }
                             )
                     )
@@ -6734,7 +6790,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxDeclarationExpressions =
                         |> parameterPatternsTypeInfer
                             { declarationTypes = declarationTypes
                             , path = [ name ]
-                            , moduleOriginLookup = typesAndOriginLookup.moduleOriginLookup
+                            , moduleOriginLookup = moduleOriginLookup
                             }
                     )
             )
@@ -10427,6 +10483,26 @@ fastDictAny valueIsFound dict =
                     || state.left ()
                     || state.right ()
             )
+
+
+{-| Like `FastDict.map` but also changing the key
+-}
+fastDictMapToFastDict :
+    (key -> value -> { key : comparableMappedKey, value : mappedValue })
+    -> FastDict.Dict key value
+    -> FastDict.Dict comparableMappedKey mappedValue
+fastDictMapToFastDict toNewEntry fastDict =
+    fastDict
+        |> FastDict.foldl
+            (\key value soFar ->
+                let
+                    entry : { key : comparableMappedKey, value : mappedValue }
+                    entry =
+                        toNewEntry key value
+                in
+                soFar |> FastDict.insert entry.key entry.value
+            )
+            FastDict.empty
 
 
 listFoldlWhileOkFrom :
