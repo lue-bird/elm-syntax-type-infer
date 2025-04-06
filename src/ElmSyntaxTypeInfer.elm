@@ -1488,7 +1488,7 @@ typeNotVariableIsAppendable type_ =
     case type_ of
         TypeConstruct variableReplacementTypeChoiceConstruct ->
             case variableReplacementTypeChoiceConstruct.moduleOrigin of
-                [ "Basics" ] ->
+                [ "String" ] ->
                     case variableReplacementTypeChoiceConstruct.name of
                         "String" ->
                             True
@@ -1535,11 +1535,16 @@ typeNotVariableIsComparable typeVariableToConstraint typeNotVariable =
     case typeNotVariable of
         TypeConstruct variableReplacementTypeChoiceConstruct ->
             case variableReplacementTypeChoiceConstruct.moduleOrigin of
-                [ "Basics" ] ->
+                [ "String" ] ->
                     case variableReplacementTypeChoiceConstruct.name of
                         "String" ->
                             True
 
+                        _ ->
+                            False
+
+                [ "Basics" ] ->
+                    case variableReplacementTypeChoiceConstruct.name of
                         "Int" ->
                             True
 
