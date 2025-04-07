@@ -2134,6 +2134,71 @@ suite =
                             )
                         )
             )
+        , Test.test "transitive un-annotated top level declaration: a = 2.2; b = a"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "a"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 2.2)
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                , { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "b"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "StringToo"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                            []
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (List.map .type_)
+                    |> Expect.equal
+                        (Ok
+                            [ ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Basics" ]
+                                    , name = "Float"
+                                    , arguments = []
+                                    }
+                                )
+                            , ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Basics" ]
+                                    , name = "Float"
+                                    , arguments = []
+                                    }
+                                )
+                            ]
+                        )
+            )
         , Test.test "self-referential a union with list of a \\a -> [ a, [ a ] ] should fail"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
