@@ -6705,7 +6705,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
         |> listFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
             , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
-            , declarationsTyped = []
+            , declarationsTypedReverse = []
             }
             (\syntaxDeclarationExpression soFar ->
                 let
@@ -6781,7 +6781,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                 resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                         , substitutions =
                                             soFarAndArgumentAndResultAndTypeUnifySubstitutions
-                                        , declarationsTyped =
+                                        , declarationsTypedReverse =
                                             { name = name
                                             , nameRange = implementation.name |> Elm.Syntax.Node.range
                                             , documentation =
@@ -6811,7 +6811,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                             , parameters =
                                                 parameters.nodesReverse |> List.reverse
                                             }
-                                                :: soFar.declarationsTyped
+                                                :: soFar.declarationsTypedReverse
                                         }
                                     )
                                     (variableSubstitutionsMerge4 declarationTypes
@@ -6865,7 +6865,8 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
             )
         |> Result.andThen
             (\intermediate ->
-                intermediate.declarationsTyped
+                intermediate.declarationsTypedReverse
+                    |> List.reverse
                     |> listMapAndCombineOk
                         (\declarationTyped ->
                             declarationTyped
