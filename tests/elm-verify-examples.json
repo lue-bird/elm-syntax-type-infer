@@ -1,11 +1,6 @@
 {
   "tests": [
-    "Print",
-    "ElmSyntaxPrint",
-    "ElmSyntaxPrintDefunctionalized",
-    "ParserFast",
-    "Char.Extra",
-    "ElmSyntaxParserLenient",
+    "ElmSyntaxTypeInfer",
     "./README.md"
   ]
 }
