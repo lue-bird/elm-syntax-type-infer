@@ -6867,16 +6867,12 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
             (\intermediate ->
                 intermediate.declarationsTypedReverse
                     |> List.reverse
-                    |> listMapAndCombineOk
-                        (\declarationTyped ->
-                            declarationTyped
-                                |> valueOrFunctionDeclarationSubstituteVariablesByNotVariables
-                                    { declarationTypes = declarationTypes
-                                    , substitutions = intermediate.substitutions
-                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                        intermediate.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                    }
-                        )
+                    |> valueOrFunctionDeclarationsApplySubstitutions
+                        { declarationTypes = declarationTypes
+                        , substitutions = intermediate.substitutions
+                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                            intermediate.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                        }
             )
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
@@ -7398,27 +7394,6 @@ expressionCaseOfCaseContainedTypeVariables typedNodeTypeToExtractVariablesFrom s
         )
 
 
-declarationValueOrFunctionCondenseEquivalentVariables :
-    List (FastSet.Set TypeVariableFromContext)
-    -> ValueOrFunctionDeclaration (Type TypeVariableFromContext)
-    ->
-        Result
-            String
-            (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
-declarationValueOrFunctionCondenseEquivalentVariables equivalentVariables declarationValueOrFunctionAndEquivalentVariables =
-    Result.map
-        (\lookupCondensedVariable ->
-            declarationValueOrFunctionAndEquivalentVariables
-                |> declarationValueOrFunctionMapTypeVariables
-                    (\variable ->
-                        lookupCondensedVariable
-                            |> FastDict.get variable
-                            |> Maybe.withDefault variable
-                    )
-        )
-        (createEquivalentVariablesToCondensedVariableLookup equivalentVariables)
-
-
 createEquivalentVariablesToCondensedVariableLookup :
     List (FastSet.Set TypeVariableFromContext)
     -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
@@ -7441,7 +7416,27 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
             )
 
 
-valueOrFunctionDeclarationSubstituteVariablesByNotVariables :
+valueOrFunctionDeclarationsApplySubstitutions :
+    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , usesOfTypeVariablesFromPartiallyInferredDeclarations :
+        FastDict.Dict
+            TypeVariableFromContext
+            (FastSet.Set TypeVariableFromContext)
+    , substitutions : VariableSubstitutions
+    }
+    -> List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+    -> Result String (List (ValueOrFunctionDeclaration (Type TypeVariableFromContext)))
+valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsSoFar =
+    declarationValueOrFunctionsSoFar
+        |> listMapAndCombineOk
+            (\declarationTyped ->
+                declarationTyped
+                    |> valueOrFunctionDeclarationApplySubstitutions
+                        state
+            )
+
+
+valueOrFunctionDeclarationApplySubstitutions :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , usesOfTypeVariablesFromPartiallyInferredDeclarations :
         FastDict.Dict
@@ -7454,8 +7449,46 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables :
         Result
             String
             (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
-valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationValueOrFunctionSoFar =
+valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoFar =
     case state.substitutions.equivalentVariables of
+        equivalentVariableSet0 :: equivalentVariableSet1Up ->
+            case
+                createEquivalentVariablesToCondensedVariableLookup
+                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
+            of
+                Err error ->
+                    Err error
+
+                Ok variableToCondensedLookup ->
+                    let
+                        variableToTypeUsingCondensedOrError : Result String VariableSubstitutions
+                        variableToTypeUsingCondensedOrError =
+                            state.substitutions.variableToType
+                                |> variableToTypeSubstitutionsCondenseVariables state.declarationTypes
+                                    variableToCondensedLookup
+                    in
+                    case variableToTypeUsingCondensedOrError of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeUsingCondensed ->
+                            valueOrFunctionDeclarationApplySubstitutions
+                                { declarationTypes = state.declarationTypes
+                                , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                    state.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                        |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
+                                            variableToCondensedLookup
+                                , substitutions = variableToTypeUsingCondensed
+                                }
+                                (declarationValueOrFunctionSoFar
+                                    |> declarationValueOrFunctionMapTypeVariables
+                                        (\variable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get variable
+                                                |> Maybe.withDefault variable
+                                        )
+                                )
+
         [] ->
             let
                 new :
@@ -7536,7 +7569,7 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationVal
                         }
             in
             if Basics.not (FastDict.isEmpty new.substitutionsOfTypeVariablesFromPartiallyInferredDeclarations) then
-                valueOrFunctionDeclarationSubstituteVariablesByNotVariables
+                valueOrFunctionDeclarationApplySubstitutions
                     { declarationTypes = state.declarationTypes
                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                         new.usesOfTypeVariablesFromPartiallyInferredDeclarations
@@ -7553,11 +7586,9 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationVal
             else
                 case state.substitutions.variableToType |> FastDict.popMin of
                     Nothing ->
-                        declarationValueOrFunctionSoFar
-                            |> declarationValueOrFunctionCondenseEquivalentVariables
-                                state.substitutions.equivalentVariables
+                        Ok declarationValueOrFunctionSoFar
 
-                    Just ( ( replacementVariable, replacementTypeNotVariable ), remainingReplacements ) ->
+                    Just ( ( replacementVariable, replacementTypeNotVariable ), remainingVariableToType ) ->
                         case
                             declarationValueOrFunctionSoFar
                                 |> declarationValueOrFunctionSubstituteVariableByNotVariable
@@ -7571,29 +7602,12 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationVal
 
                             Ok substituted ->
                                 case
-                                    remainingReplacements
-                                        |> fastDictFoldlWhileOkFrom
-                                            variableSubstitutionsNone
-                                            (\remainingVariable remainingReplacementTypeNotVariable soFar ->
-                                                Result.andThen
-                                                    (\replacementTypeSubstituted ->
-                                                        variableSubstitutionsMerge3 state.declarationTypes
-                                                            replacementTypeSubstituted.substitutions
-                                                            { equivalentVariables = []
-                                                            , variableToType =
-                                                                FastDict.singleton remainingVariable
-                                                                    replacementTypeSubstituted.type_
-                                                            }
-                                                            soFar
-                                                    )
-                                                    (remainingReplacementTypeNotVariable
-                                                        |> typeNotVariableSubstituteVariableByNotVariable
-                                                            state.declarationTypes
-                                                            { variable = replacementVariable
-                                                            , type_ = replacementTypeNotVariable
-                                                            }
-                                                    )
-                                            )
+                                    remainingVariableToType
+                                        |> variableToTypeSubstitutionsSubstituteVariableByNotVariable
+                                            state.declarationTypes
+                                            { variable = replacementVariable
+                                            , type_ = replacementTypeNotVariable
+                                            }
                                 of
                                     Err error ->
                                         Err error
@@ -7609,7 +7623,7 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationVal
                                                 Err error
 
                                             Ok substitutionsAfterSubstitution ->
-                                                valueOrFunctionDeclarationSubstituteVariablesByNotVariables
+                                                valueOrFunctionDeclarationApplySubstitutions
                                                     { declarationTypes = state.declarationTypes
                                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                                         state.usesOfTypeVariablesFromPartiallyInferredDeclarations
@@ -7617,159 +7631,168 @@ valueOrFunctionDeclarationSubstituteVariablesByNotVariables state declarationVal
                                                     }
                                                     substituted.declaration
 
-        equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            case
-                createEquivalentVariablesToCondensedVariableLookup
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-            of
-                Err error ->
-                    Err error
 
-                Ok variableToCondensedLookup ->
-                    let
-                        variableToTypeUsingCondensedOrError : Result String VariableSubstitutions
-                        variableToTypeUsingCondensedOrError =
-                            state.substitutions.variableToType
-                                |> fastDictFoldlWhileOkFrom
-                                    variableSubstitutionsNone
-                                    (\uncondensedVariable replacementType soFar ->
-                                        case variableToCondensedLookup |> FastDict.get uncondensedVariable of
-                                            Nothing ->
-                                                Ok
-                                                    { equivalentVariables = soFar.equivalentVariables
-                                                    , variableToType =
-                                                        soFar.variableToType
-                                                            |> FastDict.insert uncondensedVariable
-                                                                (replacementType
-                                                                    |> typeNotVariableMapVariables
-                                                                        (\variable ->
-                                                                            variableToCondensedLookup
-                                                                                |> FastDict.get variable
-                                                                                |> Maybe.withDefault variable
-                                                                        )
-                                                                )
-                                                    }
+variableToTypeSubstitutionsSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    ->
+        { variable : TypeVariableFromContext
+        , type_ : TypeNotVariable TypeVariableFromContext
+        }
+    -> FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    -> Result String VariableSubstitutions
+variableToTypeSubstitutionsSubstituteVariableByNotVariable declarationTypes variableToTypeSubstitutionToApply variableToTypeSubstitutions =
+    variableToTypeSubstitutions
+        |> fastDictFoldlWhileOkFrom
+            variableSubstitutionsNone
+            (\remainingVariable remainingReplacementTypeNotVariable soFar ->
+                Result.andThen
+                    (\replacementTypeSubstituted ->
+                        variableSubstitutionsMerge3 declarationTypes
+                            replacementTypeSubstituted.substitutions
+                            { equivalentVariables = []
+                            , variableToType =
+                                FastDict.singleton remainingVariable
+                                    replacementTypeSubstituted.type_
+                            }
+                            soFar
+                    )
+                    (remainingReplacementTypeNotVariable
+                        |> typeNotVariableSubstituteVariableByNotVariable
+                            declarationTypes
+                            variableToTypeSubstitutionToApply
+                    )
+            )
 
-                                            Just condensedVariable ->
-                                                let
-                                                    replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
-                                                    replacementTypeUsingCondensedVariables =
-                                                        replacementType
-                                                            |> typeNotVariableMapVariables
-                                                                (\variable ->
-                                                                    variableToCondensedLookup
-                                                                        |> FastDict.get variable
-                                                                        |> Maybe.withDefault variable
-                                                                )
-                                                in
-                                                case soFar.variableToType |> FastDict.get condensedVariable of
-                                                    Nothing ->
-                                                        Ok
-                                                            { equivalentVariables = soFar.equivalentVariables
-                                                            , variableToType =
-                                                                soFar.variableToType
-                                                                    |> FastDict.insert condensedVariable
-                                                                        replacementTypeUsingCondensedVariables
-                                                            }
 
-                                                    Just existingReplacementTypeForCondensedVariable ->
-                                                        Result.andThen
-                                                            (\replacementTypeForCondensedVariable ->
-                                                                variableSubstitutionsMerge state.declarationTypes
-                                                                    replacementTypeForCondensedVariable.substitutions
-                                                                    (case replacementTypeForCondensedVariable.type_ of
-                                                                        TypeVariable newEquivalentVariable ->
-                                                                            { equivalentVariables =
-                                                                                soFar.equivalentVariables
-                                                                                    |> equivalentVariablesMergeWithSetOf2
-                                                                                        condensedVariable
-                                                                                        newEquivalentVariable
-                                                                            , variableToType =
-                                                                                soFar.variableToType
-                                                                            }
+variableToTypeSubstitutionsCondenseVariables :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> FastDict.Dict TypeVariableFromContext TypeVariableFromContext
+    -> FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    -> Result String VariableSubstitutions
+variableToTypeSubstitutionsCondenseVariables declarationTypes variableToCondensedLookup variableToType =
+    variableToType
+        |> fastDictFoldlWhileOkFrom
+            variableSubstitutionsNone
+            (\uncondensedVariable replacementType soFar ->
+                case variableToCondensedLookup |> FastDict.get uncondensedVariable of
+                    Nothing ->
+                        Ok
+                            { equivalentVariables = soFar.equivalentVariables
+                            , variableToType =
+                                soFar.variableToType
+                                    |> FastDict.insert uncondensedVariable
+                                        (replacementType
+                                            |> typeNotVariableMapVariables
+                                                (\variable ->
+                                                    variableToCondensedLookup
+                                                        |> FastDict.get variable
+                                                        |> Maybe.withDefault variable
+                                                )
+                                        )
+                            }
 
-                                                                        TypeNotVariable replacementTypeForCondensedVariableTypeNotVariable ->
-                                                                            { equivalentVariables =
-                                                                                soFar.equivalentVariables
-                                                                            , variableToType =
-                                                                                soFar.variableToType
-                                                                                    |> FastDict.insert condensedVariable
-                                                                                        replacementTypeForCondensedVariableTypeNotVariable
-                                                                            }
-                                                                    )
-                                                            )
-                                                            (typeNotVariableUnify state.declarationTypes
-                                                                existingReplacementTypeForCondensedVariable
-                                                                replacementTypeUsingCondensedVariables
-                                                            )
-                                    )
-                    in
-                    case variableToTypeUsingCondensedOrError of
-                        Err error ->
-                            Err error
-
-                        Ok variableToTypeUsingCondensed ->
-                            let
-                                usesOfTypeVariablesFromPartiallyInferredDeclarationsUsingCondensed : FastDict.Dict TypeVariableFromContext (FastSet.Set TypeVariableFromContext)
-                                usesOfTypeVariablesFromPartiallyInferredDeclarationsUsingCondensed =
-                                    state.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                        |> FastDict.foldl
-                                            (\partiallyInferredVariableUncondensed usesUncondensed soFar ->
-                                                let
-                                                    usesCondensed : FastSet.Set TypeVariableFromContext
-                                                    usesCondensed =
-                                                        usesUncondensed
-                                                            |> FastSet.foldl
-                                                                (\useUncondensed usesCondensedSoFar ->
-                                                                    case variableToCondensedLookup |> FastDict.get useUncondensed of
-                                                                        Nothing ->
-                                                                            usesCondensedSoFar
-
-                                                                        Just useCondensed ->
-                                                                            usesCondensedSoFar
-                                                                                |> FastSet.insert useCondensed
-                                                                )
-                                                                FastSet.empty
-                                                in
-                                                soFar
-                                                    |> FastDict.update
-                                                        (case variableToCondensedLookup |> FastDict.get partiallyInferredVariableUncondensed of
-                                                            Nothing ->
-                                                                partiallyInferredVariableUncondensed
-
-                                                            Just partiallyInferredVariableCondensed ->
-                                                                partiallyInferredVariableCondensed
-                                                        )
-                                                        (\maybeUsesCondensedSoFar ->
-                                                            Just
-                                                                (case maybeUsesCondensedSoFar of
-                                                                    Nothing ->
-                                                                        usesCondensed
-
-                                                                    Just usesCondensedSoFar ->
-                                                                        FastSet.union
-                                                                            usesCondensed
-                                                                            usesCondensedSoFar
-                                                                )
-                                                        )
-                                            )
-                                            FastDict.empty
-                            in
-                            valueOrFunctionDeclarationSubstituteVariablesByNotVariables
-                                { declarationTypes = state.declarationTypes
-                                , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                    usesOfTypeVariablesFromPartiallyInferredDeclarationsUsingCondensed
-                                , substitutions =
-                                    variableToTypeUsingCondensed
-                                }
-                                (declarationValueOrFunctionSoFar
-                                    |> declarationValueOrFunctionMapTypeVariables
+                    Just condensedVariable ->
+                        let
+                            replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
+                            replacementTypeUsingCondensedVariables =
+                                replacementType
+                                    |> typeNotVariableMapVariables
                                         (\variable ->
                                             variableToCondensedLookup
                                                 |> FastDict.get variable
                                                 |> Maybe.withDefault variable
                                         )
+                        in
+                        case soFar.variableToType |> FastDict.get condensedVariable of
+                            Nothing ->
+                                Ok
+                                    { equivalentVariables = soFar.equivalentVariables
+                                    , variableToType =
+                                        soFar.variableToType
+                                            |> FastDict.insert condensedVariable
+                                                replacementTypeUsingCondensedVariables
+                                    }
+
+                            Just existingReplacementTypeForCondensedVariable ->
+                                Result.andThen
+                                    (\replacementTypeForCondensedVariable ->
+                                        variableSubstitutionsMerge declarationTypes
+                                            replacementTypeForCondensedVariable.substitutions
+                                            (case replacementTypeForCondensedVariable.type_ of
+                                                TypeVariable newEquivalentVariable ->
+                                                    { equivalentVariables =
+                                                        soFar.equivalentVariables
+                                                            |> equivalentVariablesMergeWithSetOf2
+                                                                condensedVariable
+                                                                newEquivalentVariable
+                                                    , variableToType =
+                                                        soFar.variableToType
+                                                    }
+
+                                                TypeNotVariable replacementTypeForCondensedVariableTypeNotVariable ->
+                                                    { equivalentVariables =
+                                                        soFar.equivalentVariables
+                                                    , variableToType =
+                                                        soFar.variableToType
+                                                            |> FastDict.insert condensedVariable
+                                                                replacementTypeForCondensedVariableTypeNotVariable
+                                                    }
+                                            )
+                                    )
+                                    (typeNotVariableUnify declarationTypes
+                                        existingReplacementTypeForCondensedVariable
+                                        replacementTypeUsingCondensedVariables
+                                    )
+            )
+
+
+usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables :
+    FastDict.Dict TypeVariableFromContext TypeVariableFromContext
+    -> FastDict.Dict TypeVariableFromContext (FastSet.Set TypeVariableFromContext)
+    -> FastDict.Dict TypeVariableFromContext (FastSet.Set TypeVariableFromContext)
+usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables variableToCondensedLookup usesOfTypeVariablesFromPartiallyInferredDeclarations =
+    usesOfTypeVariablesFromPartiallyInferredDeclarations
+        |> FastDict.foldl
+            (\partiallyInferredVariableUncondensed usesUncondensed soFar ->
+                let
+                    usesCondensed : FastSet.Set TypeVariableFromContext
+                    usesCondensed =
+                        usesUncondensed
+                            |> FastSet.foldl
+                                (\useUncondensed usesCondensedSoFar ->
+                                    case variableToCondensedLookup |> FastDict.get useUncondensed of
+                                        Nothing ->
+                                            usesCondensedSoFar
+
+                                        Just useCondensed ->
+                                            usesCondensedSoFar
+                                                |> FastSet.insert useCondensed
                                 )
+                                FastSet.empty
+                in
+                soFar
+                    |> FastDict.update
+                        (case variableToCondensedLookup |> FastDict.get partiallyInferredVariableUncondensed of
+                            Nothing ->
+                                partiallyInferredVariableUncondensed
+
+                            Just partiallyInferredVariableCondensed ->
+                                partiallyInferredVariableCondensed
+                        )
+                        (\maybeUsesCondensedSoFar ->
+                            Just
+                                (case maybeUsesCondensedSoFar of
+                                    Nothing ->
+                                        usesCondensed
+
+                                    Just usesCondensedSoFar ->
+                                        FastSet.union
+                                            usesCondensed
+                                            usesCondensedSoFar
+                                )
+                        )
+            )
+            FastDict.empty
 
 
 declarationValueOrFunctionSubstituteVariableByNotVariable :
