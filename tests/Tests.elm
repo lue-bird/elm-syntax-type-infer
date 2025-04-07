@@ -2199,6 +2199,68 @@ suite =
                             ]
                         )
             )
+        , Test.test "mutually influencing un-annotated top level declarations: a = 2 + b; b = a"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "a"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.OperatorApplication
+                                        "+"
+                                        Elm.Syntax.Infix.Left
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Integer 2)
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "b")
+                                        )
+                                    )
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                , { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "b"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "StringToo"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                            []
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (List.map .type_)
+                    |> Expect.equal
+                        (Ok
+                            [ ElmSyntaxTypeInfer.TypeVariable "number"
+                            , ElmSyntaxTypeInfer.TypeVariable "number"
+                            ]
+                        )
+            )
         , Test.test "self-referential a union with list of a \\a -> [ a, [ a ] ] should fail"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
