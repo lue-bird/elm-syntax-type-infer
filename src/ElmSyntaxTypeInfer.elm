@@ -461,6 +461,10 @@ type alias ModuleOriginLookup =
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
             Elm.Syntax.ModuleName.ModuleName
+    , typeConstructs :
+        FastDict.Dict
+            ( Elm.Syntax.ModuleName.ModuleName, String )
+            Elm.Syntax.ModuleName.ModuleName
     , keepOperatorIsExposedFromParserAdvanced : Bool
     , ignoreOperatorIsExposedFromParserAdvanced : Bool
     }
@@ -485,7 +489,8 @@ importsToModuleOriginLookup modulesTypes imports =
             List
                 { moduleName : Elm.Syntax.ModuleName.ModuleName
                 , alias : Maybe String
-                , exposes : List String
+                , typeExposes : List String
+                , referenceExposes : List String
                 }
         importsNormal =
             implicitImports
@@ -504,7 +509,46 @@ importsToModuleOriginLookup modulesTypes imports =
                                             (\(Elm.Syntax.Node.Node _ syntaxAlias) ->
                                                 syntaxAlias |> String.join "."
                                             )
-                                , exposes =
+                                , typeExposes =
+                                    case syntaxImport.exposingList of
+                                        Nothing ->
+                                            []
+
+                                        Just (Elm.Syntax.Node.Node _ syntaxExposing) ->
+                                            case modulesTypes |> FastDict.get importModuleName of
+                                                Nothing ->
+                                                    []
+
+                                                Just moduleTypes ->
+                                                    case syntaxExposing of
+                                                        Elm.Syntax.Exposing.All _ ->
+                                                            (moduleTypes.typeAliases |> FastDict.keys)
+                                                                ++ (moduleTypes.choiceTypes
+                                                                        |> FastDict.foldl
+                                                                            (\choiceTypeName _ soFar ->
+                                                                                choiceTypeName :: soFar
+                                                                            )
+                                                                            []
+                                                                   )
+
+                                                        Elm.Syntax.Exposing.Explicit exposes ->
+                                                            exposes
+                                                                |> List.concatMap
+                                                                    (\(Elm.Syntax.Node.Node _ expose) ->
+                                                                        case expose of
+                                                                            Elm.Syntax.Exposing.InfixExpose _ ->
+                                                                                []
+
+                                                                            Elm.Syntax.Exposing.FunctionExpose _ ->
+                                                                                []
+
+                                                                            Elm.Syntax.Exposing.TypeOrAliasExpose name ->
+                                                                                [ name ]
+
+                                                                            Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
+                                                                                [ choiceTypeExpose.name ]
+                                                                    )
+                                , referenceExposes =
                                     case syntaxImport.exposingList of
                                         Nothing ->
                                             []
@@ -518,12 +562,10 @@ importsToModuleOriginLookup modulesTypes imports =
                                                     case syntaxExposing of
                                                         Elm.Syntax.Exposing.All _ ->
                                                             (moduleTypes.signatures |> FastDict.keys)
-                                                                ++ (moduleTypes.typeAliases |> FastDict.keys)
                                                                 ++ (moduleTypes.choiceTypes
                                                                         |> FastDict.foldl
-                                                                            (\choiceTypeName choiceTypeInfo soFar ->
-                                                                                choiceTypeName
-                                                                                    :: (choiceTypeInfo.variants |> FastDict.keys)
+                                                                            (\_ choiceTypeInfo soFar ->
+                                                                                (choiceTypeInfo.variants |> FastDict.keys)
                                                                                     ++ soFar
                                                                             )
                                                                             []
@@ -534,19 +576,19 @@ importsToModuleOriginLookup modulesTypes imports =
                                                                 |> List.concatMap
                                                                     (\(Elm.Syntax.Node.Node _ expose) ->
                                                                         case expose of
+                                                                            Elm.Syntax.Exposing.TypeOrAliasExpose _ ->
+                                                                                []
+
                                                                             Elm.Syntax.Exposing.InfixExpose operator ->
                                                                                 [ operator ]
 
                                                                             Elm.Syntax.Exposing.FunctionExpose name ->
                                                                                 [ name ]
 
-                                                                            Elm.Syntax.Exposing.TypeOrAliasExpose name ->
-                                                                                [ name ]
-
                                                                             Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
                                                                                 case choiceTypeExpose.open of
                                                                                     Nothing ->
-                                                                                        [ choiceTypeExpose.name ]
+                                                                                        []
 
                                                                                     Just _ ->
                                                                                         case moduleTypes.choiceTypes |> FastDict.get choiceTypeExpose.name of
@@ -573,7 +615,7 @@ importsToModuleOriginLookup modulesTypes imports =
                             _ ->
                                 False
                         )
-                            && (syntaxImport.exposes
+                            && (syntaxImport.referenceExposes
                                     |> List.any
                                         (\syntaxExpose ->
                                             (syntaxExpose == operator)
@@ -595,12 +637,10 @@ importsToModuleOriginLookup modulesTypes imports =
                                 exposedFromImportedModuleItself : List String
                                 exposedFromImportedModuleItself =
                                     (moduleTypes.signatures |> FastDict.keys)
-                                        ++ (moduleTypes.typeAliases |> FastDict.keys)
                                         ++ (moduleTypes.choiceTypes
                                                 |> FastDict.foldl
-                                                    (\choiceTypeName choiceType variantNamesSoFar ->
-                                                        choiceTypeName
-                                                            :: (choiceType.variants |> FastDict.keys)
+                                                    (\_ choiceType variantNamesSoFar ->
+                                                        (choiceType.variants |> FastDict.keys)
                                                             ++ variantNamesSoFar
                                                     )
                                                     []
@@ -608,7 +648,61 @@ importsToModuleOriginLookup modulesTypes imports =
                             in
                             FastDict.union
                                 (FastDict.union
-                                    (syntaxImport.exposes
+                                    (syntaxImport.referenceExposes
+                                        |> listMapToFastDict
+                                            (\expose ->
+                                                { key = ( [], expose )
+                                                , value = syntaxImport.moduleName
+                                                }
+                                            )
+                                    )
+                                    (case syntaxImport.alias of
+                                        Nothing ->
+                                            exposedFromImportedModuleItself
+                                                |> listMapToFastDict
+                                                    (\exposeFromImportedModule ->
+                                                        { key = ( syntaxImport.moduleName, exposeFromImportedModule )
+                                                        , value = syntaxImport.moduleName
+                                                        }
+                                                    )
+
+                                        Just importAlias ->
+                                            exposedFromImportedModuleItself
+                                                |> listMapToFastDict
+                                                    (\exposeFromImportedModule ->
+                                                        { key = ( [ importAlias ], exposeFromImportedModule )
+                                                        , value = syntaxImport.moduleName
+                                                        }
+                                                    )
+                                    )
+                                )
+                                soFar
+                )
+                FastDict.empty
+    , typeConstructs =
+        importsNormal
+            |> List.foldl
+                (\syntaxImport soFar ->
+                    case modulesTypes |> FastDict.get syntaxImport.moduleName of
+                        Nothing ->
+                            soFar
+
+                        Just moduleTypes ->
+                            let
+                                exposedFromImportedModuleItself : List String
+                                exposedFromImportedModuleItself =
+                                    (moduleTypes.typeAliases |> FastDict.keys)
+                                        ++ (moduleTypes.choiceTypes
+                                                |> FastDict.foldl
+                                                    (\choiceTypeName _ variantNamesSoFar ->
+                                                        choiceTypeName :: variantNamesSoFar
+                                                    )
+                                                    []
+                                           )
+                            in
+                            FastDict.union
+                                (FastDict.union
+                                    (syntaxImport.typeExposes
                                         |> listMapToFastDict
                                             (\expose ->
                                                 { key = ( [], expose )
@@ -650,15 +744,15 @@ implicitImports :
     List
         { moduleName : Elm.Syntax.ModuleName.ModuleName
         , alias : Maybe String
-        , exposes : List String
+        , typeExposes : List String
+        , referenceExposes : List String
         }
 implicitImports =
     [ { moduleName = [ "Basics" ]
       , alias = Nothing
-      , exposes =
-            [ "Int"
-            , "Float"
-            , "(+)"
+      , typeExposes = [ "Int", "Float", "Order", "Bool", "Never" ]
+      , referenceExposes =
+            [ "(+)"
             , "(-)"
             , "(*)"
             , "(/)"
@@ -678,11 +772,9 @@ implicitImports =
             , "max"
             , "min"
             , "compare"
-            , "Order"
             , "LT"
             , "EQ"
             , "GT"
-            , "Bool"
             , "True"
             , "False"
             , "not"
@@ -719,52 +811,35 @@ implicitImports =
             , "(|>)"
             , "(<<)"
             , "(>>)"
-            , "Never"
             , "never"
             ]
       }
-    , { moduleName = [ "List" ], alias = Nothing, exposes = [ "List", "(::)" ] }
-    , { moduleName = [ "Maybe" ], alias = Nothing, exposes = [ "Maybe", "Just", "Nothing" ] }
-    , { moduleName = [ "Result" ], alias = Nothing, exposes = [ "Result", "Ok", "Err" ] }
-    , { moduleName = [ "String" ], alias = Nothing, exposes = [ "String" ] }
-    , { moduleName = [ "Char" ], alias = Nothing, exposes = [ "Char" ] }
-    , { moduleName = [ "Tuple" ], alias = Nothing, exposes = [] }
-    , { moduleName = [ "Debug" ], alias = Nothing, exposes = [] }
-    , { moduleName = [ "Platform" ], alias = Nothing, exposes = [ "Program" ] }
-    , { moduleName = [ "Platform", "Cmd" ], alias = Just "Cmd", exposes = [ "Cmd" ] }
-    , { moduleName = [ "Platform", "Sub" ], alias = Just "Sub", exposes = [ "Sub" ] }
+    , { moduleName = [ "List" ], alias = Nothing, typeExposes = [ "List" ], referenceExposes = [ "(::)" ] }
+    , { moduleName = [ "Maybe" ], alias = Nothing, typeExposes = [ "Maybe" ], referenceExposes = [ "Just", "Nothing" ] }
+    , { moduleName = [ "Result" ], alias = Nothing, typeExposes = [ "Result" ], referenceExposes = [ "Ok", "Err" ] }
+    , { moduleName = [ "String" ], alias = Nothing, typeExposes = [ "String" ], referenceExposes = [] }
+    , { moduleName = [ "Char" ], alias = Nothing, typeExposes = [ "Char" ], referenceExposes = [] }
+    , { moduleName = [ "Tuple" ], alias = Nothing, typeExposes = [], referenceExposes = [] }
+    , { moduleName = [ "Debug" ], alias = Nothing, typeExposes = [], referenceExposes = [] }
+    , { moduleName = [ "Platform" ], alias = Nothing, typeExposes = [ "Program" ], referenceExposes = [] }
+    , { moduleName = [ "Platform", "Cmd" ], alias = Just "Cmd", typeExposes = [ "Cmd" ], referenceExposes = [] }
+    , { moduleName = [ "Platform", "Sub" ], alias = Just "Sub", typeExposes = [ "Sub" ], referenceExposes = [] }
     ]
-
-
-listMapToFastDict :
-    (a -> { key : comparableKey, value : value })
-    -> List a
-    -> FastDict.Dict comparableKey value
-listMapToFastDict elementToKeyValue list =
-    list
-        |> List.foldl
-            (\element soFar ->
-                let
-                    keyValue : { key : comparableKey, value : value }
-                    keyValue =
-                        element |> elementToKeyValue
-                in
-                soFar |> FastDict.insert keyValue.key keyValue.value
-            )
-            FastDict.empty
 
 
 importsCombine :
     List
         { moduleName : Elm.Syntax.ModuleName.ModuleName
         , alias : Maybe String
-        , exposes : List String
+        , typeExposes : List String
+        , referenceExposes : List String
         }
     ->
         List
             { moduleName : Elm.Syntax.ModuleName.ModuleName
             , alias : Maybe String
-            , exposes : List String
+            , typeExposes : List String
+            , referenceExposes : List String
             }
 importsCombine syntaxImports =
     importsCombineFrom [] syntaxImports
@@ -774,19 +849,22 @@ importsCombineFrom :
     List
         { moduleName : Elm.Syntax.ModuleName.ModuleName
         , alias : Maybe String
-        , exposes : List String
+        , typeExposes : List String
+        , referenceExposes : List String
         }
     ->
         List
             { moduleName : Elm.Syntax.ModuleName.ModuleName
             , alias : Maybe String
-            , exposes : List String
+            , typeExposes : List String
+            , referenceExposes : List String
             }
     ->
         List
             { moduleName : Elm.Syntax.ModuleName.ModuleName
             , alias : Maybe String
-            , exposes : List String
+            , typeExposes : List String
+            , referenceExposes : List String
             }
 importsCombineFrom soFar syntaxImports =
     case syntaxImports of
@@ -812,17 +890,20 @@ importsCombineFrom soFar syntaxImports =
 importsMerge :
     { moduleName : Elm.Syntax.ModuleName.ModuleName
     , alias : Maybe String
-    , exposes : List String
+    , typeExposes : List String
+    , referenceExposes : List String
     }
     ->
         { moduleName : Elm.Syntax.ModuleName.ModuleName
         , alias : Maybe String
-        , exposes : List String
+        , typeExposes : List String
+        , referenceExposes : List String
         }
     ->
         { moduleName : Elm.Syntax.ModuleName.ModuleName
         , alias : Maybe String
-        , exposes : List String
+        , typeExposes : List String
+        , referenceExposes : List String
         }
 importsMerge earlier later =
     { moduleName = earlier.moduleName
@@ -833,8 +914,10 @@ importsMerge earlier later =
 
             Nothing ->
                 later.alias
-    , exposes =
-        exposingCombine earlier.exposes later.exposes
+    , typeExposes =
+        exposingCombine earlier.typeExposes later.typeExposes
+    , referenceExposes =
+        exposingCombine earlier.referenceExposes later.referenceExposes
     }
 
 
@@ -892,7 +975,7 @@ syntaxToType moduleOriginLookup syntaxType =
             Ok (TypeVariable variableName)
 
         Elm.Syntax.TypeAnnotation.Typed (Elm.Syntax.Node.Node _ ( qualification, unqualifiedName )) argumentNodes ->
-            case moduleOriginLookup.references |> FastDict.get ( qualification, unqualifiedName ) of
+            case moduleOriginLookup.typeConstructs |> FastDict.get ( qualification, unqualifiedName ) of
                 Nothing ->
                     Err
                         (case qualification of
@@ -6682,6 +6765,24 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                 typesAndOriginLookup.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced
             , ignoreOperatorIsExposedFromParserAdvanced =
                 typesAndOriginLookup.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
+            , typeConstructs =
+                typesAndOriginLookup.moduleOriginLookup.typeConstructs
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
+                            |> fastDictMapToFastDict
+                                (\typeAliasName _ ->
+                                    { key = ( [], typeAliasName ), value = [] }
+                                )
+                        )
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                            |> FastDict.foldl
+                                (\choiceTypeName _ soFar ->
+                                    soFar
+                                        |> FastDict.insert ( [], choiceTypeName ) []
+                                )
+                                FastDict.empty
+                        )
             , references =
                 typesAndOriginLookup.moduleOriginLookup.references
                     |> FastDict.union
@@ -6707,18 +6808,10 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                 )
                         )
                     |> FastDict.union
-                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
-                            |> fastDictMapToFastDict
-                                (\typeAliasName _ ->
-                                    { key = ( [], typeAliasName ), value = [] }
-                                )
-                        )
-                    |> FastDict.union
                         (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
                             |> FastDict.foldl
-                                (\choiceTypeName info soFar ->
+                                (\_ info soFar ->
                                     soFar
-                                        |> FastDict.insert ( [], choiceTypeName ) []
                                         |> FastDict.union
                                             (info.variants
                                                 |> fastDictMapToFastDict
@@ -10914,6 +11007,24 @@ fastDictMapToFastDict toNewEntry fastDict =
                         toNewEntry key value
                 in
                 soFar |> FastDict.insert entry.key entry.value
+            )
+            FastDict.empty
+
+
+listMapToFastDict :
+    (a -> { key : comparableKey, value : value })
+    -> List a
+    -> FastDict.Dict comparableKey value
+listMapToFastDict elementToKeyValue list =
+    list
+        |> List.foldl
+            (\element soFar ->
+                let
+                    keyValue : { key : comparableKey, value : value }
+                    keyValue =
+                        element |> elementToKeyValue
+                in
+                soFar |> FastDict.insert keyValue.key keyValue.value
             )
             FastDict.empty
 
