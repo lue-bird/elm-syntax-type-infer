@@ -7931,9 +7931,9 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
                     (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
             , substitutions : VariableSubstitutions
             }
-valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueOrFunctionDeclarationToApplySubstitutionTo =
+valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     -- TODO optimize
-    valueOrFunctionDeclarationToApplySubstitutionTo
+    valueAndFunctionDeclarationsToApplySubstitutionTo
         |> listFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
             , declarations = []
