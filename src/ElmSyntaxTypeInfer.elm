@@ -7663,16 +7663,13 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                                 |> fastDictMapToFastDict
                                     (\substitutionVariable substitutionTypeNotVariable ->
                                         { key =
-                                            substitutionVariable
-                                                |> (\typeVariable ->
-                                                        case typeVariable |> typeVariableFromContextMergeConstraintWithPartialCondensedConstraintIfAffected of
-                                                            Ok eqSetVarWithMergedConstraint ->
-                                                                eqSetVarWithMergedConstraint
+                                            case substitutionVariable |> typeVariableFromContextMergeConstraintWithPartialCondensedConstraintIfAffected of
+                                                Ok eqSetVarWithMergedConstraint ->
+                                                    eqSetVarWithMergedConstraint
 
-                                                            Err _ ->
-                                                                -- TODO carry and stop on error
-                                                                typeVariable
-                                                   )
+                                                Err _ ->
+                                                    -- TODO carry and stop on error
+                                                    substitutionVariable
                                         , value =
                                             substitutionTypeNotVariable
                                                 |> typeNotVariableMapVariables
@@ -7701,16 +7698,13 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                                 |> fastDictMapToFastDict
                                     (\partialTypeVariable uses ->
                                         { key =
-                                            partialTypeVariable
-                                                |> (\typeVariable ->
-                                                        case typeVariable |> typeVariableFromContextMergeConstraintWithPartialCondensedConstraintIfAffected of
-                                                            Ok eqSetVarWithMergedConstraint ->
-                                                                eqSetVarWithMergedConstraint
+                                            case partialTypeVariable |> typeVariableFromContextMergeConstraintWithPartialCondensedConstraintIfAffected of
+                                                Ok eqSetVarWithMergedConstraint ->
+                                                    eqSetVarWithMergedConstraint
 
-                                                            Err _ ->
-                                                                -- TODO carry and stop on error
-                                                                typeVariable
-                                                   )
+                                                Err _ ->
+                                                    -- TODO carry and stop on error
+                                                    partialTypeVariable
                                         , value =
                                             uses
                                                 |> FastSet.map
