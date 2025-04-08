@@ -1514,6 +1514,78 @@ suite =
                             )
                         )
             )
+        , Test.test "curried call: Tuple.pair <| \"\""
+            (\() ->
+                Elm.Syntax.Expression.OperatorApplication
+                    "<|"
+                    Elm.Syntax.Infix.Right
+                    (Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
+                    )
+                    (Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    )
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { arguments = []
+                                                            , moduleOrigin = [ "String" ]
+                                                            , name = "String"
+                                                            }
+                                                        )
+                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "curried call: \"\" |> Tuple.pair"
+            (\() ->
+                Elm.Syntax.Expression.OperatorApplication
+                    "|>"
+                    Elm.Syntax.Infix.Left
+                    (Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    )
+                    (Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
+                    )
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { arguments = []
+                                                            , moduleOrigin = [ "String" ]
+                                                            , name = "String"
+                                                            }
+                                                        )
+                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "fully applied implicitly imported variant: Just 1.1"
             (\() ->
                 Elm.Syntax.Expression.Application
