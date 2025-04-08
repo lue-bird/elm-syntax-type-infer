@@ -7416,6 +7416,37 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
             )
 
 
+equivalentVariablesGetSetThatContains :
+    TypeVariableFromContext
+    -> List (FastSet.Set TypeVariableFromContext)
+    -> Maybe (FastSet.Set TypeVariableFromContext)
+equivalentVariablesGetSetThatContains needle equivalentVariables =
+    equivalentVariables
+        |> listMapAndFirstJust
+            (\equivalentVariableSet ->
+                if equivalentVariableSet |> FastSet.member needle then
+                    Just equivalentVariableSet
+
+                else
+                    Nothing
+            )
+
+
+listMapAndFirstJust : (a -> Maybe b) -> List a -> Maybe b
+listMapAndFirstJust elementToMaybe list =
+    case list of
+        [] ->
+            Nothing
+
+        head :: tail ->
+            case elementToMaybe head of
+                Just headValue ->
+                    Just headValue
+
+                Nothing ->
+                    listMapAndFirstJust elementToMaybe tail
+
+
 valueOrFunctionDeclarationsApplySubstitutions :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , usesOfTypeVariablesFromPartiallyInferredDeclarations :
@@ -7456,116 +7487,111 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                             }
                             (\partialTypeVariable uses soFar ->
                                 case
-                                    -- TODO this is extremely wasteful
-                                    createEquivalentVariablesToCondensedVariableLookup
-                                        soFar.equivalentVariables
+                                    soFar.equivalentVariables
+                                        |> equivalentVariablesGetSetThatContains partialTypeVariable
+                                        |> Maybe.andThen (\set -> set |> equivalentVariablesCreateCondensedVariable |> Result.toMaybe)
                                 of
-                                    Err error ->
-                                        Err error
+                                    Nothing ->
+                                        Ok soFar
 
-                                    Ok variableToCondensedLookup ->
-                                        case variableToCondensedLookup |> FastDict.get partialTypeVariable of
+                                    Just condensedPartialTypeVariable ->
+                                        case
+                                            condensedPartialTypeVariable
+                                                |> typeVariableIgnoringContext
+                                                |> typeVariableConstraint
+                                        of
                                             Nothing ->
                                                 Ok soFar
 
-                                            Just condensedPartialTypeVariable ->
-                                                case
-                                                    condensedPartialTypeVariable
-                                                        |> typeVariableIgnoringContext
-                                                        |> typeVariableConstraint
-                                                of
-                                                    Nothing ->
-                                                        Ok soFar
+                                            Just constraintToAdd ->
+                                                let
+                                                    addConstraint : TypeVariableFromContext -> Result String TypeVariableFromContext
+                                                    addConstraint ( typeVariableContext, typeVariableWithoutContext ) =
+                                                        Result.map
+                                                            (\newTypeVariableWithoutContext ->
+                                                                ( typeVariableContext
+                                                                , typeVariableWithoutContext
+                                                                    |> typeVariableNameReplaceMaybeConstraint
+                                                                        newTypeVariableWithoutContext
+                                                                )
+                                                            )
+                                                            (maybeTypeVariableConstraintMerge
+                                                                (typeVariableWithoutContext |> typeVariableConstraint)
+                                                                (Just constraintToAdd)
+                                                            )
 
-                                                    Just constraintToAdd ->
+                                                    partialUsesWithUpdatedConstraintsOrError : Result String (FastSet.Set TypeVariableFromContext)
+                                                    partialUsesWithUpdatedConstraintsOrError =
+                                                        uses
+                                                            |> -- TODO optimize
+                                                               FastSet.toList
+                                                            |> listFoldlWhileOkFrom
+                                                                FastSet.empty
+                                                                (\use usesWithUpdatedConstraintsSoFar ->
+                                                                    Result.map
+                                                                        (\useWithUpdatedConstraint ->
+                                                                            usesWithUpdatedConstraintsSoFar
+                                                                                |> FastSet.insert useWithUpdatedConstraint
+                                                                        )
+                                                                        (use |> addConstraint)
+                                                                )
+                                                in
+                                                case partialUsesWithUpdatedConstraintsOrError of
+                                                    Err error ->
+                                                        Err error
+
+                                                    Ok partialUsesWithUpdatedConstraints ->
                                                         let
-                                                            addConstraint : TypeVariableFromContext -> Result String TypeVariableFromContext
-                                                            addConstraint ( typeVariableContext, typeVariableWithoutContext ) =
-                                                                Result.map
-                                                                    (\newTypeVariableWithoutContext ->
-                                                                        ( typeVariableContext
-                                                                        , typeVariableWithoutContext
-                                                                            |> typeVariableNameReplaceMaybeConstraint
-                                                                                newTypeVariableWithoutContext
-                                                                        )
-                                                                    )
-                                                                    (maybeTypeVariableConstraintMerge
-                                                                        (typeVariableWithoutContext |> typeVariableConstraint)
-                                                                        (Just constraintToAdd)
-                                                                    )
+                                                            addConstraintIfPartialUse : TypeVariableFromContext -> TypeVariableFromContext
+                                                            addConstraintIfPartialUse typeVariable =
+                                                                if uses |> FastSet.member typeVariable then
+                                                                    case typeVariable |> addConstraint of
+                                                                        Ok typeVariableWithUpdatedConstraint ->
+                                                                            typeVariableWithUpdatedConstraint
 
-                                                            partialUsesWithUpdatedConstraintsOrError : Result String (FastSet.Set TypeVariableFromContext)
-                                                            partialUsesWithUpdatedConstraintsOrError =
-                                                                uses
-                                                                    |> -- TODO optimize
-                                                                       FastSet.toList
-                                                                    |> listFoldlWhileOkFrom
-                                                                        FastSet.empty
-                                                                        (\use usesWithUpdatedConstraintsSoFar ->
-                                                                            Result.map
-                                                                                (\useWithUpdatedConstraint ->
-                                                                                    usesWithUpdatedConstraintsSoFar
-                                                                                        |> FastSet.insert useWithUpdatedConstraint
-                                                                                )
-                                                                                (use |> addConstraint)
-                                                                        )
-                                                        in
-                                                        case partialUsesWithUpdatedConstraintsOrError of
-                                                            Err error ->
-                                                                Err error
-
-                                                            Ok partialUsesWithUpdatedConstraints ->
-                                                                let
-                                                                    addConstraintIfPartialUse : TypeVariableFromContext -> TypeVariableFromContext
-                                                                    addConstraintIfPartialUse typeVariable =
-                                                                        if uses |> FastSet.member typeVariable then
-                                                                            case typeVariable |> addConstraint of
-                                                                                Ok typeVariableWithUpdatedConstraint ->
-                                                                                    typeVariableWithUpdatedConstraint
-
-                                                                                Err _ ->
-                                                                                    -- would have errored in partialUsesWithUpdatedConstraints already
-                                                                                    typeVariable
-
-                                                                        else
+                                                                        Err _ ->
+                                                                            -- would have errored in partialUsesWithUpdatedConstraints already
                                                                             typeVariable
-                                                                in
-                                                                -- TODO avoid accidental name overlaps?
-                                                                Ok
-                                                                    { declarations =
-                                                                        soFar.declarations
-                                                                            |> List.map
-                                                                                (\declaration ->
-                                                                                    declaration
-                                                                                        |> declarationValueOrFunctionMapTypeVariables
-                                                                                            addConstraintIfPartialUse
-                                                                                )
-                                                                    , variableToTypeSubstitutions =
-                                                                        soFar.variableToTypeSubstitutions
-                                                                            |> fastDictMapToFastDict
-                                                                                (\substitutionVariable substitutionTypeNotVariable ->
-                                                                                    { key = substitutionVariable |> addConstraintIfPartialUse
-                                                                                    , value =
-                                                                                        substitutionTypeNotVariable
-                                                                                            |> typeNotVariableMapVariables
-                                                                                                addConstraintIfPartialUse
-                                                                                    }
-                                                                                )
-                                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                                                        soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                                            |> FastDict.update partialTypeVariable
-                                                                                (\partialUsesWithOldConstraintsOrNothing ->
-                                                                                    partialUsesWithOldConstraintsOrNothing
-                                                                                        |> Maybe.map (\_ -> partialUsesWithUpdatedConstraints)
-                                                                                )
-                                                                    , equivalentVariables =
-                                                                        soFar.equivalentVariables
-                                                                            |> List.map
-                                                                                (\equivalentVariableSet ->
-                                                                                    equivalentVariableSet
-                                                                                        |> FastSet.map addConstraintIfPartialUse
-                                                                                )
-                                                                    }
+
+                                                                else
+                                                                    typeVariable
+                                                        in
+                                                        -- TODO avoid accidental name overlaps?
+                                                        Ok
+                                                            { declarations =
+                                                                soFar.declarations
+                                                                    |> List.map
+                                                                        (\declaration ->
+                                                                            declaration
+                                                                                |> declarationValueOrFunctionMapTypeVariables
+                                                                                    addConstraintIfPartialUse
+                                                                        )
+                                                            , variableToTypeSubstitutions =
+                                                                soFar.variableToTypeSubstitutions
+                                                                    |> fastDictMapToFastDict
+                                                                        (\substitutionVariable substitutionTypeNotVariable ->
+                                                                            { key = substitutionVariable |> addConstraintIfPartialUse
+                                                                            , value =
+                                                                                substitutionTypeNotVariable
+                                                                                    |> typeNotVariableMapVariables
+                                                                                        addConstraintIfPartialUse
+                                                                            }
+                                                                        )
+                                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                    |> FastDict.update partialTypeVariable
+                                                                        (\partialUsesWithOldConstraintsOrNothing ->
+                                                                            partialUsesWithOldConstraintsOrNothing
+                                                                                |> Maybe.map (\_ -> partialUsesWithUpdatedConstraints)
+                                                                        )
+                                                            , equivalentVariables =
+                                                                soFar.equivalentVariables
+                                                                    |> List.map
+                                                                        (\equivalentVariableSet ->
+                                                                            equivalentVariableSet
+                                                                                |> FastSet.map addConstraintIfPartialUse
+                                                                        )
+                                                            }
                             )
             in
             case withConstrainedPartialTypeVariablesOrError of
