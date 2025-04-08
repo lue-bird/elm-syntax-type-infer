@@ -42,10 +42,18 @@ suite =
                                     exampleModuleOriginLookup
                                 |> .types
                         }
-                    |> Result.map (List.map .type_)
+                    |> Result.andThen
+                        (\declarationsTyped ->
+                            case declarationsTyped |> FastDict.get "majorVersions" of
+                                Nothing ->
+                                    Err "typed declaration not found"
+
+                                Just majorVersionDeclarationTyped ->
+                                    Ok majorVersionDeclarationTyped.type_
+                        )
                     |> Expect.equal
                         (Ok
-                            [ ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
                                     { moduleOrigin = [ "List" ]
                                     , name = "List"
@@ -55,7 +63,7 @@ suite =
                                         ]
                                     }
                                 )
-                            ]
+                            )
                         )
             )
         , Test.test "unify integer and float in list"
@@ -2179,23 +2187,32 @@ suite =
                                     exampleModuleOriginLookup
                                 |> .types
                         }
-                    |> Result.map (List.map .type_)
+                    |> Result.map
+                        (\declarationsTyped ->
+                            declarationsTyped
+                                |> FastDict.map (\_ -> .type_)
+                                |> FastDict.toList
+                        )
                     |> Expect.equal
                         (Ok
-                            [ ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Basics" ]
-                                    , name = "Float"
-                                    , arguments = []
-                                    }
-                                )
-                            , ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Basics" ]
-                                    , name = "Float"
-                                    , arguments = []
-                                    }
-                                )
+                            [ ( "a"
+                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                    (ElmSyntaxTypeInfer.TypeConstruct
+                                        { moduleOrigin = [ "Basics" ]
+                                        , name = "Float"
+                                        , arguments = []
+                                        }
+                                    )
+                              )
+                            , ( "b"
+                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                    (ElmSyntaxTypeInfer.TypeConstruct
+                                        { moduleOrigin = [ "Basics" ]
+                                        , name = "Float"
+                                        , arguments = []
+                                        }
+                                    )
+                              )
                             ]
                         )
             )
@@ -2253,11 +2270,16 @@ suite =
                                     exampleModuleOriginLookup
                                 |> .types
                         }
-                    |> Result.map (List.map .type_)
+                    |> Result.map
+                        (\declarationsTyped ->
+                            declarationsTyped
+                                |> FastDict.map (\_ -> .type_)
+                                |> FastDict.toList
+                        )
                     |> Expect.equal
                         (Ok
-                            [ ElmSyntaxTypeInfer.TypeVariable "numberDeclarationResult"
-                            , ElmSyntaxTypeInfer.TypeVariable "numberType"
+                            [ ( "a", ElmSyntaxTypeInfer.TypeVariable "numberDeclarationResult" )
+                            , ( "b", ElmSyntaxTypeInfer.TypeVariable "numberType" )
                             ]
                         )
             )
@@ -2332,17 +2354,14 @@ expressionToInferredType expression =
         |> Result.andThen toSingleInferredDeclaration
 
 
-toSingleInferredDeclaration : List { inferred_ | type_ : type_ } -> Result String type_
+toSingleInferredDeclaration : FastDict.Dict String { inferred_ | type_ : type_ } -> Result String type_
 toSingleInferredDeclaration declarationsInferred =
-    case declarationsInferred of
-        [ declarationInferred ] ->
-            Ok declarationInferred.type_
+    case declarationsInferred |> FastDict.getMin of
+        Nothing ->
+            Err "no typed declarations found"
 
-        [] ->
-            Err "no resulting inferred declaration"
-
-        _ :: _ :: _ ->
-            Err "not exactly 1 resulting inferred declaration"
+        Just ( _, declarationTyped ) ->
+            Ok declarationTyped.type_
 
 
 exampleModuleOriginLookupImportingProcess : ElmSyntaxTypeInfer.ModuleOriginLookup

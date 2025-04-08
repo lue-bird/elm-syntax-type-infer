@@ -6639,9 +6639,9 @@ valueOrFunctionDeclarations :
     ->
         Result
             String
-            (List
-                { name : String
-                , nameRange : Elm.Syntax.Range.Range
+            (FastDict.Dict
+                String
+                { nameRange : Elm.Syntax.Range.Range
                 , documentation :
                     Maybe
                         { content : String
@@ -6746,7 +6746,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
         |> listFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
             , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
-            , declarationsTypedReverse = []
+            , declarationsTyped = FastDict.empty
             }
             (\syntaxDeclarationExpression soFar ->
                 let
@@ -6822,37 +6822,37 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                 resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                         , substitutions =
                                             soFarAndArgumentAndResultAndTypeUnifySubstitutions
-                                        , declarationsTypedReverse =
-                                            { name = name
-                                            , nameRange = implementation.name |> Elm.Syntax.Node.range
-                                            , documentation =
-                                                case syntaxDeclarationExpression.documentation of
-                                                    Nothing ->
-                                                        Nothing
+                                        , declarationsTyped =
+                                            FastDict.insert name
+                                                { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                , documentation =
+                                                    case syntaxDeclarationExpression.documentation of
+                                                        Nothing ->
+                                                            Nothing
 
-                                                    Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
-                                                        Just
-                                                            { range = documentationRange
-                                                            , content = documentationContent
-                                                            }
-                                            , signature =
-                                                case syntaxDeclarationExpression.signature of
-                                                    Nothing ->
-                                                        Nothing
+                                                        Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
+                                                            Just
+                                                                { range = documentationRange
+                                                                , content = documentationContent
+                                                                }
+                                                , signature =
+                                                    case syntaxDeclarationExpression.signature of
+                                                        Nothing ->
+                                                            Nothing
 
-                                                    Just (Elm.Syntax.Node.Node signatureRange signature) ->
-                                                        Just
-                                                            { range = signatureRange
-                                                            , nameRange = signature.name |> Elm.Syntax.Node.range
-                                                            , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
-                                                            , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
-                                                            }
-                                            , result = resultInferred.node
-                                            , type_ = fullType
-                                            , parameters =
-                                                parameters.nodesReverse |> List.reverse
-                                            }
-                                                :: soFar.declarationsTypedReverse
+                                                        Just (Elm.Syntax.Node.Node signatureRange signature) ->
+                                                            Just
+                                                                { range = signatureRange
+                                                                , nameRange = signature.name |> Elm.Syntax.Node.range
+                                                                , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
+                                                                , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
+                                                                }
+                                                , result = resultInferred.node
+                                                , type_ = fullType
+                                                , parameters =
+                                                    parameters.nodesReverse |> List.reverse
+                                                }
+                                                soFar.declarationsTyped
                                         }
                                     )
                                     (variableSubstitutionsMerge4 declarationTypes
@@ -6906,8 +6906,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
             )
         |> Result.andThen
             (\intermediate ->
-                intermediate.declarationsTypedReverse
-                    |> List.reverse
+                intermediate.declarationsTyped
                     |> valueOrFunctionDeclarationsApplySubstitutions
                         { declarationTypes = declarationTypes
                         , substitutions = intermediate.substitutions
@@ -6918,13 +6917,15 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
                 fullySubstitutedDeclarationsTypedWithContext
-                    |> List.map declarationValueOrFunctionDisambiguateTypeVariables
+                    |> FastDict.map
+                        (\_ declaration ->
+                            declaration |> declarationValueOrFunctionInfoDisambiguateTypeVariables
+                        )
             )
 
 
-type alias ValueOrFunctionDeclaration type_ =
-    { name : String
-    , nameRange : Elm.Syntax.Range.Range
+type alias ValueOrFunctionDeclarationInfo type_ =
+    { nameRange : Elm.Syntax.Range.Range
     , documentation :
         Maybe
             { content : String
@@ -6951,16 +6952,16 @@ type alias ModuleLevelDeclarationTypesAvailableInModule =
         ModuleTypes
 
 
-declarationValueOrFunctionDisambiguateTypeVariables :
-    ValueOrFunctionDeclaration (Type TypeVariableFromContext)
-    -> ValueOrFunctionDeclaration (Type String)
-declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
+declarationValueOrFunctionInfoDisambiguateTypeVariables :
+    ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+    -> ValueOrFunctionDeclarationInfo (Type String)
+declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : FastDict.Dict TypeVariableFromContext String
         globalTypeVariableDisambiguationLookup =
             typeVariablesFromContextToDisambiguationLookup
-                (declarationValueOrFunction
-                    |> declarationValueOrFunctionContainedGlobalTypeVariables identity
+                (declarationValueOrFunctionInfo
+                    |> declarationValueOrFunctionInfoContainedGlobalTypeVariables identity
                     |> FastSet.map
                         (\( context, name ) ->
                             ( context |> List.reverse |> List.drop 1
@@ -6969,8 +6970,8 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
                         )
                 )
     in
-    declarationValueOrFunction
-        |> declarationValueOrFunctionMapTypeVariables
+    declarationValueOrFunctionInfo
+        |> declarationValueOrFunctionInfoMapTypeVariables
             (\( context, name ) ->
                 globalTypeVariableDisambiguationLookup
                     |> FastDict.get
@@ -6982,11 +6983,11 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunction =
             )
 
 
-declarationValueOrFunctionContainedGlobalTypeVariables :
+declarationValueOrFunctionInfoContainedGlobalTypeVariables :
     (type_ -> Type comparableTypeVariable)
-    -> ValueOrFunctionDeclaration type_
+    -> ValueOrFunctionDeclarationInfo type_
     -> FastSet.Set comparableTypeVariable
-declarationValueOrFunctionContainedGlobalTypeVariables typedNodeTypeToExtractVariablesFrom declarationValueOrFunction =
+declarationValueOrFunctionInfoContainedGlobalTypeVariables typedNodeTypeToExtractVariablesFrom declarationValueOrFunction =
     FastSet.union
         (declarationValueOrFunction.parameters
             |> List.foldl
@@ -7496,8 +7497,17 @@ valueOrFunctionDeclarationsApplySubstitutions :
             (FastSet.Set TypeVariableFromContext)
     , substitutions : VariableSubstitutions
     }
-    -> List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
-    -> Result String (List (ValueOrFunctionDeclaration (Type TypeVariableFromContext)))
+    ->
+        FastDict.Dict
+            String
+            (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+    ->
+        Result
+            String
+            (FastDict.Dict
+                String
+                (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+            )
 valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsSoFar =
     case state.substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
@@ -7592,10 +7602,10 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                                         }
                                         (declarationValueOrFunctionsSoFar
                                             |> -- TODO optimize
-                                               List.map
-                                                (\declarationValueOrFunctionToCondenseVariablesIn ->
+                                               FastDict.map
+                                                (\_ declarationValueOrFunctionToCondenseVariablesIn ->
                                                     declarationValueOrFunctionToCondenseVariablesIn
-                                                        |> declarationValueOrFunctionMapTypeVariables
+                                                        |> declarationValueOrFunctionInfoMapTypeVariables
                                                             (\variable ->
                                                                 variableToCondensedLookup
                                                                     |> FastDict.get variable
@@ -7720,14 +7730,17 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                         declarationsUsingCondensedOrError :
                             Result
                                 String
-                                (List (ValueOrFunctionDeclaration (Type TypeVariableFromContext)))
+                                (FastDict.Dict
+                                    String
+                                    (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+                                )
                         declarationsUsingCondensedOrError =
                             declarationValueOrFunctionsSoFar
                                 |> -- TODO optimize
-                                   List.map
-                                    (\declarationValueOrFunctionToCondenseVariablesIn ->
+                                   FastDict.map
+                                    (\_ declarationValueOrFunctionToCondenseVariablesIn ->
                                         declarationValueOrFunctionToCondenseVariablesIn
-                                            |> declarationValueOrFunctionMapTypeVariables
+                                            |> declarationValueOrFunctionInfoMapTypeVariables
                                                 (\typeVariable ->
                                                     case typeVariable |> typeVariableFromContextMergeConstraintWithPartialCondensedConstraintIfAffected of
                                                         Ok eqSetVarWithMergedConstraint ->
@@ -7922,31 +7935,36 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
         }
-    -> List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+    ->
+        FastDict.Dict
+            String
+            (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
     ->
         Result
             String
             { declarations :
-                List
-                    (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+                FastDict.Dict
+                    String
+                    (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     -- TODO optimize
     valueAndFunctionDeclarationsToApplySubstitutionTo
-        |> listFoldlWhileOkFrom
+        |> fastDictFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
-            , declarations = []
+            , declarations = FastDict.empty
             }
-            (\declarationToSubstituteIn soFar ->
+            (\declarationName declarationToSubstituteIn soFar ->
                 Result.andThen
                     (\declarationSubstituted ->
                         Result.map
                             (\fullSubstitutions ->
                                 { substitutions = fullSubstitutions
                                 , declarations =
-                                    declarationSubstituted.declaration
-                                        :: soFar.declarations
+                                    FastDict.insert declarationName
+                                        declarationSubstituted.declaration
+                                        soFar.declarations
                                 }
                             )
                             (variableSubstitutionsMerge declarationTypes
@@ -7955,16 +7973,10 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes sub
                             )
                     )
                     (declarationToSubstituteIn
-                        |> declarationValueOrFunctionSubstituteVariableByNotVariable
+                        |> declarationValueOrFunctionInfoSubstituteVariableByNotVariable
                             declarationTypes
                             substitutionToApply
                     )
-            )
-        |> Result.map
-            (\substituted ->
-                { declarations = substituted.declarations |> List.reverse
-                , substitutions = substituted.substitutions
-                }
             )
 
 
@@ -8131,20 +8143,20 @@ usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables variableTo
             FastDict.empty
 
 
-declarationValueOrFunctionSubstituteVariableByNotVariable :
+declarationValueOrFunctionInfoSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         { variable : TypeVariableFromContext
         , type_ : TypeNotVariable TypeVariableFromContext
         }
-    -> ValueOrFunctionDeclaration (Type TypeVariableFromContext)
+    -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
     ->
         Result
             String
-            { declaration : ValueOrFunctionDeclaration (Type TypeVariableFromContext)
+            { declaration : ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
             , substitutions : VariableSubstitutions
             }
-declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
+declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
     if replacement.type_ |> typeNotVariableContainedVariables |> FastSet.member replacement.variable then
         if replacement.type_ |> typeNotVariableIsEquivalentToTypeVariable declarationTypes then
             -- is ok when type_ is an identity type alias
@@ -8168,8 +8180,7 @@ declarationValueOrFunctionSubstituteVariableByNotVariable declarationTypes repla
                 Result.map
                     (\fullSubstitutions ->
                         { declaration =
-                            { name = declarationValueOrFunctionSoFar.name
-                            , nameRange = declarationValueOrFunctionSoFar.nameRange
+                            { nameRange = declarationValueOrFunctionSoFar.nameRange
                             , documentation = declarationValueOrFunctionSoFar.documentation
                             , signature = declarationValueOrFunctionSoFar.signature
                             , parameters =
@@ -8365,13 +8376,12 @@ typeNotVariablePrintRoughly typeNotVariable =
                 ++ " }"
 
 
-declarationValueOrFunctionMapTypeVariables :
+declarationValueOrFunctionInfoMapTypeVariables :
     (typeVariable -> changedTypeVariable)
-    -> ValueOrFunctionDeclaration (Type typeVariable)
-    -> ValueOrFunctionDeclaration (Type changedTypeVariable)
-declarationValueOrFunctionMapTypeVariables variableChange declarationValueOrFunctionSoFar =
-    { name = declarationValueOrFunctionSoFar.name
-    , nameRange = declarationValueOrFunctionSoFar.nameRange
+    -> ValueOrFunctionDeclarationInfo (Type typeVariable)
+    -> ValueOrFunctionDeclarationInfo (Type changedTypeVariable)
+declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOrFunctionSoFar =
+    { nameRange = declarationValueOrFunctionSoFar.nameRange
     , documentation = declarationValueOrFunctionSoFar.documentation
     , signature =
         declarationValueOrFunctionSoFar.signature

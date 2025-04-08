@@ -32,18 +32,21 @@ import ElmSyntaxTypeInfer
                     exampleModuleOriginLookup
                 |> .types
         }
-    |> Result.map (List.map .type_)
 -->
 Ok
-    [ ElmSyntaxTypeInfer.TypeNotVariable
-        (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "List" ]
-            , name = "List"
-            , arguments =
-                [ ElmSyntaxTypeInfer.TypeVariable "number" ]
-            }
-        )
-    ]
+    (FastDict.singleton "majorVersions"
+        { type_ =
+            ElmSyntaxTypeInfer.TypeNotVariable
+                (ElmSyntaxTypeInfer.TypeConstruct
+                    { moduleOrigin = [ "List" ]
+                    , name = "List"
+                    , arguments =
+                        [ ElmSyntaxTypeInfer.TypeVariable "number" ]
+                    }
+                )
+        ...
+        }
+    )
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
