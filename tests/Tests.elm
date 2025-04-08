@@ -1514,6 +1514,46 @@ suite =
                             )
                         )
             )
+        , Test.test "fully applied implicitly imported variant: Just 1.1"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [] "Just")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Floatable 1.1)
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Maybe" ]
+                                    , name = "Maybe"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Float"
+                                                , arguments = []
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "fully applied imported call: Process.sleep 1.1"
             (\() ->
                 Elm.Syntax.Expression.Application
