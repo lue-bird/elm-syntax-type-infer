@@ -62,6 +62,7 @@ exampleModuleOriginLookup =
 -   add more tests
 -   (mutually) recursive type aliases can run into an infinite loop
 -   type infer record type alias constructor function reference expression
+-   optimize amount of partials in play. ALWAYS use existing types where available without intermediate steps (applied to let and module scope declarations)
 -   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
 
 ### performance problems?
