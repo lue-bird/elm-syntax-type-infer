@@ -4022,7 +4022,10 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         )
                 )
                 (toNegate
-                    |> expressionTypeInfer context
+                    |> expressionTypeInfer
+                        (context
+                            |> expressionContextToInPath "negated"
+                        )
                 )
 
         Elm.Syntax.Expression.RecordAccess recordNode fieldNameNode ->
@@ -4079,7 +4082,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             )
                         )
                 )
-                (expressionTypeInfer context recordNode)
+                (recordNode
+                    |> expressionTypeInfer
+                        (context
+                            |> expressionContextToInPath "record"
+                        )
+                )
 
         Elm.Syntax.Expression.OperatorApplication operator _ left right ->
             expressionInfixOperationTypeInfer context
@@ -5896,10 +5904,16 @@ expressionInfixOperationTypeInfer context infixOperation =
             infixOperation.operator
         )
         (infixOperation.left
-            |> expressionTypeInfer context
+            |> expressionTypeInfer
+                (context
+                    |> expressionContextToInPath "left"
+                )
         )
         (infixOperation.right
-            |> expressionTypeInfer context
+            |> expressionTypeInfer
+                (context
+                    |> expressionContextToInPath "right"
+                )
         )
 
 
