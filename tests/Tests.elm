@@ -2256,8 +2256,8 @@ suite =
                     |> Result.map (List.map .type_)
                     |> Expect.equal
                         (Ok
-                            [ ElmSyntaxTypeInfer.TypeVariable "number"
-                            , ElmSyntaxTypeInfer.TypeVariable "number"
+                            [ ElmSyntaxTypeInfer.TypeVariable "numberDeclarationResult"
+                            , ElmSyntaxTypeInfer.TypeVariable "numberType"
                             ]
                         )
             )

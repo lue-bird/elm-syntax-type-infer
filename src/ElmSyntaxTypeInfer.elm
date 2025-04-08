@@ -130,8 +130,8 @@ type TypeVariableConstraint
     | TypeVariableConstraintCompappend
 
 
-typeVariableFromContextName : TypeVariableFromContext -> String
-typeVariableFromContextName ( _, name ) =
+typeVariableIgnoringContext : TypeVariableFromContext -> String
+typeVariableIgnoringContext ( _, name ) =
     name
 
 
@@ -1033,7 +1033,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
     case type_ of
         TypeVariable typeVariable ->
             if typeVariable == replacement.variable then
-                case replacement.variable |> typeVariableFromContextName |> typeVariableConstraint of
+                case replacement.variable |> typeVariableIgnoringContext |> typeVariableConstraint of
                     Nothing ->
                         Ok
                             { type_ = TypeNotVariable replacement.type_
@@ -1063,7 +1063,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify appendable type variable with types other than String/List _"
 
                             TypeVariableConstraintComparable ->
-                                if replacement.type_ |> typeNotVariableIsComparable (\var -> var |> typeVariableFromContextName |> typeVariableConstraint) then
+                                if replacement.type_ |> typeNotVariableIsComparable (\var -> var |> typeVariableIgnoringContext |> typeVariableConstraint) then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1073,7 +1073,7 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
 
                             TypeVariableConstraintCompappend ->
-                                if replacement.type_ |> typeNotVariableIsCompappend (\var -> var |> typeVariableFromContextName |> typeVariableConstraint) then
+                                if replacement.type_ |> typeNotVariableIsCompappend (\var -> var |> typeVariableIgnoringContext |> typeVariableConstraint) then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -2688,9 +2688,9 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                 newBaseVariable =
                     ( -- creating a new variable safely
                       "_of"
-                        :: ([ (aRecordExtension.recordVariable |> typeVariableFromContextName)
+                        :: ([ (aRecordExtension.recordVariable |> typeVariableIgnoringContext)
                                 :: (aRecordExtension.recordVariable |> Tuple.first)
-                            , (bRecordExtension.recordVariable |> typeVariableFromContextName)
+                            , (bRecordExtension.recordVariable |> typeVariableIgnoringContext)
                                 :: (bRecordExtension.recordVariable |> Tuple.first)
                             ]
                                 |> List.sort
@@ -7427,67 +7427,190 @@ valueOrFunctionDeclarationsApplySubstitutions :
     -> List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
     -> Result String (List (ValueOrFunctionDeclaration (Type TypeVariableFromContext)))
 valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsSoFar =
-    declarationValueOrFunctionsSoFar
-        |> listMapAndCombineOk
-            (\declarationTyped ->
-                declarationTyped
-                    |> valueOrFunctionDeclarationApplySubstitutions
-                        state
-            )
-
-
-valueOrFunctionDeclarationApplySubstitutions :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , usesOfTypeVariablesFromPartiallyInferredDeclarations :
-        FastDict.Dict
-            TypeVariableFromContext
-            (FastSet.Set TypeVariableFromContext)
-    , substitutions : VariableSubstitutions
-    }
-    -> ValueOrFunctionDeclaration (Type TypeVariableFromContext)
-    ->
-        Result
-            String
-            (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
-valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoFar =
     case state.substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            case
-                createEquivalentVariablesToCondensedVariableLookup
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-            of
+            let
+                withConstrainedPartialTypeVariablesOrError :
+                    Result
+                        String
+                        { declarations : List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+                        , usesOfTypeVariablesFromPartiallyInferredDeclarations :
+                            FastDict.Dict
+                                TypeVariableFromContext
+                                (FastSet.Set TypeVariableFromContext)
+                        , variableToTypeSubstitutions :
+                            FastDict.Dict
+                                TypeVariableFromContext
+                                (TypeNotVariable TypeVariableFromContext)
+                        , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
+                        }
+                withConstrainedPartialTypeVariablesOrError =
+                    state.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                        |> fastDictFoldlWhileOkFrom
+                            { declarations = declarationValueOrFunctionsSoFar
+                            , variableToTypeSubstitutions = state.substitutions.variableToType
+                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                state.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                            , equivalentVariables =
+                                equivalentVariableSet0 :: equivalentVariableSet1Up
+                            }
+                            (\partialTypeVariable uses soFar ->
+                                case
+                                    -- TODO this is extremely wasteful
+                                    createEquivalentVariablesToCondensedVariableLookup
+                                        soFar.equivalentVariables
+                                of
+                                    Err error ->
+                                        Err error
+
+                                    Ok variableToCondensedLookup ->
+                                        case variableToCondensedLookup |> FastDict.get partialTypeVariable of
+                                            Nothing ->
+                                                Ok soFar
+
+                                            Just condensedPartialTypeVariable ->
+                                                case
+                                                    condensedPartialTypeVariable
+                                                        |> typeVariableIgnoringContext
+                                                        |> typeVariableConstraint
+                                                of
+                                                    Nothing ->
+                                                        Ok soFar
+
+                                                    Just constraintToAdd ->
+                                                        let
+                                                            addConstraint : TypeVariableFromContext -> Result String TypeVariableFromContext
+                                                            addConstraint ( typeVariableContext, typeVariableWithoutContext ) =
+                                                                Result.map
+                                                                    (\newTypeVariableWithoutContext ->
+                                                                        ( typeVariableContext
+                                                                        , typeVariableWithoutContext
+                                                                            |> typeVariableNameReplaceMaybeConstraint
+                                                                                newTypeVariableWithoutContext
+                                                                        )
+                                                                    )
+                                                                    (maybeTypeVariableConstraintMerge
+                                                                        (typeVariableWithoutContext |> typeVariableConstraint)
+                                                                        (Just constraintToAdd)
+                                                                    )
+
+                                                            partialUsesWithUpdatedConstraintsOrError : Result String (FastSet.Set TypeVariableFromContext)
+                                                            partialUsesWithUpdatedConstraintsOrError =
+                                                                uses
+                                                                    |> -- TODO optimize
+                                                                       FastSet.toList
+                                                                    |> listFoldlWhileOkFrom
+                                                                        FastSet.empty
+                                                                        (\use usesWithUpdatedConstraintsSoFar ->
+                                                                            Result.map
+                                                                                (\useWithUpdatedConstraint ->
+                                                                                    usesWithUpdatedConstraintsSoFar
+                                                                                        |> FastSet.insert useWithUpdatedConstraint
+                                                                                )
+                                                                                (use |> addConstraint)
+                                                                        )
+                                                        in
+                                                        case partialUsesWithUpdatedConstraintsOrError of
+                                                            Err error ->
+                                                                Err error
+
+                                                            Ok partialUsesWithUpdatedConstraints ->
+                                                                let
+                                                                    addConstraintIfPartialUse : TypeVariableFromContext -> TypeVariableFromContext
+                                                                    addConstraintIfPartialUse typeVariable =
+                                                                        if uses |> FastSet.member typeVariable then
+                                                                            case typeVariable |> addConstraint of
+                                                                                Ok typeVariableWithUpdatedConstraint ->
+                                                                                    typeVariableWithUpdatedConstraint
+
+                                                                                Err _ ->
+                                                                                    -- would have errored in partialUsesWithUpdatedConstraints already
+                                                                                    typeVariable
+
+                                                                        else
+                                                                            typeVariable
+                                                                in
+                                                                -- TODO avoid accidental name overlaps?
+                                                                Ok
+                                                                    { declarations =
+                                                                        soFar.declarations
+                                                                            |> List.map
+                                                                                (\declaration ->
+                                                                                    declaration
+                                                                                        |> declarationValueOrFunctionMapTypeVariables
+                                                                                            addConstraintIfPartialUse
+                                                                                )
+                                                                    , variableToTypeSubstitutions =
+                                                                        soFar.variableToTypeSubstitutions
+                                                                            |> fastDictMapToFastDict
+                                                                                (\substitutionVariable substitutionTypeNotVariable ->
+                                                                                    { key = substitutionVariable |> addConstraintIfPartialUse
+                                                                                    , value =
+                                                                                        substitutionTypeNotVariable
+                                                                                            |> typeNotVariableMapVariables
+                                                                                                addConstraintIfPartialUse
+                                                                                    }
+                                                                                )
+                                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                        soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                            |> FastDict.update partialTypeVariable
+                                                                                (\partialUsesWithOldConstraintsOrNothing ->
+                                                                                    partialUsesWithOldConstraintsOrNothing
+                                                                                        |> Maybe.map (\_ -> partialUsesWithUpdatedConstraints)
+                                                                                )
+                                                                    , equivalentVariables =
+                                                                        soFar.equivalentVariables
+                                                                            |> List.map
+                                                                                (\equivalentVariableSet ->
+                                                                                    equivalentVariableSet
+                                                                                        |> FastSet.map addConstraintIfPartialUse
+                                                                                )
+                                                                    }
+                            )
+            in
+            case withConstrainedPartialTypeVariablesOrError of
                 Err error ->
                     Err error
 
-                Ok variableToCondensedLookup ->
-                    let
-                        variableToTypeUsingCondensedOrError : Result String VariableSubstitutions
-                        variableToTypeUsingCondensedOrError =
-                            state.substitutions.variableToType
-                                |> variableToTypeSubstitutionsCondenseVariables state.declarationTypes
-                                    variableToCondensedLookup
-                    in
-                    case variableToTypeUsingCondensedOrError of
+                Ok withConstrainedPartialTypeVariables ->
+                    case
+                        createEquivalentVariablesToCondensedVariableLookup
+                            withConstrainedPartialTypeVariables.equivalentVariables
+                    of
                         Err error ->
                             Err error
 
-                        Ok variableToTypeUsingCondensed ->
-                            valueOrFunctionDeclarationApplySubstitutions
-                                { declarationTypes = state.declarationTypes
-                                , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                    state.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                        |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
-                                            variableToCondensedLookup
-                                , substitutions = variableToTypeUsingCondensed
-                                }
-                                (declarationValueOrFunctionSoFar
-                                    |> declarationValueOrFunctionMapTypeVariables
-                                        (\variable ->
-                                            variableToCondensedLookup
-                                                |> FastDict.get variable
-                                                |> Maybe.withDefault variable
+                        Ok variableToCondensedLookup ->
+                            case
+                                withConstrainedPartialTypeVariables.variableToTypeSubstitutions
+                                    |> variableToTypeSubstitutionsCondenseVariables state.declarationTypes
+                                        variableToCondensedLookup
+                            of
+                                Err error ->
+                                    Err error
+
+                                Ok variableToTypeUsingCondensed ->
+                                    valueOrFunctionDeclarationsApplySubstitutions
+                                        { declarationTypes = state.declarationTypes
+                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                            state.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
+                                                    variableToCondensedLookup
+                                        , substitutions = variableToTypeUsingCondensed
+                                        }
+                                        (withConstrainedPartialTypeVariables.declarations
+                                            |> -- TODO optimize
+                                               List.map
+                                                (\declarationValueOrFunctionToCondenseVariablesIn ->
+                                                    declarationValueOrFunctionToCondenseVariablesIn
+                                                        |> declarationValueOrFunctionMapTypeVariables
+                                                            (\variable ->
+                                                                variableToCondensedLookup
+                                                                    |> FastDict.get variable
+                                                                    |> Maybe.withDefault variable
+                                                            )
+                                                )
                                         )
-                                )
 
         [] ->
             let
@@ -7569,7 +7692,7 @@ valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoF
                         }
             in
             if Basics.not (FastDict.isEmpty new.substitutionsOfTypeVariablesFromPartiallyInferredDeclarations) then
-                valueOrFunctionDeclarationApplySubstitutions
+                valueOrFunctionDeclarationsApplySubstitutions
                     { declarationTypes = state.declarationTypes
                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                         new.usesOfTypeVariablesFromPartiallyInferredDeclarations
@@ -7581,20 +7704,20 @@ valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoF
                                 new.substitutionsOfTypeVariablesFromPartiallyInferredDeclarations
                         }
                     }
-                    declarationValueOrFunctionSoFar
+                    declarationValueOrFunctionsSoFar
 
             else
                 case state.substitutions.variableToType |> FastDict.popMin of
                     Nothing ->
-                        Ok declarationValueOrFunctionSoFar
+                        Ok declarationValueOrFunctionsSoFar
 
-                    Just ( ( replacementVariable, replacementTypeNotVariable ), remainingVariableToType ) ->
+                    Just ( ( variableOfSubstitutionToApply, typeNotVariableOfSubstitutionToApply ), remainingVariableToType ) ->
                         case
-                            declarationValueOrFunctionSoFar
-                                |> declarationValueOrFunctionSubstituteVariableByNotVariable
+                            declarationValueOrFunctionsSoFar
+                                |> valueAndFunctionDeclarationsSubstituteVariableByNotVariable
                                     state.declarationTypes
-                                    { variable = replacementVariable
-                                    , type_ = replacementTypeNotVariable
+                                    { variable = variableOfSubstitutionToApply
+                                    , type_ = typeNotVariableOfSubstitutionToApply
                                     }
                         of
                             Err error ->
@@ -7605,8 +7728,8 @@ valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoF
                                     remainingVariableToType
                                         |> variableToTypeSubstitutionsSubstituteVariableByNotVariable
                                             state.declarationTypes
-                                            { variable = replacementVariable
-                                            , type_ = replacementTypeNotVariable
+                                            { variable = variableOfSubstitutionToApply
+                                            , type_ = typeNotVariableOfSubstitutionToApply
                                             }
                                 of
                                     Err error ->
@@ -7623,13 +7746,80 @@ valueOrFunctionDeclarationApplySubstitutions state declarationValueOrFunctionSoF
                                                 Err error
 
                                             Ok substitutionsAfterSubstitution ->
-                                                valueOrFunctionDeclarationApplySubstitutions
+                                                valueOrFunctionDeclarationsApplySubstitutions
                                                     { declarationTypes = state.declarationTypes
                                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                                         state.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                                     , substitutions = substitutionsAfterSubstitution
                                                     }
-                                                    substituted.declaration
+                                                    substituted.declarations
+
+
+fastDictReplaceKey :
+    { old : comparableKey, new : comparableKey }
+    -> FastDict.Dict comparableKey value
+    -> FastDict.Dict comparableKey value
+fastDictReplaceKey keys fastDict =
+    case fastDict |> FastDict.get keys.old of
+        Nothing ->
+            fastDict
+
+        Just oldValue ->
+            fastDict
+                |> FastDict.remove keys.old
+                |> FastDict.insert keys.new oldValue
+
+
+valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    ->
+        { variable : TypeVariableFromContext
+        , type_ : TypeNotVariable TypeVariableFromContext
+        }
+    -> List (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+    ->
+        Result
+            String
+            { declarations :
+                List
+                    (ValueOrFunctionDeclaration (Type TypeVariableFromContext))
+            , substitutions : VariableSubstitutions
+            }
+valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueOrFunctionDeclarationToApplySubstitutionTo =
+    -- TODO optimize
+    valueOrFunctionDeclarationToApplySubstitutionTo
+        |> listFoldlWhileOkFrom
+            { substitutions = variableSubstitutionsNone
+            , declarations = []
+            }
+            (\declarationToSubstituteIn soFar ->
+                Result.andThen
+                    (\declarationSubstituted ->
+                        Result.map
+                            (\fullSubstitutions ->
+                                { substitutions = fullSubstitutions
+                                , declarations =
+                                    declarationSubstituted.declaration
+                                        :: soFar.declarations
+                                }
+                            )
+                            (variableSubstitutionsMerge declarationTypes
+                                soFar.substitutions
+                                declarationSubstituted.substitutions
+                            )
+                    )
+                    (declarationToSubstituteIn
+                        |> declarationValueOrFunctionSubstituteVariableByNotVariable
+                            declarationTypes
+                            substitutionToApply
+                    )
+            )
+        |> Result.map
+            (\substituted ->
+                { declarations = substituted.declarations |> List.reverse
+                , substitutions = substituted.substitutions
+                }
+            )
 
 
 variableToTypeSubstitutionsSubstituteVariableByNotVariable :
@@ -9859,7 +10049,7 @@ equivalentVariablesCreateCondensedVariable set =
                         |> List.intersperse [ "_and" ]
                         |> List.concat
                     , variable0
-                        |> typeVariableFromContextName
+                        |> typeVariableIgnoringContext
                         |> typeVariableNameReplaceMaybeConstraint unifiedConstraint
                     )
                 )
@@ -9868,7 +10058,7 @@ equivalentVariablesCreateCondensedVariable set =
                         (\variable soFar ->
                             maybeTypeVariableConstraintMerge
                                 (variable
-                                    |> typeVariableFromContextName
+                                    |> typeVariableIgnoringContext
                                     |> typeVariableConstraint
                                 )
                                 soFar
