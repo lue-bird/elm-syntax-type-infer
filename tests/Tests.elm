@@ -1787,6 +1787,85 @@ suite =
                     |> expressionToInferredType
                     |> Expect.err
             )
+        , Test.test "local type aliases with same name as variant from different module: type alias Just a = a ; just : Just String ; just = \"\""
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "Just")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "just"
+                            , arguments = []
+                            }
+                  , signature =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                { name = Elm.Syntax.Node.empty "just"
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "Just" ))
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "Just" ))
+                                                    [ Elm.Syntax.Node.empty
+                                                        (Elm.Syntax.TypeAnnotation.Typed
+                                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                                            []
+                                                        )
+                                                    ]
+                                                )
+                                            ]
+                                        )
+                                }
+                            )
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "Just"
+                                , generics = [ Elm.Syntax.Node.empty "a" ]
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.GenericType "a")
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Maybe" ]
+                                    , name = "Maybe"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "String" ]
+                                                , name = "String"
+                                                , arguments = []
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
