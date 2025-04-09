@@ -66,6 +66,47 @@ suite =
                             )
                         )
             )
+        , Test.test "ElmSyntaxTypeInfer documentation example"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "hello"
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Literal "world")
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen
+                        (\declarationsTyped ->
+                            case declarationsTyped |> FastDict.get "hello" of
+                                Nothing ->
+                                    Err "typed declaration not found"
+
+                                Just majorVersionDeclarationTyped ->
+                                    Ok majorVersionDeclarationTyped.type_
+                        )
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "String" ], name = "String", arguments = [] }
+                                )
+                            )
+                        )
+            )
         , Test.test "unify integer and float in list"
             (\() ->
                 Elm.Syntax.Expression.ListExpr
