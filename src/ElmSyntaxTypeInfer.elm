@@ -1,7 +1,7 @@
 module ElmSyntaxTypeInfer exposing
-    ( ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
-    , importsToModuleOriginLookup, ModuleOriginLookup
-    , valueOrFunctionDeclarations
+    ( valueOrFunctionDeclarations
+    , ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
+    , ModuleOriginLookup, importsToModuleOriginLookup
     , TypedNode, Expression(..), LetDeclaration(..), Base10Or16(..), Pattern(..)
     , Type(..), TypeNotVariable(..)
     )
@@ -9,18 +9,21 @@ module ElmSyntaxTypeInfer exposing
 {-| Add type information to the nodes
 of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) tree.
 
+@docs valueOrFunctionDeclarations
 
 ## context
 
 @docs ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
-@docs importsToModuleOriginLookup, ModuleOriginLookup
+@docs ModuleOriginLookup, importsToModuleOriginLookup
 
 
 ## syntax
 
-@docs valueOrFunctionDeclarations
 @docs TypedNode, Expression, LetDeclaration, Base10Or16, Pattern
 @docs Type, TypeNotVariable
+
+If you are interested in exposing helpers like `expressionMapType`,
+[open an issue](https://github.com/lue-bird/elm-syntax-type-infer/issues/new)
 
 -}
 
@@ -39,7 +42,7 @@ import FastDict
 import FastSet
 
 
-{-| Container for known types of members of a module.
+{-| Known types of members in a module.
 Create with [`moduleDeclarationsToTypes`](#moduleDeclarationsToTypes)
 and [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 -}
@@ -72,7 +75,7 @@ using [`moduleDeclarationsToTypes`](#moduleDeclarationsToTypes)
 and [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 
 And if for some reason you already know used dependencies at compile time,
-you can re-use the [code generator used for these elm/core types](https://github.com/lue-bird/elm-syntax-type-infer/codegen)
+you can re-use the [code generator used for these elm/core types](https://github.com/lue-bird/elm-syntax-type-infer/tree/main/codegen)
 
 -}
 elmCoreTypes :
@@ -448,9 +451,10 @@ typeNotVariableMapVariables variableMap typeNotVariable =
                 }
 
 
-{-| How do references used in a module map to their origin module?
+{-| How to map names and symbols used in a module to their origin module.
+Create with [`importsToModuleOriginLookup`](#importsToModuleOriginLookup).
 
-Contains variants, type alias names, choice type names, port names, expression declaration names
+Contains variants, type alias names, choice type names, port names, value/function declaration names
 and whether `(|.)` and or `(|=)` are imported from `Parser.Advanced`.
 
 Also contains locally declared names when available.
@@ -2929,11 +2933,14 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
         )
 
 
-{-| A part in the syntax tree
+{-| A part in the syntax tree with an attached
 
-  - its [range](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Range#Range) in the source
-  - its global [`Type`](#Type): most concretely inferred,
-    influenced by other branches and value/function (let) declaration type annotations by the user
+  - [range](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Range#Range) in the source
+  - global [`Type`](#Type): concretely inferred,
+    influenced by other branches and value/function (let) declaration type annotations
+
+Since type is a parameter, you can fill it with any representation
+like [`Elm.Syntax.TypeAnnotation.TypeAnnotation`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-TypeAnnotation#TypeAnnotation)
 
 -}
 type alias TypedNode value type_ =
@@ -6865,14 +6872,62 @@ expressionContextToInPath innermostPathDescription context =
 {-| Infer types of
 value/[`Elm.Syntax.Expression.Function`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Function) declarations
 in a module.
+
+    import Elm.Syntax.Node
+    import Elm.Syntax.Expression
+    import ElmSyntaxTypeInfer
+
+
+    [ { declaration =
+            Elm.Syntax.Node.empty
+                { name = Elm.Syntax.Node.empty "hello"
+                , expression =
+                    Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "world")
+                , arguments = []
+                }
+      , signature = Nothing
+      , documentation = Nothing
+      }
+    ]
+        |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+            { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+            , moduleOriginLookup = exampleModuleOriginLookup
+            , otherModuleDeclaredTypes =
+                []
+                    |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                        exampleModuleOriginLookup
+                    |> .types
+            }
+    -->
+    Ok
+        (FastDict.singleton "hello"
+            { type_ =
+                ElmSyntaxTypeInfer.TypeNotVariable
+                    (ElmSyntaxTypeInfer.TypeConstruct
+                        { moduleOrigin = [ "String" ], name = "String", arguments = [] }
+                    )
+            ...
+            }
+        )
+
+
+    exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+    exampleModuleOriginLookup =
+        []
+            |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                ElmSyntaxTypeInfer.elmCoreTypes
+    
+See [`ModuleTypes`](#ModuleTypes) and [`ModuleOriginLookup`](#ModuleOriginLookup)
+
 -}
 valueOrFunctionDeclarations :
     { importedTypes :
         FastDict.Dict
             Elm.Syntax.ModuleName.ModuleName
             ModuleTypes
-    , otherModuleDeclaredTypes : ModuleTypes
     , moduleOriginLookup : ModuleOriginLookup
+    , otherModuleDeclaredTypes : ModuleTypes
     }
     -> List Elm.Syntax.Expression.Function
     ->
@@ -10620,7 +10675,7 @@ For elm-syntax modules, use [`moduleDeclarationsToTypes`](#moduleDeclarationsToT
 -}
 moduleInterfaceToTypes :
     Elm.Docs.Module
-    -> { errors : List String, types : ModuleTypes }
+    -> { types : ModuleTypes, errors : List String }
 moduleInterfaceToTypes moduleInterface =
     let
         typeAliases :
@@ -10880,7 +10935,7 @@ interfaceToType typeInterface =
 
 {-| Extract all known types
 from declarations within a module.
-No effort is being made to infer types at this stage.
+Un-annotated value/function declarations are ignored.
 
 For dependency modules, use [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 
