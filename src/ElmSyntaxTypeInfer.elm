@@ -455,6 +455,10 @@ and whether `(|.)` and or `(|=)` are imported from `Parser.Advanced`.
 
 Also contains locally declared names when available.
 
+Type- and expression/pattern-level members
+are separated since you can for example have a local `List` variant
+while also using an (implicitly) imported `List` type.
+
 -}
 type alias ModuleOriginLookup =
     { references :
