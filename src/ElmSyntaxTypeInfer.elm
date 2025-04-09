@@ -5114,7 +5114,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         acrossLetIn :
                             { introducedExpressionVariables :
                                 FastDict.Dict String (Type TypeVariableFromContext)
-                            , fullyInferredDeclarationTypes :
+                            , annotatedDeclarationTypes :
                                 FastDict.Dict String (Type String)
                             , partiallyInferredDeclarationTypes :
                                 FastDict.Dict String (Type TypeVariableFromContext)
@@ -5143,8 +5143,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 of
                                                     Err _ ->
                                                         { index = soFar.index + 1
-                                                        , fullyInferredDeclarationTypes =
-                                                            soFar.fullyInferredDeclarationTypes
+                                                        , annotatedDeclarationTypes =
+                                                            soFar.annotatedDeclarationTypes
                                                         , partiallyInferredDeclarationTypes =
                                                             soFar.partiallyInferredDeclarationTypes
                                                         , introducedExpressionVariables =
@@ -5153,8 +5153,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
                                                     Ok patternInferred ->
                                                         { index = soFar.index + 1
-                                                        , fullyInferredDeclarationTypes =
-                                                            soFar.fullyInferredDeclarationTypes
+                                                        , annotatedDeclarationTypes =
+                                                            soFar.annotatedDeclarationTypes
                                                         , partiallyInferredDeclarationTypes =
                                                             soFar.partiallyInferredDeclarationTypes
                                                         , introducedExpressionVariables =
@@ -5188,8 +5188,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             soFar.partiallyInferredDeclarationTypes
                                                         , introducedExpressionVariables =
                                                             soFar.introducedExpressionVariables
-                                                        , fullyInferredDeclarationTypes =
-                                                            soFar.fullyInferredDeclarationTypes
+                                                        , annotatedDeclarationTypes =
+                                                            soFar.annotatedDeclarationTypes
                                                                 |> FastDict.insert name type_
                                                         }
 
@@ -5197,8 +5197,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         { index = soFar.index + 1
                                                         , introducedExpressionVariables =
                                                             soFar.introducedExpressionVariables
-                                                        , fullyInferredDeclarationTypes =
-                                                            soFar.fullyInferredDeclarationTypes
+                                                        , annotatedDeclarationTypes =
+                                                            soFar.annotatedDeclarationTypes
                                                         , partiallyInferredDeclarationTypes =
                                                             soFar.partiallyInferredDeclarationTypes
                                                                 |> FastDict.insert name
@@ -5209,13 +5209,13 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     )
                                     { index = 0
                                     , introducedExpressionVariables = FastDict.empty
-                                    , fullyInferredDeclarationTypes = FastDict.empty
+                                    , annotatedDeclarationTypes = FastDict.empty
                                     , partiallyInferredDeclarationTypes = FastDict.empty
                                     }
                                 |> (\result ->
                                         { introducedExpressionVariables = result.introducedExpressionVariables
                                         , partiallyInferredDeclarationTypes = result.partiallyInferredDeclarationTypes
-                                        , fullyInferredDeclarationTypes = result.fullyInferredDeclarationTypes
+                                        , annotatedDeclarationTypes = result.annotatedDeclarationTypes
                                         }
                                    )
 
@@ -5243,7 +5243,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             Just
                                                 (case localDeclarationTypesOrNothing of
                                                     Nothing ->
-                                                        { signatures = acrossLetIn.fullyInferredDeclarationTypes
+                                                        { signatures = acrossLetIn.annotatedDeclarationTypes
                                                         , typeAliases = FastDict.empty
                                                         , choiceTypes = FastDict.empty
                                                         }
@@ -5252,7 +5252,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         { signatures =
                                                             FastDict.union
                                                                 localDeclarationTypes.signatures
-                                                                acrossLetIn.fullyInferredDeclarationTypes
+                                                                acrossLetIn.annotatedDeclarationTypes
                                                         , typeAliases = localDeclarationTypes.typeAliases
                                                         , choiceTypes = localDeclarationTypes.choiceTypes
                                                         }
@@ -6979,8 +6979,12 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                         )
             }
 
-        partiallyInferredValueAndFunctionDeclarationsTypes : FastDict.Dict String (Type TypeVariableFromContext)
-        partiallyInferredValueAndFunctionDeclarationsTypes =
+        acrossValueAndFunctionDeclarationsToInfer :
+            { partiallyInferredDeclarationTypes :
+                FastDict.Dict String (Type TypeVariableFromContext)
+            , annotated : FastDict.Dict String (Type String)
+            }
+        acrossValueAndFunctionDeclarationsToInfer =
             syntaxValueAndFunctionDeclarations
                 |> List.foldl
                     (\syntaxValueOrFunctionDeclaration soFar ->
@@ -6992,17 +6996,47 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                     |> .name
                                     |> Elm.Syntax.Node.value
                         in
-                        soFar
-                            |> FastDict.insert name
-                                (TypeVariable ( [ name ], "type" ))
+                        case
+                            syntaxValueOrFunctionDeclaration.signature
+                                |> Maybe.andThen
+                                    (\(Elm.Syntax.Node.Node _ signature) ->
+                                        signature.typeAnnotation
+                                            |> Elm.Syntax.Node.value
+                                            |> syntaxToType moduleOriginLookup
+                                            |> Result.toMaybe
+                                    )
+                        of
+                            Just type_ ->
+                                { partiallyInferredDeclarationTypes =
+                                    soFar.partiallyInferredDeclarationTypes
+                                , annotated =
+                                    soFar.annotated
+                                        |> FastDict.insert name type_
+                                }
+
+                            Nothing ->
+                                { annotated = soFar.annotated
+                                , partiallyInferredDeclarationTypes =
+                                    soFar.partiallyInferredDeclarationTypes
+                                        |> FastDict.insert name
+                                            (TypeVariable ( [ name ], "type" ))
+                                }
                     )
-                    FastDict.empty
+                    { partiallyInferredDeclarationTypes = FastDict.empty
+                    , annotated = FastDict.empty
+                    }
 
         declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         declarationTypes =
             typesAndOriginLookup.importedTypes
                 |> FastDict.insert []
-                    typesAndOriginLookup.otherModuleDeclaredTypes
+                    { signatures =
+                        FastDict.union
+                            typesAndOriginLookup.otherModuleDeclaredTypes.signatures
+                            acrossValueAndFunctionDeclarationsToInfer.annotated
+                    , typeAliases = typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
+                    , choiceTypes = typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                    }
     in
     syntaxValueAndFunctionDeclarations
         |> listFoldlWhileOkFrom
@@ -7010,11 +7044,11 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
             , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
             , declarationsTyped = FastDict.empty
             }
-            (\syntaxDeclarationExpression soFar ->
+            (\valueOrFunctionDeclarationToInfer soFar ->
                 let
                     implementation : Elm.Syntax.Expression.FunctionImplementation
                     implementation =
-                        syntaxDeclarationExpression.declaration |> Elm.Syntax.Node.value
+                        valueOrFunctionDeclarationToInfer.declaration |> Elm.Syntax.Node.value
 
                     name : String
                     name =
@@ -7044,10 +7078,6 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                         Result.andThen
                             (\resultInferred ->
                                 let
-                                    fullTypeVariable : TypeVariableFromContext
-                                    fullTypeVariable =
-                                        ( [ name ], "type" )
-
                                     resultInferredSubstitutions :
                                         { variableToType :
                                             FastDict.Dict
@@ -7088,7 +7118,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                             FastDict.insert name
                                                 { nameRange = implementation.name |> Elm.Syntax.Node.range
                                                 , documentation =
-                                                    case syntaxDeclarationExpression.documentation of
+                                                    case valueOrFunctionDeclarationToInfer.documentation of
                                                         Nothing ->
                                                             Nothing
 
@@ -7098,7 +7128,7 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                                 , content = documentationContent
                                                                 }
                                                 , signature =
-                                                    case syntaxDeclarationExpression.signature of
+                                                    case valueOrFunctionDeclarationToInfer.signature of
                                                         Nothing ->
                                                             Nothing
 
@@ -7121,22 +7151,32 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                         soFar.substitutions
                                         resultInferredSubstitutions
                                         parameters.substitutions
-                                        (case fullType of
-                                            TypeVariable fullTypeValueVariable ->
-                                                { equivalentVariables =
-                                                    [ FastSet.singleton fullTypeVariable
-                                                        |> FastSet.insert fullTypeValueVariable
-                                                    ]
-                                                , variableToType =
-                                                    FastDict.empty
-                                                }
+                                        (case valueOrFunctionDeclarationToInfer.signature of
+                                            Just _ ->
+                                                variableSubstitutionsNone
 
-                                            TypeNotVariable fullTypeNotVariable ->
-                                                { equivalentVariables = []
-                                                , variableToType =
-                                                    FastDict.singleton fullTypeVariable
-                                                        fullTypeNotVariable
-                                                }
+                                            Nothing ->
+                                                let
+                                                    fullTypeVariable : TypeVariableFromContext
+                                                    fullTypeVariable =
+                                                        ( [ name ], "type" )
+                                                in
+                                                case fullType of
+                                                    TypeVariable fullTypeValueVariable ->
+                                                        { equivalentVariables =
+                                                            [ FastSet.singleton fullTypeVariable
+                                                                |> FastSet.insert fullTypeValueVariable
+                                                            ]
+                                                        , variableToType =
+                                                            FastDict.empty
+                                                        }
+
+                                                    TypeNotVariable fullTypeNotVariable ->
+                                                        { equivalentVariables = []
+                                                        , variableToType =
+                                                            FastDict.singleton fullTypeVariable
+                                                                fullTypeNotVariable
+                                                        }
                                         )
                                     )
                             )
@@ -7144,14 +7184,19 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                 |> expressionTypeInfer
                                     { declarationTypes = declarationTypes
                                     , locallyIntroducedExpressionVariables =
-                                        -- elm declarations do not allow "polymorphic recursion"
-                                        -- https://github.com/elm/compiler/issues/2275
-                                        -- so instead of putting it in partiallyInferredDeclarationTypes
-                                        -- we treat it as an introduced variable (sharing the same type variables)
-                                        parameters.introducedExpressionVariables
-                                            |> FastDict.insert name fullType
+                                        case valueOrFunctionDeclarationToInfer.signature of
+                                            Just _ ->
+                                                parameters.introducedExpressionVariables
+
+                                            Nothing ->
+                                                -- elm declarations do not allow "polymorphic recursion"
+                                                -- https://github.com/elm/compiler/issues/2275
+                                                -- so instead of putting it in partiallyInferredDeclarationTypes
+                                                -- we treat it as an introduced variable (sharing the same type variables)
+                                                parameters.introducedExpressionVariables
+                                                    |> FastDict.insert name fullType
                                     , partiallyInferredDeclarationTypes =
-                                        partiallyInferredValueAndFunctionDeclarationsTypes
+                                        acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
                                     , containingDeclarationName = name
                                     , path = [ "declarationResult", name ]
                                     , moduleOriginLookup = moduleOriginLookup
