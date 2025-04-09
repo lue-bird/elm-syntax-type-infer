@@ -2,7 +2,7 @@ module ElmSyntaxTypeInfer exposing
     ( valueOrFunctionDeclarations
     , ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
     , ModuleOriginLookup, importsToModuleOriginLookup
-    , TypedNode, Expression(..), LetDeclaration(..), Base10Or16(..), Pattern(..)
+    , TypedNode, Expression(..), LetDeclaration(..), Pattern(..), Base10Or16(..)
     , Type(..), TypeNotVariable(..)
     )
 
@@ -19,7 +19,7 @@ of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) t
 
 ## syntax
 
-@docs TypedNode, Expression, LetDeclaration, Base10Or16, Pattern
+@docs TypedNode, Expression, LetDeclaration, Pattern, Base10Or16
 @docs Type, TypeNotVariable
 
 If you are interested in exposing helpers like `expressionMapType`,
@@ -3068,7 +3068,7 @@ type Expression type_
 
 
 {-| Like [`Elm.Syntax.Expression.LetDeclaration`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#LetDeclaration)
-but all its sub-nodes are [`TypedNode`](#TypedNode)s
+but its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
 type LetDeclaration type_
     = LetDestructuring
@@ -3134,7 +3134,7 @@ type Pattern type_
 
 
 {-| Either decimal or hexadecimal.
-Used by integer pattern and expression
+Used by [`PatternInt`](#Pattern) and [`ExpressionInteger`](#Expression)
 -}
 type Base10Or16
     = Base10
