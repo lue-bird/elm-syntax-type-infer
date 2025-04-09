@@ -1787,6 +1787,66 @@ suite =
                     |> expressionToInferredType
                     |> Expect.err
             )
+        , Test.test "fully applied record type alias constructor for one field, no generics"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "Record")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "constructedRecord"
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "Record"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Record
+                                            [ Elm.Syntax.Node.empty
+                                                ( Elm.Syntax.Node.empty "field"
+                                                , Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "String" ))
+                                                        []
+                                                    )
+                                                )
+                                            ]
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = []
+                                    , name = "Record"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "local type aliases with same name as variant from different module: type alias Just a = a ; just : Just String ; just = \"\""
             (\() ->
                 [ { declaration =
