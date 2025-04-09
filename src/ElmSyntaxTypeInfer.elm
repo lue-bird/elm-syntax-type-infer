@@ -566,6 +566,18 @@ importsToModuleOriginLookup modulesTypes imports =
                                                     case syntaxExposing of
                                                         Elm.Syntax.Exposing.All _ ->
                                                             (moduleTypes.signatures |> FastDict.keys)
+                                                                ++ (moduleTypes.typeAliases
+                                                                        |> FastDict.foldl
+                                                                            (\typeAliasName info soFar ->
+                                                                                case info.recordFieldOrder of
+                                                                                    Nothing ->
+                                                                                        soFar
+
+                                                                                    Just _ ->
+                                                                                        typeAliasName :: soFar
+                                                                            )
+                                                                            []
+                                                                   )
                                                                 ++ (moduleTypes.choiceTypes
                                                                         |> FastDict.foldl
                                                                             (\_ choiceTypeInfo soFar ->
@@ -5510,14 +5522,64 @@ expressionReferenceTypeInfer context expressionReference =
 
                                         Nothing ->
                                             case originModuleDeclarationTypes.typeAliases |> FastDict.get expressionReference.name of
-                                                Just _ ->
-                                                    Err
-                                                        ("I found what looks like a record type alias constructor: "
-                                                            ++ qualifiedToString
-                                                                { qualification = moduleOrigin, name = expressionReference.name }
-                                                            ++ ". These are not supported, yet.\n"
-                                                            ++ "Hint: no value/function/port/variant was found in the origin module of that reference, so that might be the actual problem."
-                                                        )
+                                                Just originTypeAliasDeclaration ->
+                                                    case ( originTypeAliasDeclaration.recordFieldOrder, originTypeAliasDeclaration.type_ ) of
+                                                        ( Just fieldOrder, TypeNotVariable (TypeRecord fields) ) ->
+                                                            Ok
+                                                                { substitutions = variableSubstitutionsNone
+                                                                , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                                                                , node =
+                                                                    { range = expressionReference.fullRange
+                                                                    , value =
+                                                                        { qualification = expressionReference.qualification
+                                                                        , moduleOrigin = moduleOrigin
+                                                                        , name = expressionReference.name
+                                                                        }
+                                                                    , type_ =
+                                                                        fieldOrder
+                                                                            |> List.foldr
+                                                                                (\fieldName outputTypeSoFar ->
+                                                                                    case fields |> FastDict.get fieldName of
+                                                                                        Nothing ->
+                                                                                            outputTypeSoFar
+
+                                                                                        Just fieldValueType ->
+                                                                                            TypeNotVariable
+                                                                                                (TypeFunction
+                                                                                                    { input =
+                                                                                                        fieldValueType
+                                                                                                            |> typeMapVariables
+                                                                                                                (\name ->
+                                                                                                                    ( context.path, name )
+                                                                                                                )
+                                                                                                    , output = outputTypeSoFar
+                                                                                                    }
+                                                                                                )
+                                                                                )
+                                                                                (TypeNotVariable
+                                                                                    (TypeConstruct
+                                                                                        { moduleOrigin = moduleOrigin
+                                                                                        , name = expressionReference.name
+                                                                                        , arguments =
+                                                                                            originTypeAliasDeclaration.parameters
+                                                                                                |> List.map
+                                                                                                    (\parameterName ->
+                                                                                                        TypeVariable ( context.path, parameterName )
+                                                                                                    )
+                                                                                        }
+                                                                                    )
+                                                                                )
+                                                                    }
+                                                                }
+
+                                                        _ ->
+                                                            Err
+                                                                ("no value/function/port/variant/record type alias constructor was found in the origin module of the reference "
+                                                                    ++ qualifiedToString
+                                                                        { qualification = moduleOrigin
+                                                                        , name = expressionReference.name
+                                                                        }
+                                                                )
 
                                                 Nothing ->
                                                     Err
@@ -6810,6 +6872,19 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                 (\signatureName _ ->
                                     { key = ( [], signatureName ), value = [] }
                                 )
+                        )
+                    |> FastDict.union
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
+                            |> FastDict.foldl
+                                (\typeAliasName info soFar ->
+                                    case info.recordFieldOrder of
+                                        Nothing ->
+                                            soFar
+
+                                        Just _ ->
+                                            soFar |> FastDict.insert ( [], typeAliasName ) []
+                                )
+                                FastDict.empty
                         )
                     |> FastDict.union
                         (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
