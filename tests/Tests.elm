@@ -1754,6 +1754,90 @@ suite =
                             )
                         )
             )
+        , let
+            moduleOriginLookupImportingId : ElmSyntaxTypeInfer.ModuleOriginLookup
+            moduleOriginLookupImportingId =
+                [ Elm.Syntax.Node.empty
+                    { moduleName = Elm.Syntax.Node.empty [ "Id" ]
+                    , moduleAlias = Just (Elm.Syntax.Node.empty [ "Ident" ])
+                    , exposingList =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                (Elm.Syntax.Exposing.Explicit
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Exposing.TypeExpose
+                                            { name = "Id"
+                                            , open = Just Elm.Syntax.Range.empty
+                                            }
+                                        )
+                                    ]
+                                )
+                            )
+                    }
+                ]
+                    |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                        declarationTypes
+
+            declarationTypes : FastDict.Dict Elm.Syntax.ModuleName.ModuleName ElmSyntaxTypeInfer.ModuleTypes
+            declarationTypes =
+                ElmSyntaxTypeInfer.elmCoreTypes
+                    |> FastDict.insert
+                        [ "Id" ]
+                        ([ Elm.Syntax.Declaration.CustomTypeDeclaration
+                            { documentation = Nothing
+                            , name = Elm.Syntax.Node.empty "Id"
+                            , generics = []
+                            , constructors =
+                                [ Elm.Syntax.Node.empty
+                                    { name = Elm.Syntax.Node.empty "Id"
+                                    , arguments =
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                []
+                                            )
+                                        ]
+                                    }
+                                ]
+                            }
+                         ]
+                            |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                exampleModuleOriginLookup
+                            |> .types
+                        )
+          in
+          Test.test "fully applied explicitly imported variant, used as exposed but imported also using alias: module Id exposing (Id(..)) ; type Id = Id Int ;; import Id exposing (Id(..)) ; id = Id 1"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [] "Id")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Integer 1)
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = declarationTypes
+                        , moduleOriginLookup = moduleOriginLookupImportingId
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookupImportingId
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Id" ]
+                                    , name = "Id"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "fully applied implicitly locally declared variant with multiple values: type Two = Two String Float ; two = Two \"\" 1.1"
             (\() ->
                 Elm.Syntax.Expression.Application
