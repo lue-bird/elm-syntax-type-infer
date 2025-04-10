@@ -1,5 +1,5 @@
 module ElmSyntaxTypeInfer exposing
-    ( valueOrFunctionDeclarations
+    ( valueAndFunctionDeclarations
     , ModuleTypes, elmCoreTypes, moduleDeclarationsToTypes, moduleInterfaceToTypes
     , ModuleOriginLookup, importsToModuleOriginLookup
     , TypedNode, Expression(..), LetDeclaration(..), Pattern(..), Base10Or16(..)
@@ -9,7 +9,7 @@ module ElmSyntaxTypeInfer exposing
 {-| Add type information to the nodes
 of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) tree.
 
-@docs valueOrFunctionDeclarations
+@docs valueAndFunctionDeclarations
 
 ## context
 
@@ -6898,7 +6898,7 @@ in a module.
       , documentation = Nothing
       }
     ]
-        |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+        |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
             { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
             , moduleOriginLookup = exampleModuleOriginLookup
             , otherModuleDeclaredTypes =
@@ -6929,7 +6929,7 @@ in a module.
 See [`ModuleTypes`](#ModuleTypes) and [`ModuleOriginLookup`](#ModuleOriginLookup)
 
 -}
-valueOrFunctionDeclarations :
+valueAndFunctionDeclarations :
     { importedTypes :
         FastDict.Dict
             Elm.Syntax.ModuleName.ModuleName
@@ -6962,7 +6962,7 @@ valueOrFunctionDeclarations :
                 , type_ : Type String
                 }
             )
-valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarations =
+valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarations =
     let
         moduleOriginLookup : ModuleOriginLookup
         moduleOriginLookup =

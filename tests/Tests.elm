@@ -33,7 +33,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -80,7 +80,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -1637,7 +1637,7 @@ suite =
                     ]
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
@@ -1679,7 +1679,7 @@ suite =
                     ]
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -1745,7 +1745,7 @@ suite =
                     }
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -1812,7 +1812,7 @@ suite =
                     ]
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
@@ -1848,7 +1848,7 @@ suite =
                     ]
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
@@ -1983,7 +1983,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2064,7 +2064,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2203,7 +2203,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2468,7 +2468,7 @@ suite =
                     }
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
@@ -2534,7 +2534,7 @@ suite =
                     }
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2751,7 +2751,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2834,7 +2834,7 @@ suite =
                   , documentation = Nothing
                   }
                 ]
-                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
@@ -2926,7 +2926,7 @@ expressionToInferredType :
     -> Result String (ElmSyntaxTypeInfer.Type String)
 expressionToInferredType expression =
     [ expressionWrapInExampleDeclaration expression ]
-        |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+        |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
             { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
             , moduleOriginLookup = exampleModuleOriginLookup
             , otherModuleDeclaredTypes =

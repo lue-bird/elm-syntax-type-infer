@@ -23,7 +23,7 @@ import ElmSyntaxTypeInfer
   , documentation = Nothing
   }
 ]
-    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
         , moduleOriginLookup = exampleModuleOriginLookup
         , otherModuleDeclaredTypes =
