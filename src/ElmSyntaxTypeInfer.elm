@@ -2345,14 +2345,39 @@ typeNotVariableUnify declarationTypes a b =
                             Err "unit (`()`) cannot be unified with types other than unit"
 
                 TypeConstruct aTypeConstruct ->
-                    Err
-                        ("choice type "
-                            ++ qualifiedToString
-                                { qualification = aTypeConstruct.moduleOrigin
-                                , name = aTypeConstruct.name
-                                }
-                            ++ " cannot be unified be with a choice type with a different name"
-                        )
+                    let
+                        aDescription : String
+                        aDescription =
+                            "choice type "
+                                ++ qualifiedToString
+                                    { qualification = aTypeConstruct.moduleOrigin
+                                    , name = aTypeConstruct.name
+                                    }
+                    in
+                    case b of
+                        TypeUnit ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+
+                        TypeConstruct _ ->
+                            Err
+                                (aDescription
+                                    ++ " cannot be unified be with a choice type with a different name"
+                                )
+
+                        TypeTuple _ ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+
+                        TypeTriple _ ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+
+                        TypeRecord _ ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+
+                        TypeRecordExtension _ ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+
+                        TypeFunction _ ->
+                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
 
                 TypeTuple aTuple ->
                     case b of
@@ -3835,9 +3860,11 @@ patternVariantTypeInfer context patternVariant =
                             { moduleOrigin = patternVariant.moduleOrigin
                             , name = patternVariant.choiceTypeName
                             , arguments =
-                                argumentsUnified.nodesReverse
-                                    |> listReverseAndMap
-                                        (\value -> value.type_)
+                                patternVariant.choiceTypeParameters
+                                    |> List.map
+                                        (\parameter ->
+                                            TypeVariable ( context.path, parameter )
+                                        )
                             }
                         )
                 }
@@ -3863,8 +3890,8 @@ patternVariantTypeInfer context patternVariant =
                             Result.andThen
                                 (\argumentUnified ->
                                     Result.map
-                                        (\substitutionsWithArgument ->
-                                            { substitutions = substitutionsWithArgument
+                                        (\substitutionsSoFarWithArgument ->
+                                            { substitutions = substitutionsSoFarWithArgument
                                             , introducedExpressionVariables =
                                                 FastDict.union
                                                     argumentPatternInferred.introducedExpressionVariables
@@ -3874,7 +3901,8 @@ patternVariantTypeInfer context patternVariant =
                                                     :: soFar.nodesReverse
                                             }
                                         )
-                                        (variableSubstitutionsMerge context.declarationTypes
+                                        (variableSubstitutionsMerge3 context.declarationTypes
+                                            soFar.substitutions
                                             argumentPatternInferred.substitutions
                                             argumentUnified.substitutions
                                         )
@@ -3892,16 +3920,6 @@ patternVariantTypeInfer context patternVariant =
                         )
                 )
         )
-
-
-listReverseAndMap : (a -> b) -> List a -> List b
-listReverseAndMap elementChange list =
-    list
-        |> List.foldl
-            (\element soFar ->
-                (element |> elementChange) :: soFar
-            )
-            []
 
 
 expressionTypeInfer :
@@ -5554,8 +5572,8 @@ expressionReferenceTypeInfer context expressionReference =
                                                     choiceTypeInfo.variants
                                                         |> FastDict.get expressionReference.name
                                                         |> Maybe.map
-                                                            (\variantParameters ->
-                                                                { variantParameters = variantParameters
+                                                            (\variantValues ->
+                                                                { variantValues = variantValues
                                                                 , choiceTypeName = choiceTypeName
                                                                 , choiceTypeParameters = choiceTypeInfo.parameters
                                                                 }
@@ -5578,7 +5596,7 @@ expressionReferenceTypeInfer context expressionReference =
 
                                                 fullType : Type TypeVariableFromContext
                                                 fullType =
-                                                    variant.variantParameters
+                                                    variant.variantValues
                                                         |> List.foldr
                                                             (\argument output ->
                                                                 TypeNotVariable
