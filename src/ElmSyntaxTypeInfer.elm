@@ -10944,7 +10944,73 @@ moduleDeclarationsToTypes :
     ModuleOriginLookup
     -> List Elm.Syntax.Declaration.Declaration
     -> { types : ModuleTypes, errors : List String }
-moduleDeclarationsToTypes moduleOriginLookup declarations =
+moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declarations =
+    let
+        moduleOriginLookup : ModuleOriginLookup
+        moduleOriginLookup =
+            declarations
+                |> List.foldl
+                    (\declaration soFar ->
+                        case declaration of
+                            Elm.Syntax.Declaration.InfixDeclaration _ ->
+                                soFar
+
+                            Elm.Syntax.Declaration.Destructuring _ _ ->
+                                soFar
+
+                            Elm.Syntax.Declaration.FunctionDeclaration declarationValueOrFunction ->
+                                { soFar
+                                    | references =
+                                        soFar.references
+                                            |> FastDict.insert
+                                                ( []
+                                                , declarationValueOrFunction.declaration
+                                                    |> Elm.Syntax.Node.value
+                                                    |> .name
+                                                    |> Elm.Syntax.Node.value
+                                                )
+                                                []
+                                }
+
+                            Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
+                                { soFar
+                                    | typeConstructs =
+                                        soFar.typeConstructs
+                                            |> FastDict.insert
+                                                ( [], declarationTypeAlias.name |> Elm.Syntax.Node.value )
+                                                []
+                                }
+
+                            Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
+                                { soFar
+                                    | typeConstructs =
+                                        soFar.typeConstructs
+                                            |> FastDict.insert
+                                                ( [], declarationChoiceType.name |> Elm.Syntax.Node.value )
+                                                []
+                                    , references =
+                                        declarationChoiceType.constructors
+                                            |> List.foldl
+                                                (\(Elm.Syntax.Node.Node _ variant) soFarReferencesIncludingVariantsSoFar ->
+                                                    soFarReferencesIncludingVariantsSoFar
+                                                        |> FastDict.insert
+                                                            ( [], variant.name |> Elm.Syntax.Node.value )
+                                                            []
+                                                )
+                                                soFar.references
+                                }
+
+                            Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
+                                { soFar
+                                    | references =
+                                        soFar.references
+                                            |> FastDict.insert
+                                                ( [], declarationPortSignature.name |> Elm.Syntax.Node.value )
+                                                []
+                                }
+                    )
+                    moduleOriginLookupNotIncludingLocalDeclarations
+    in
     declarations
         |> List.foldl
             (\declaration soFar ->
