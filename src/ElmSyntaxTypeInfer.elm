@@ -5999,22 +5999,9 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                         (variableSubstitutionsMerge3 context.declarationTypes
                             argumentsInferred.substitutions
                             resultInferred.substitutions
-                            (case letDeclarationPartiallyInferredType of
-                                TypeVariable letDeclarationPartiallyInferredTypeVariable ->
-                                    { equivalentVariables =
-                                        [ FastSet.singleton letDeclarationTypeVariable
-                                            |> FastSet.insert letDeclarationPartiallyInferredTypeVariable
-                                        ]
-                                    , variableToType =
-                                        FastDict.empty
-                                    }
-
-                                TypeNotVariable letDeclarationPartiallyInferredTypeNotVariable ->
-                                    { equivalentVariables = []
-                                    , variableToType =
-                                        FastDict.singleton letDeclarationTypeVariable
-                                            letDeclarationPartiallyInferredTypeNotVariable
-                                    }
+                            (variableSubstitutionsFromVariableToType
+                                letDeclarationTypeVariable
+                                letDeclarationPartiallyInferredType
                             )
                         )
                 )
@@ -7124,7 +7111,8 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                 let
                     implementation : Elm.Syntax.Expression.FunctionImplementation
                     implementation =
-                        valueOrFunctionDeclarationToInfer.declaration |> Elm.Syntax.Node.value
+                        valueOrFunctionDeclarationToInfer.declaration
+                            |> Elm.Syntax.Node.value
 
                     name : String
                     name =
@@ -7154,33 +7142,11 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                         Result.andThen
                             (\resultInferred ->
                                 let
-                                    resultInferredSubstitutions :
-                                        { variableToType :
-                                            FastDict.Dict
-                                                TypeVariableFromContext
-                                                (TypeNotVariable TypeVariableFromContext)
-                                        , equivalentVariables : List (FastSet.Set TypeVariableFromContext)
-                                        }
-                                    resultInferredSubstitutions =
-                                        case resultInferred.node.type_ of
-                                            TypeNotVariable resultInferredNotVariable ->
-                                                { variableToType =
-                                                    resultInferred.substitutions.variableToType
-                                                        |> FastDict.insert resultTypeVariable
-                                                            resultInferredNotVariable
-                                                , equivalentVariables =
-                                                    resultInferred.substitutions.equivalentVariables
-                                                }
-
-                                            TypeVariable resultInferredVariable ->
-                                                { variableToType =
-                                                    resultInferred.substitutions.variableToType
-                                                , equivalentVariables =
-                                                    equivalentVariablesMergeWithSetOf2
-                                                        resultTypeVariable
-                                                        resultInferredVariable
-                                                        resultInferred.substitutions.equivalentVariables
-                                                }
+                                    resultInferredUnifiedWithResultVariableSubstitutions : VariableSubstitutions
+                                    resultInferredUnifiedWithResultVariableSubstitutions =
+                                        variableSubstitutionsFromVariableToType
+                                            resultTypeVariable
+                                            resultInferred.node.type_
                                 in
                                 Result.map
                                     (\soFarAndArgumentAndResultAndTypeUnifySubstitutions ->
@@ -7223,9 +7189,10 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                 soFar.declarationsTyped
                                         }
                                     )
-                                    (variableSubstitutionsMerge4 declarationTypes
+                                    (variableSubstitutionsMerge5 declarationTypes
                                         soFar.substitutions
-                                        resultInferredSubstitutions
+                                        resultInferred.substitutions
+                                        resultInferredUnifiedWithResultVariableSubstitutions
                                         parameters.substitutions
                                         (case valueOrFunctionDeclarationToInfer.signature of
                                             Just _ ->
@@ -7237,22 +7204,9 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                     fullTypeVariable =
                                                         ( [ name ], "type" )
                                                 in
-                                                case fullType of
-                                                    TypeVariable fullTypeValueVariable ->
-                                                        { equivalentVariables =
-                                                            [ FastSet.singleton fullTypeVariable
-                                                                |> FastSet.insert fullTypeValueVariable
-                                                            ]
-                                                        , variableToType =
-                                                            FastDict.empty
-                                                        }
-
-                                                    TypeNotVariable fullTypeNotVariable ->
-                                                        { equivalentVariables = []
-                                                        , variableToType =
-                                                            FastDict.singleton fullTypeVariable
-                                                                fullTypeNotVariable
-                                                        }
+                                                variableSubstitutionsFromVariableToType
+                                                    fullTypeVariable
+                                                    fullType
                                         )
                                     )
                             )
@@ -7305,6 +7259,28 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                             declaration |> declarationValueOrFunctionInfoDisambiguateTypeVariables
                         )
             )
+
+
+variableSubstitutionsFromVariableToType :
+    TypeVariableFromContext
+    -> Type TypeVariableFromContext
+    -> VariableSubstitutions
+variableSubstitutionsFromVariableToType variableToReplace replacementType =
+    case replacementType of
+        TypeNotVariable replacementTypeNotVariable ->
+            { variableToType =
+                FastDict.singleton variableToReplace
+                    replacementTypeNotVariable
+            , equivalentVariables = []
+            }
+
+        TypeVariable replacementVariable ->
+            { variableToType = FastDict.empty
+            , equivalentVariables =
+                [ FastSet.singleton variableToReplace
+                    |> FastSet.insert replacementVariable
+                ]
+            }
 
 
 type alias ValueOrFunctionDeclarationInfo type_ =
@@ -8388,27 +8364,12 @@ variableToTypeSubstitutionsCondenseVariables declarationTypes variableToCondense
                             Just existingReplacementTypeForCondensedVariable ->
                                 Result.andThen
                                     (\replacementTypeForCondensedVariable ->
-                                        variableSubstitutionsMerge declarationTypes
+                                        variableSubstitutionsMerge3 declarationTypes
+                                            soFar
                                             replacementTypeForCondensedVariable.substitutions
-                                            (case replacementTypeForCondensedVariable.type_ of
-                                                TypeVariable newEquivalentVariable ->
-                                                    { equivalentVariables =
-                                                        soFar.equivalentVariables
-                                                            |> equivalentVariablesMergeWithSetOf2
-                                                                condensedVariable
-                                                                newEquivalentVariable
-                                                    , variableToType =
-                                                        soFar.variableToType
-                                                    }
-
-                                                TypeNotVariable replacementTypeForCondensedVariableTypeNotVariable ->
-                                                    { equivalentVariables =
-                                                        soFar.equivalentVariables
-                                                    , variableToType =
-                                                        soFar.variableToType
-                                                            |> FastDict.insert condensedVariable
-                                                                replacementTypeForCondensedVariableTypeNotVariable
-                                                    }
+                                            (variableSubstitutionsFromVariableToType
+                                                condensedVariable
+                                                replacementTypeForCondensedVariable.type_
                                             )
                                     )
                                     (typeNotVariableUnify declarationTypes
