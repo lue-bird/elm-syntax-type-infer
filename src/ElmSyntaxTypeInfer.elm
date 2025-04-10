@@ -6404,7 +6404,7 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable ( context.path, "element" )
             in
             Ok
                 (TypeNotVariable
@@ -6414,7 +6414,7 @@ operatorFunctionType context operator =
                             TypeNotVariable
                                 (TypeFunction
                                     { input = typeListList a
-                                    , output = a
+                                    , output = typeListList a
                                     }
                                 )
                         }
@@ -6485,20 +6485,15 @@ operatorFunctionType context operator =
                 )
 
         "/" ->
-            let
-                number : Type TypeVariableFromContext
-                number =
-                    TypeVariable ( context.path, "number" )
-            in
             Ok
                 (TypeNotVariable
                     (TypeFunction
-                        { input = number
+                        { input = typeBasicsFloat
                         , output =
                             TypeNotVariable
                                 (TypeFunction
-                                    { input = number
-                                    , output = number
+                                    { input = typeBasicsFloat
+                                    , output = typeBasicsFloat
                                     }
                                 )
                         }
