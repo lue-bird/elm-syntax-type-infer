@@ -1,10 +1,13 @@
 module Tests exposing (suite)
 
 import Elm.Syntax.Declaration
+import Elm.Syntax.Exposing
 import Elm.Syntax.Expression
 import Elm.Syntax.Infix
+import Elm.Syntax.ModuleName
 import Elm.Syntax.Node
 import Elm.Syntax.Pattern
+import Elm.Syntax.Range
 import Elm.Syntax.TypeAnnotation
 import ElmSyntaxTypeInfer
 import Expect
@@ -1662,6 +1665,90 @@ suite =
                                                 }
                                             )
                                         ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , let
+            moduleOriginLookupImportingId : ElmSyntaxTypeInfer.ModuleOriginLookup
+            moduleOriginLookupImportingId =
+                [ Elm.Syntax.Node.empty
+                    { moduleName = Elm.Syntax.Node.empty [ "Id" ]
+                    , moduleAlias = Nothing
+                    , exposingList =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                (Elm.Syntax.Exposing.Explicit
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Exposing.TypeExpose
+                                            { name = "Id"
+                                            , open = Just Elm.Syntax.Range.empty
+                                            }
+                                        )
+                                    ]
+                                )
+                            )
+                    }
+                ]
+                    |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                        declarationTypes
+
+            declarationTypes : FastDict.Dict Elm.Syntax.ModuleName.ModuleName ElmSyntaxTypeInfer.ModuleTypes
+            declarationTypes =
+                ElmSyntaxTypeInfer.elmCoreTypes
+                    |> FastDict.insert
+                        [ "Id" ]
+                        ([ Elm.Syntax.Declaration.CustomTypeDeclaration
+                            { documentation = Nothing
+                            , name = Elm.Syntax.Node.empty "Id"
+                            , generics = []
+                            , constructors =
+                                [ Elm.Syntax.Node.empty
+                                    { name = Elm.Syntax.Node.empty "Id"
+                                    , arguments =
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                []
+                                            )
+                                        ]
+                                    }
+                                ]
+                            }
+                         ]
+                            |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                exampleModuleOriginLookup
+                            |> .types
+                        )
+          in
+          Test.test "fully applied explicitly imported variant: module Id exposing (Id(..)) ; type Id = Id Int ;; import Id exposing (Id(..)) ; id = Id 1"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [] "Id")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Integer 1)
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = declarationTypes
+                        , moduleOriginLookup = moduleOriginLookupImportingId
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookupImportingId
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Id" ]
+                                    , name = "Id"
+                                    , arguments = []
                                     }
                                 )
                             )
