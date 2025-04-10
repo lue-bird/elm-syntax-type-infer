@@ -7125,8 +7125,8 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                             resultTypeVariable =
                                 ( [ name ], "declarationResult" )
 
-                            fullType : Type TypeVariableFromContext
-                            fullType =
+                            inferredFullType : Type TypeVariableFromContext
+                            inferredFullType =
                                 parameters.nodesReverse
                                     |> List.foldl
                                         (\argumentTypedNode typeSoFar ->
@@ -7138,16 +7138,22 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                 )
                                         )
                                         (TypeVariable resultTypeVariable)
+
+                            fullType : Type TypeVariableFromContext
+                            fullType =
+                                case acrossValueAndFunctionDeclarationsToInfer.annotated |> FastDict.get name of
+                                    Just annotationType ->
+                                        annotationType
+                                            |> typeMapVariables
+                                                (\variable ->
+                                                    ( [ name ], variable )
+                                                )
+
+                                    Nothing ->
+                                        inferredFullType
                         in
                         Result.andThen
                             (\resultInferred ->
-                                let
-                                    resultInferredUnifiedWithResultVariableSubstitutions : VariableSubstitutions
-                                    resultInferredUnifiedWithResultVariableSubstitutions =
-                                        variableSubstitutionsFromVariableToType
-                                            resultTypeVariable
-                                            resultInferred.node.type_
-                                in
                                 Result.map
                                     (\soFarAndArgumentAndResultAndTypeUnifySubstitutions ->
                                         { usesOfTypeVariablesFromPartiallyInferredDeclarations =
@@ -7189,25 +7195,39 @@ valueOrFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarati
                                                 soFar.declarationsTyped
                                         }
                                     )
-                                    (variableSubstitutionsMerge5 declarationTypes
-                                        soFar.substitutions
-                                        resultInferred.substitutions
-                                        resultInferredUnifiedWithResultVariableSubstitutions
-                                        parameters.substitutions
-                                        (case valueOrFunctionDeclarationToInfer.signature of
-                                            Just _ ->
-                                                variableSubstitutionsNone
+                                    (case valueOrFunctionDeclarationToInfer.signature of
+                                        Just _ ->
+                                            Result.andThen
+                                                (\inferredUnifiedWithAnnotated ->
+                                                    variableSubstitutionsMerge4 declarationTypes
+                                                        soFar.substitutions
+                                                        parameters.substitutions
+                                                        resultInferred.substitutions
+                                                        inferredUnifiedWithAnnotated.substitutions
+                                                )
+                                                (typeUnify declarationTypes
+                                                    fullType
+                                                    inferredFullType
+                                                )
 
-                                            Nothing ->
-                                                let
-                                                    fullTypeVariable : TypeVariableFromContext
-                                                    fullTypeVariable =
-                                                        ( [ name ], "type" )
-                                                in
-                                                variableSubstitutionsFromVariableToType
+                                        Nothing ->
+                                            let
+                                                fullTypeVariable : TypeVariableFromContext
+                                                fullTypeVariable =
+                                                    ( [ name ], "type" )
+                                            in
+                                            variableSubstitutionsMerge5 declarationTypes
+                                                soFar.substitutions
+                                                parameters.substitutions
+                                                resultInferred.substitutions
+                                                (variableSubstitutionsFromVariableToType
+                                                    resultTypeVariable
+                                                    resultInferred.node.type_
+                                                )
+                                                (variableSubstitutionsFromVariableToType
                                                     fullTypeVariable
                                                     fullType
-                                        )
+                                                )
                                     )
                             )
                             (implementation.expression
