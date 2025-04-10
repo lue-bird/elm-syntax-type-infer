@@ -2102,6 +2102,155 @@ suite =
                             )
                         )
             )
+        , Test.test "recursive, too strictly annotated function: addAbs : Int -> Int -> Int ; addAbs toAdd base = if toAdd <= 0 then base else 1 + addAbs (toAdd - 1) base"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "addAbs"
+                            , arguments =
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "toAdd")
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "base")
+                                ]
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.IfBlock
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.OperatorApplication
+                                                "<="
+                                                Elm.Syntax.Infix.Non
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.FunctionOrValue [] "toAdd")
+                                                )
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.Integer 0)
+                                                )
+                                            )
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "base")
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.OperatorApplication
+                                                "+"
+                                                Elm.Syntax.Infix.Left
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.Integer 1)
+                                                )
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.Application
+                                                        [ Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.FunctionOrValue [] "addAbs")
+                                                        , Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.OperatorApplication
+                                                                "-"
+                                                                Elm.Syntax.Infix.Left
+                                                                (Elm.Syntax.Node.empty
+                                                                    (Elm.Syntax.Expression.FunctionOrValue [] "base")
+                                                                )
+                                                                (Elm.Syntax.Node.empty
+                                                                    (Elm.Syntax.Expression.Integer 1)
+                                                                )
+                                                            )
+                                                        ]
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                            }
+                  , signature =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                { name = Elm.Syntax.Node.empty "addAbs"
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                    []
+                                                )
+                                            )
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                    (Elm.Syntax.Node.empty
+                                                        (Elm.Syntax.TypeAnnotation.Typed
+                                                            (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                            []
+                                                        )
+                                                    )
+                                                    (Elm.Syntax.Node.empty
+                                                        (Elm.Syntax.TypeAnnotation.Typed
+                                                            (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                            []
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                }
+                            )
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "Just"
+                                , generics = [ Elm.Syntax.Node.empty "a" ]
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.GenericType "a")
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Int"
+                                                , arguments = []
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "Basics" ]
+                                                            , name = "Int"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                , output =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "Basics" ]
+                                                            , name = "Int"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration let a = 2.2 in a"
             (\() ->
                 Elm.Syntax.Expression.LetExpression
