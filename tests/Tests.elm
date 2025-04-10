@@ -2023,7 +2023,7 @@ suite =
                             )
                         )
             )
-        , Test.test "local type aliases with same name as variant from different module: type alias Just a = a ; just : Just String ; just = \"\""
+        , Test.test "local type aliases with same name as variant from different module: type alias Just a = a ; just : Just (Just String) ; just = \"\""
             (\() ->
                 [ { declaration =
                         Elm.Syntax.Node.empty
@@ -2086,14 +2086,22 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Maybe" ]
-                                    , name = "Maybe"
+                                    { moduleOrigin = []
+                                    , name = "Just"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "String" ]
-                                                , name = "String"
-                                                , arguments = []
+                                                { moduleOrigin = []
+                                                , name = "Just"
+                                                , arguments =
+                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "String" ]
+                                                            , name = "String"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                    ]
                                                 }
                                             )
                                         ]
