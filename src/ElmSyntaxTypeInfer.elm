@@ -2583,7 +2583,15 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
         TypeConstruct typeConstructToExpand ->
             case declarationTypes |> FastDict.get typeConstructToExpand.moduleOrigin of
                 Nothing ->
-                    Nothing
+                    Just
+                        (Err
+                            ("could not find declaration types in the origin module of the type construct "
+                                ++ qualifiedToString
+                                    { qualification = typeConstructToExpand.moduleOrigin
+                                    , name = typeConstructToExpand.name
+                                    }
+                            )
+                        )
 
                 Just aOriginModuleTypes ->
                     case aOriginModuleTypes.typeAliases |> FastDict.get typeConstructToExpand.name of
