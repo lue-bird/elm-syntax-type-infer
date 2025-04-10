@@ -1667,6 +1667,62 @@ suite =
                             )
                         )
             )
+        , Test.test "fully applied implicitly locally declared variant with multiple values: type Two = Two String Float ; two = Two \"\" 1.1"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.FunctionOrValue [] "Two")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Literal "")
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.Floatable 1.1)
+                    ]
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueOrFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.CustomTypeDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "Two"
+                                , generics = []
+                                , constructors =
+                                    [ Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "Two"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "Float" ))
+                                                    []
+                                                )
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = []
+                                    , name = "Two"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "fully applied imported call: Process.sleep 1.1"
             (\() ->
                 Elm.Syntax.Expression.Application
