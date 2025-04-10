@@ -60,6 +60,8 @@ exampleModuleOriginLookup =
 
 -   add local types in a fully separate (optional!) step
 -   add more tests
+-   optimize substitution scope: e.g. patterns should _never_
+    return substitutions. Instead, they should be applied as they are created
 -   (mutually) recursive type aliases can run into an infinite loop
 -   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
 
