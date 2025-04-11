@@ -2102,11 +2102,41 @@ equivalentVariablesMergeWithSetOf2 :
     -> List (FastSet.Set comparable)
     -> List (FastSet.Set comparable)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
-    equivalentVariableSetMerge
-        equivalentVariables
-        [ FastSet.singleton aEquivalentVariable
-            |> FastSet.insert bEquivalentVariable
-        ]
+    equivalentVariablesMergeWithSetOf2Into [] aEquivalentVariable bEquivalentVariable equivalentVariables
+
+
+equivalentVariablesMergeWithSetOf2Into :
+    List (FastSet.Set comparable)
+    -> comparable
+    -> comparable
+    -> List (FastSet.Set comparable)
+    -> List (FastSet.Set comparable)
+equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
+    case equivalentVariables of
+        [] ->
+            (FastSet.singleton aEquivalentVariable
+                |> FastSet.insert bEquivalentVariable
+            )
+                :: soFar
+
+        equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
+            if
+                (equivalentVariablesSet0 |> FastSet.member aEquivalentVariable)
+                    || (equivalentVariablesSet0 |> FastSet.member bEquivalentVariable)
+            then
+                (equivalentVariablesSet0
+                    |> FastSet.insert aEquivalentVariable
+                    |> FastSet.insert bEquivalentVariable
+                )
+                    :: soFar
+                    ++ equivalentVariablesSet1Up
+
+            else
+                equivalentVariablesMergeWithSetOf2Into
+                    (equivalentVariablesSet0 :: soFar)
+                    aEquivalentVariable
+                    bEquivalentVariable
+                    equivalentVariablesSet1Up
 
 
 equivalentVariableSetMerge :

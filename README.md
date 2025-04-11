@@ -63,7 +63,6 @@ exampleModuleOriginLookup =
 -   optimize substitution scope similar to how patterns are currently inferred:
     Substitutions should be applied as they are created except for partials and local variables
 -   (mutually) recursive type aliases can run into an infinite loop
--   optimize equivalentVariablesMergeWithSetOf2, potentially de-optimize typedNodeReplaceTypeBy
 
 ### performance problems?
 
