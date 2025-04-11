@@ -3284,6 +3284,66 @@ typeUrlParserQueryParser a =
         )
 
 
+patternTypedNodeIntroducedVariables : TypedNode (Pattern type_) type_ -> FastDict.Dict String type_
+patternTypedNodeIntroducedVariables patternTypedNode =
+    case patternTypedNode.value of
+        PatternUnit ->
+            FastDict.empty
+
+        PatternIgnored ->
+            FastDict.empty
+
+        PatternInt _ ->
+            FastDict.empty
+
+        PatternString _ ->
+            FastDict.empty
+
+        PatternChar _ ->
+            FastDict.empty
+
+        PatternVariable variable ->
+            FastDict.singleton variable patternTypedNode.type_
+
+        PatternRecord fieldVariables ->
+            fieldVariables
+                |> listMapToFastDict
+                    (\fieldVariable ->
+                        { key = fieldVariable.value, value = fieldVariable.type_ }
+                    )
+
+        PatternAs patternAs ->
+            FastDict.insert patternAs.variable.value
+                patternAs.variable.type_
+                (patternAs.pattern |> patternTypedNodeIntroducedVariables)
+
+        PatternParenthesized inParens ->
+            inParens |> patternTypedNodeIntroducedVariables
+
+        PatternListCons listCons ->
+            FastDict.union
+                (listCons.head |> patternTypedNodeIntroducedVariables)
+                (listCons.tail |> patternTypedNodeIntroducedVariables)
+
+        PatternTuple parts ->
+            FastDict.union
+                (parts.part0 |> patternTypedNodeIntroducedVariables)
+                (parts.part1 |> patternTypedNodeIntroducedVariables)
+
+        PatternTriple parts ->
+            (parts.part0 |> patternTypedNodeIntroducedVariables)
+                |> FastDict.union (parts.part1 |> patternTypedNodeIntroducedVariables)
+                |> FastDict.union (parts.part2 |> patternTypedNodeIntroducedVariables)
+
+        PatternListExact elements ->
+            elements
+                |> listMapAndFastDictsUnify patternTypedNodeIntroducedVariables
+
+        PatternVariant variant ->
+            variant.values
+                |> listMapAndFastDictsUnify patternTypedNodeIntroducedVariables
+
+
 patternContextToInPath :
     String
     ->
@@ -3314,8 +3374,6 @@ patternTypeInfer :
             String
             { substitutions : VariableSubstitutions
             , node : TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
-            , introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
             }
 patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
     -- IGNORE TCO
@@ -3336,7 +3394,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = type_
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.UnitPattern ->
@@ -3347,7 +3404,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = TypeNotVariable TypeUnit
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.CharPattern charValue ->
@@ -3358,7 +3414,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = typeCharChar
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.IntPattern intValue ->
@@ -3369,7 +3424,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = typeBasicsInt
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.HexPattern intValue ->
@@ -3380,7 +3434,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = typeBasicsInt
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.StringPattern stringValue ->
@@ -3391,7 +3444,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , type_ = typeStringString
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables = FastDict.empty
                 }
 
         Elm.Syntax.Pattern.VarPattern variableName ->
@@ -3407,8 +3459,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     , value = PatternVariable variableName
                     , type_ = variableType
                     }
-                , introducedExpressionVariables =
-                    FastDict.singleton variableName variableType
                 }
 
         Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
@@ -3420,8 +3470,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         , value = PatternParenthesized inParens.node
                         , type_ = inParens.node.type_
                         }
-                    , introducedExpressionVariables =
-                        inParens.introducedExpressionVariables
                     }
                 )
                 (parenthesizedInParens
@@ -3445,10 +3493,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 }
                         , type_ = inner.node.type_
                         }
-                    , introducedExpressionVariables =
-                        inner.introducedExpressionVariables
-                            |> FastDict.insert variableName
-                                inner.node.type_
                     }
                 )
                 (innerPatternNode
@@ -3466,7 +3510,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             , type_ = TypeNotVariable TypeUnit
                             }
                         , substitutions = variableSubstitutionsNone
-                        , introducedExpressionVariables = FastDict.empty
                         }
 
                 [ parenthesizedInParens ] ->
@@ -3480,8 +3523,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                     PatternParenthesized inParens.node
                                 , type_ = inParens.node.type_
                                 }
-                            , introducedExpressionVariables =
-                                inParens.introducedExpressionVariables
                             }
                         )
                         (parenthesizedInParens
@@ -3509,10 +3550,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 )
                                         }
                                     , substitutions = fullSubstitutions
-                                    , introducedExpressionVariables =
-                                        FastDict.union
-                                            part0.introducedExpressionVariables
-                                            part1.introducedExpressionVariables
                                     }
                                 )
                                 (variableSubstitutionsMerge
@@ -3547,13 +3584,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 )
                                         }
                                     , substitutions = fullSubstitutions
-                                    , introducedExpressionVariables =
-                                        FastDict.union
-                                            part0.introducedExpressionVariables
-                                            (FastDict.union
-                                                part1.introducedExpressionVariables
-                                                part2.introducedExpressionVariables
-                                            )
                                     }
                                 )
                                 (variableSubstitutionsMerge3
@@ -3602,15 +3632,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             )
                     }
                 , substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables =
-                    recordFields
-                        |> List.foldl
-                            (\(Elm.Syntax.Node.Node _ fieldName) soFar ->
-                                soFar
-                                    |> FastDict.insert fieldName
-                                        (TypeVariable ( context.path, fieldName ))
-                            )
-                            FastDict.empty
                 }
 
         Elm.Syntax.Pattern.UnConsPattern headNode tailNode ->
@@ -3621,10 +3642,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             Result.map
                                 (\fullSubstitutions ->
                                     { substitutions = fullSubstitutions
-                                    , introducedExpressionVariables =
-                                        FastDict.union
-                                            headInferred.introducedExpressionVariables
-                                            tailInferred.introducedExpressionVariables
                                     , node =
                                         { range = fullRange
                                         , value =
@@ -3669,7 +3686,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     in
                     Ok
                         { substitutions = variableSubstitutionsNone
-                        , introducedExpressionVariables = FastDict.empty
                         , node =
                             { range = fullRange
                             , value = PatternListExact []
@@ -3681,8 +3697,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     Result.map
                         (\elementTypeAndSubstitutions ->
                             { substitutions = elementTypeAndSubstitutions.substitutions
-                            , introducedExpressionVariables =
-                                elementTypeAndSubstitutions.introducedExpressionVariables
                             , node =
                                 { range = fullRange
                                 , value =
@@ -3702,8 +3716,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                         , elementNodesReverse =
                                             [ headInferred.node
                                             ]
-                                        , introducedExpressionVariables =
-                                            headInferred.introducedExpressionVariables
                                         , index = 1
                                         }
                                         (\elementNode soFar ->
@@ -3719,10 +3731,6 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                                             :: soFar.elementNodesReverse
                                                                     , elementType = elementTypeWithCurrent.type_
                                                                     , substitutions = substitutionsWithElement
-                                                                    , introducedExpressionVariables =
-                                                                        FastDict.union
-                                                                            elementTypedNodeAndSubstitutions.introducedExpressionVariables
-                                                                            soFar.introducedExpressionVariables
                                                                     }
                                                                 )
                                                                 (variableSubstitutionsMerge3 context.declarationTypes
@@ -3830,8 +3838,6 @@ patternVariantTypeInfer :
         Result
             String
             { substitutions : VariableSubstitutions
-            , introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
             , node :
                 TypedNode
                     (Pattern (Type TypeVariableFromContext))
@@ -3841,8 +3847,6 @@ patternVariantTypeInfer context patternVariant =
     Result.map
         (\argumentsUnified ->
             { substitutions = argumentsUnified.substitutions
-            , introducedExpressionVariables =
-                argumentsUnified.introducedExpressionVariables
             , node =
                 { range = patternVariant.fullRange
                 , value =
@@ -3880,8 +3884,6 @@ patternVariantTypeInfer context patternVariant =
             patternVariant.parameters
             |> listFoldlWhileOkFrom
                 { substitutions = variableSubstitutionsNone
-                , introducedExpressionVariables =
-                    FastDict.empty
                 , nodesReverse = []
                 }
                 (\argument soFar ->
@@ -3892,10 +3894,6 @@ patternVariantTypeInfer context patternVariant =
                                     Result.map
                                         (\substitutionsSoFarWithArgument ->
                                             { substitutions = substitutionsSoFarWithArgument
-                                            , introducedExpressionVariables =
-                                                FastDict.union
-                                                    argumentPatternInferred.introducedExpressionVariables
-                                                    soFar.introducedExpressionVariables
                                             , nodesReverse =
                                                 argumentPatternInferred.node
                                                     :: soFar.nodesReverse
@@ -4885,11 +4883,15 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             context.partiallyInferredDeclarationTypes
                                         , locallyIntroducedExpressionVariables =
                                             FastDict.union
-                                                (FastDict.union
-                                                    parameter0Inferred.introducedExpressionVariables
-                                                    parameter1UpInferred.introducedExpressionVariables
-                                                )
                                                 context.locallyIntroducedExpressionVariables
+                                                (List.foldl
+                                                    (\parameter soFar ->
+                                                        FastDict.union soFar
+                                                            (parameter |> patternTypedNodeIntroducedVariables)
+                                                    )
+                                                    (parameter0Inferred.node |> patternTypedNodeIntroducedVariables)
+                                                    parameter1UpInferred.nodesReverse
+                                                )
                                         }
                                 )
                         )
@@ -4903,7 +4905,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (parameter1Up
                             |> listFoldlWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
-                                , introducedExpressionVariables = FastDict.empty
                                 , nodesReverse = []
                                 , index = 1
                                 }
@@ -4917,10 +4918,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     , nodesReverse =
                                                         patternInferred.node
                                                             :: soFar.nodesReverse
-                                                    , introducedExpressionVariables =
-                                                        FastDict.union
-                                                            patternInferred.introducedExpressionVariables
-                                                            soFar.introducedExpressionVariables
                                                     }
                                                 )
                                                 (variableSubstitutionsMerge context.declarationTypes
@@ -4941,8 +4938,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             |> Result.map
                                 (\folded ->
                                     { substitutions = folded.substitutions
-                                    , introducedExpressionVariables =
-                                        folded.introducedExpressionVariables
                                     , nodesReverse = folded.nodesReverse
                                     }
                                 )
@@ -5059,9 +5054,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             , containingDeclarationName = context.containingDeclarationName
                                             , path = "result" :: "case0" :: context.path
                                             , locallyIntroducedExpressionVariables =
-                                                FastDict.union
-                                                    patternInferred.introducedExpressionVariables
-                                                    context.locallyIntroducedExpressionVariables
+                                                FastDict.union context.locallyIntroducedExpressionVariables
+                                                    (patternInferred.node |> patternTypedNodeIntroducedVariables)
                                             }
                                     )
                             )
@@ -5122,7 +5116,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         , path = "result" :: casePath
                                                         , locallyIntroducedExpressionVariables =
                                                             FastDict.union
-                                                                patternInferred.introducedExpressionVariables
+                                                                (patternInferred.node |> patternTypedNodeIntroducedVariables)
                                                                 context.locallyIntroducedExpressionVariables
                                                         }
                                                 )
@@ -5191,9 +5185,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         , partiallyInferredDeclarationTypes =
                                                             soFar.partiallyInferredDeclarationTypes
                                                         , introducedExpressionVariables =
-                                                            FastDict.union
-                                                                patternInferred.introducedExpressionVariables
-                                                                soFar.introducedExpressionVariables
+                                                            FastDict.union soFar.introducedExpressionVariables
+                                                                (patternInferred.node |> patternTypedNodeIntroducedVariables)
                                                         }
 
                                             Elm.Syntax.Expression.LetFunction letValueOrFunctionDeclaration ->
@@ -5241,9 +5234,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         }
                                     )
                                     { index = 0
-                                    , introducedExpressionVariables = FastDict.empty
                                     , annotatedDeclarationTypes = FastDict.empty
                                     , partiallyInferredDeclarationTypes = FastDict.empty
+                                    , introducedExpressionVariables = FastDict.empty
                                     }
                                 |> (\result ->
                                         { introducedExpressionVariables = result.introducedExpressionVariables
@@ -5804,7 +5797,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                 (\fullSubstitutions ->
                                     { substitutions = fullSubstitutions
                                     , introducedExpressionVariables =
-                                        patternInferred.introducedExpressionVariables
+                                        patternInferred.node |> patternTypedNodeIntroducedVariables
                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                         expressionInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                     , node =
@@ -5843,6 +5836,15 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
         Elm.Syntax.Expression.LetFunction letValueOrFunction ->
             letFunctionOrValueDeclarationTypeInfer context
                 (Elm.Syntax.Node.Node letDeclarationRange letValueOrFunction)
+                |> Result.map
+                    (\letFunctionOrValueDeclarationInferred ->
+                        { substitutions = letFunctionOrValueDeclarationInferred.substitutions
+                        , introducedExpressionVariables = FastDict.empty
+                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                            letFunctionOrValueDeclarationInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                        , node = letFunctionOrValueDeclarationInferred.node
+                        }
+                    )
 
 
 letFunctionOrValueDeclarationTypeInfer :
@@ -5860,8 +5862,6 @@ letFunctionOrValueDeclarationTypeInfer :
         Result
             String
             { substitutions : VariableSubstitutions
-            , introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
             , usesOfTypeVariablesFromPartiallyInferredDeclarations :
                 FastDict.Dict
                     TypeVariableFromContext
@@ -5928,7 +5928,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             }
                                         , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                             resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                        , introducedExpressionVariables = FastDict.empty
                                         }
 
                                 Just (Elm.Syntax.Node.Node signatureRange letValueOrFunctionSignature) ->
@@ -5966,7 +5965,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                 }
                                                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                                                 resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                            , introducedExpressionVariables = FastDict.empty
                                                             }
                                                         )
                                                         (variableSubstitutionsMerge context.declarationTypes
@@ -7656,6 +7654,21 @@ listMapAndFastSetsUnify elementToSet elements =
                     soFar
             )
             FastSet.empty
+
+
+listMapAndFastDictsUnify :
+    (a -> FastDict.Dict comparable value)
+    -> List a
+    -> FastDict.Dict comparable value
+listMapAndFastDictsUnify elementToSet elements =
+    elements
+        |> List.foldl
+            (\element soFar ->
+                FastDict.union
+                    (element |> elementToSet)
+                    soFar
+            )
+            FastDict.empty
 
 
 expressionTypedNodeContainedTypeVariables :
@@ -10786,9 +10799,8 @@ parameterPatternsTypeInfer context parameterPatterns =
                                     patternInferred.node
                                         :: soFar.nodesReverse
                                 , introducedExpressionVariables =
-                                    FastDict.union
-                                        patternInferred.introducedExpressionVariables
-                                        soFar.introducedExpressionVariables
+                                    FastDict.union soFar.introducedExpressionVariables
+                                        (patternInferred.node |> patternTypedNodeIntroducedVariables)
                                 }
                             )
                             (variableSubstitutionsMerge context.declarationTypes
