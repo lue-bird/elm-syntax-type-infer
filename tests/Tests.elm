@@ -162,7 +162,7 @@ suite =
                                                                   , ElmSyntaxTypeInfer.TypeVariable "a"
                                                                   )
                                                                 ]
-                                                        , recordVariable = "accessedRecordBase"
+                                                        , recordVariable = "record"
                                                         }
                                                     )
                                             , output =
@@ -221,7 +221,7 @@ suite =
                                             }
                                         )
                                 , part2 =
-                                    ElmSyntaxTypeInfer.TypeVariable "number2"
+                                    ElmSyntaxTypeInfer.TypeVariable "number1"
                                 }
                             )
                         )
@@ -795,70 +795,73 @@ suite =
                                 ]
                             )
                     }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable = "recordBase"
-                                            , fields =
-                                                FastDict.fromList
-                                                    [ ( "a"
-                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                            ElmSyntaxTypeInfer.TypeUnit
-                                                      )
-                                                    , ( "c"
-                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                            ElmSyntaxTypeInfer.TypeUnit
-                                                      )
-                                                    , ( "b"
-                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                                { arguments = []
-                                                                , moduleOrigin = [ "Basics" ]
-                                                                , name = "Float"
-                                                                }
-                                                            )
-                                                      )
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                { recordVariable = "record"
+                                                , fields =
+                                                    FastDict.fromList
+                                                        [ ( "a"
+                                                          , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                ElmSyntaxTypeInfer.TypeUnit
+                                                          )
+                                                        , ( "c"
+                                                          , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                ElmSyntaxTypeInfer.TypeUnit
+                                                          )
+                                                        , ( "b"
+                                                          , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeConstruct
+                                                                    { arguments = []
+                                                                    , moduleOrigin = [ "Basics" ]
+                                                                    , name = "Float"
+                                                                    }
+                                                                )
+                                                          )
+                                                        ]
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "List" ]
+                                                , name = "List"
+                                                , arguments =
+                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                            { recordVariable = "record"
+                                                            , fields =
+                                                                FastDict.fromList
+                                                                    [ ( "a"
+                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            ElmSyntaxTypeInfer.TypeUnit
+                                                                      )
+                                                                    , ( "c"
+                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            ElmSyntaxTypeInfer.TypeUnit
+                                                                      )
+                                                                    , ( "b"
+                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                                                { arguments = []
+                                                                                , moduleOrigin = [ "Basics" ]
+                                                                                , name = "Float"
+                                                                                }
+                                                                            )
+                                                                      )
+                                                                    ]
+                                                            }
+                                                        )
                                                     ]
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                        { recordVariable = "recordBase"
-                                                        , fields =
-                                                            FastDict.fromList
-                                                                [ ( "a"
-                                                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                        ElmSyntaxTypeInfer.TypeUnit
-                                                                  )
-                                                                , ( "c"
-                                                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                        ElmSyntaxTypeInfer.TypeUnit
-                                                                  )
-                                                                , ( "b"
-                                                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                                            { arguments = []
-                                                                            , moduleOrigin = [ "Basics" ]
-                                                                            , name = "Float"
-                                                                            }
-                                                                        )
-                                                                  )
-                                                                ]
-                                                        }
-                                                    )
-                                                ]
-                                            }
-                                        )
-                                }
+                                                }
+                                            )
+                                    }
+                                )
                             )
                         )
             )
