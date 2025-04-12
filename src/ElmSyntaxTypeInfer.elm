@@ -8178,8 +8178,7 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                                         , substitutions = variableToTypeUsingCondensed
                                         }
                                         (declarationValueOrFunctionsSoFar
-                                            |> -- TODO optimize
-                                               FastDict.map
+                                            |> FastDict.map
                                                 (\_ declarationValueOrFunctionToCondenseVariablesIn ->
                                                     declarationValueOrFunctionToCondenseVariablesIn
                                                         |> declarationValueOrFunctionInfoMapTypeVariables
@@ -8285,8 +8284,7 @@ valueOrFunctionDeclarationsApplySubstitutions state declarationValueOrFunctionsS
                                         (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
                                 declarationsUsingCondensed =
                                     declarationValueOrFunctionsSoFar
-                                        |> -- TODO optimize
-                                           FastDict.map
+                                        |> FastDict.map
                                             (\_ declarationValueOrFunctionToCondenseVariablesIn ->
                                                 declarationValueOrFunctionToCondenseVariablesIn
                                                     |> declarationValueOrFunctionInfoMapTypeVariables
@@ -8467,7 +8465,6 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
-    -- TODO optimize
     valueAndFunctionDeclarationsToApplySubstitutionTo
         |> fastDictFoldlWhileOkFrom
             { substitutions = variableSubstitutionsNone
