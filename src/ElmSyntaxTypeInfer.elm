@@ -10806,20 +10806,20 @@ equivalentVariablesCreateCondensedVariable set =
 
         variable0 :: variable1 :: variable2Up ->
             Result.map
-                (\unifiedConstraint ->
-                    ( -- creating a new variable safely
-                      (variable0 :: variable1 :: variable2Up)
-                        |> List.map
-                            (\( context, name ) ->
-                                name :: context
+                (\unifiedMaybeConstraint ->
+                    case unifiedMaybeConstraint of
+                        Nothing ->
+                            variable0
+
+                        Just unifiedConstraint ->
+                            let
+                                ( variable0Context, variable0IgnoringContext ) =
+                                    variable0
+                            in
+                            ( variable0Context
+                            , variable0IgnoringContext
+                                |> typeVariableNameReplaceConstraint unifiedConstraint
                             )
-                        |> List.sort
-                        |> List.intersperse [ "_and" ]
-                        |> List.concat
-                    , variable0
-                        |> typeVariableIgnoringContext
-                        |> typeVariableNameReplaceMaybeConstraint unifiedConstraint
-                    )
                 )
                 ((variable0 :: variable1 :: variable2Up)
                     |> listFoldlWhileOkFrom Nothing
@@ -10850,11 +10850,11 @@ typeVariableConstraintToString constraint =
             "compappend"
 
 
-typeVariableNameReplaceMaybeConstraint : Maybe TypeVariableConstraint -> String -> String
-typeVariableNameReplaceMaybeConstraint maybeConstraint typeVariableNameWithPotentialConstraint =
+typeVariableNameReplaceConstraint : TypeVariableConstraint -> String -> String
+typeVariableNameReplaceConstraint replacementConstraint typeVariableNameWithPotentialConstraint =
     let
-        typeVariableNameStripConstraint : String
-        typeVariableNameStripConstraint =
+        typeVariableNameWithoutConstraint : String
+        typeVariableNameWithoutConstraint =
             case typeVariableNameWithPotentialConstraint |> typeVariableConstraint of
                 Nothing ->
                     typeVariableNameWithPotentialConstraint
@@ -10865,13 +10865,8 @@ typeVariableNameReplaceMaybeConstraint maybeConstraint typeVariableNameWithPoten
                         typeVariableNameWithPotentialConstraint
                         |> stringFirstCharToLower
     in
-    case maybeConstraint of
-        Nothing ->
-            typeVariableNameStripConstraint
-
-        Just constraint ->
-            (constraint |> typeVariableConstraintToString)
-                ++ (typeVariableNameStripConstraint |> stringFirstCharToUpper)
+    (replacementConstraint |> typeVariableConstraintToString)
+        ++ (typeVariableNameWithoutConstraint |> stringFirstCharToUpper)
 
 
 fastDictFoldlWhileOkFrom : ok -> (key -> value -> ok -> Result err ok) -> FastDict.Dict key value -> Result err ok
