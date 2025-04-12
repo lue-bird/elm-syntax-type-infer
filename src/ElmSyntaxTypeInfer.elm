@@ -7523,7 +7523,7 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
         globalTypeVariableDisambiguationLookup =
             typeVariablesFromContextToDisambiguationLookup
                 (declarationValueOrFunctionInfo
-                    |> declarationValueOrFunctionInfoContainedGlobalTypeVariables identity
+                    |> declarationValueOrFunctionInfoContainedGlobalTypeVariables
                     |> FastSet.map
                         (\( context, name ) ->
                             ( context |> List.reverse |> List.drop 1
@@ -7546,10 +7546,9 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
 
 
 declarationValueOrFunctionInfoContainedGlobalTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> ValueOrFunctionDeclarationInfo type_
+    ValueOrFunctionDeclarationInfo (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-declarationValueOrFunctionInfoContainedGlobalTypeVariables typedNodeTypeToExtractVariablesFrom declarationValueOrFunction =
+declarationValueOrFunctionInfoContainedGlobalTypeVariables declarationValueOrFunction =
     FastSet.union
         (declarationValueOrFunction.parameters
             |> List.foldl
@@ -7557,7 +7556,6 @@ declarationValueOrFunctionInfoContainedGlobalTypeVariables typedNodeTypeToExtrac
                     FastSet.union
                         (parameter
                             |> patternTypedNodeContainedTypeVariables
-                                typedNodeTypeToExtractVariablesFrom
                         )
                         soFar
                 )
@@ -7565,37 +7563,31 @@ declarationValueOrFunctionInfoContainedGlobalTypeVariables typedNodeTypeToExtrac
         )
         (FastSet.union
             (declarationValueOrFunction.type_
-                |> typedNodeTypeToExtractVariablesFrom
                 |> typeContainedVariables
             )
             (declarationValueOrFunction.result
                 |> expressionTypedNodeContainedTypeVariables
-                    typedNodeTypeToExtractVariablesFrom
             )
         )
 
 
 patternTypedNodeContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> TypedNode (Pattern type_) type_
+    TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-patternTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom patternTypedNode =
+patternTypedNodeContainedTypeVariables patternTypedNode =
     FastSet.union
         (patternTypedNode.type_
-            |> typedNodeTypeToExtractVariablesFrom
             |> typeContainedVariables
         )
         (patternTypedNode.value
             |> patternContainedTypeVariables
-                typedNodeTypeToExtractVariablesFrom
         )
 
 
 patternContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> Pattern type_
+    Pattern (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
+patternContainedTypeVariables pattern =
     case pattern of
         PatternIgnored ->
             FastSet.empty
@@ -7616,38 +7608,33 @@ patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
             FastSet.empty
 
         PatternParenthesized inParens ->
-            patternTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom
+            patternTypedNodeContainedTypeVariables
                 inParens
 
         PatternAs patternAs ->
-            patternTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom
+            patternTypedNodeContainedTypeVariables
                 patternAs.pattern
 
         PatternTuple parts ->
             FastSet.union
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (parts.part1
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
 
         PatternTriple parts ->
             FastSet.union
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (parts.part1
                         |> patternTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (parts.part2
                         |> patternTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
@@ -7655,11 +7642,9 @@ patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
             FastSet.union
                 (patternListCons.head
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (patternListCons.tail
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
 
         PatternListExact elements ->
@@ -7668,7 +7653,6 @@ patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
                     (\element ->
                         element
                             |> patternTypedNodeContainedTypeVariables
-                                typedNodeTypeToExtractVariablesFrom
                     )
 
         PatternVariant patternVariant ->
@@ -7677,7 +7661,6 @@ patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
                     (\value ->
                         value
                             |> patternTypedNodeContainedTypeVariables
-                                typedNodeTypeToExtractVariablesFrom
                     )
 
         PatternRecord fields ->
@@ -7685,7 +7668,6 @@ patternContainedTypeVariables typedNodeTypeToExtractVariablesFrom pattern =
                 |> listMapAndFastSetsUnify
                     (\fieldTypedNode ->
                         fieldTypedNode.type_
-                            |> typedNodeTypeToExtractVariablesFrom
                             |> typeContainedVariables
                     )
 
@@ -7718,26 +7700,22 @@ listMapAndFastDictsUnify elementToSet elements =
 
 
 expressionTypedNodeContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> TypedNode (Expression type_) type_
+    TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-expressionTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom expressionTypedNode =
+expressionTypedNodeContainedTypeVariables expressionTypedNode =
     FastSet.union
         (expressionTypedNode.type_
-            |> typedNodeTypeToExtractVariablesFrom
             |> typeContainedVariables
         )
         (expressionTypedNode.value
             |> expressionContainedTypeVariables
-                typedNodeTypeToExtractVariablesFrom
         )
 
 
 expressionContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> Expression type_
+    Expression (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression =
+expressionContainedTypeVariables expression =
     case expression of
         ExpressionUnit ->
             FastSet.empty
@@ -7764,53 +7742,46 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
             FastSet.empty
 
         ExpressionNegation negated ->
-            expressionTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom
+            expressionTypedNodeContainedTypeVariables
                 negated
 
         ExpressionParenthesized inParens ->
-            expressionTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom
+            expressionTypedNodeContainedTypeVariables
                 inParens
 
         ExpressionRecordAccess expressionRecordAccess ->
-            expressionTypedNodeContainedTypeVariables typedNodeTypeToExtractVariablesFrom
+            expressionTypedNodeContainedTypeVariables
                 expressionRecordAccess.record
 
         ExpressionInfixOperation expressionInfixOperation ->
             FastSet.union
                 (expressionInfixOperation.left
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (expressionInfixOperation.right
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
 
         ExpressionTuple parts ->
             FastSet.union
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (parts.part1
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
 
         ExpressionTriple parts ->
             FastSet.union
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (parts.part1
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (parts.part2
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
@@ -7818,16 +7789,13 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
             FastSet.union
                 (expressionIfThenElse.condition
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (expressionIfThenElse.onFalse
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
@@ -7837,7 +7805,6 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
                     (\element ->
                         element
                             |> expressionTypedNodeContainedTypeVariables
-                                typedNodeTypeToExtractVariablesFrom
                     )
 
         ExpressionRecord fields ->
@@ -7846,26 +7813,22 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
                     (\field ->
                         field.value
                             |> expressionTypedNodeContainedTypeVariables
-                                typedNodeTypeToExtractVariablesFrom
                     )
 
         ExpressionCall expressionCall ->
             FastSet.union
                 (expressionCall.called
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (expressionCall.argument0
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (expressionCall.argument1Up
                         |> listMapAndFastSetsUnify
                             (\argument ->
                                 argument
                                     |> expressionTypedNodeContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
                             )
                     )
                 )
@@ -7874,7 +7837,6 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
             FastSet.union
                 (expressionLambda.parameter0
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (expressionLambda.parameter1Up
@@ -7882,32 +7844,27 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
                             (\parameter ->
                                 parameter
                                     |> patternTypedNodeContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
                             )
                     )
                     (expressionLambda.result
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
         ExpressionRecordUpdate expressionRecordUpdate ->
             FastSet.union
                 (expressionRecordUpdate.recordVariable.type_
-                    |> typedNodeTypeToExtractVariablesFrom
                     |> typeContainedVariables
                 )
                 (FastSet.union
                     (expressionRecordUpdate.field0.value
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (expressionRecordUpdate.field1Up
                         |> listMapAndFastSetsUnify
                             (\field ->
                                 field.value
                                     |> expressionTypedNodeContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
                             )
                     )
                 )
@@ -7916,20 +7873,14 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
             FastSet.union
                 (expressionCaseOf.matchedExpression
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (expressionCaseOf.case0
                         |> expressionCaseOfCaseContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                     (expressionCaseOf.case1Up
                         |> listMapAndFastSetsUnify
-                            (\case_ ->
-                                case_
-                                    |> expressionCaseOfCaseContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
-                            )
+                            expressionCaseOfCaseContainedTypeVariables
                     )
                 )
 
@@ -7937,7 +7888,6 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
             FastSet.union
                 (expressionLetIn.declaration0.declaration
                     |> letDeclarationContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (FastSet.union
                     (expressionLetIn.declaration1Up
@@ -7945,37 +7895,31 @@ expressionContainedTypeVariables typedNodeTypeToExtractVariablesFrom expression 
                             (\letDeclaration ->
                                 letDeclaration.declaration
                                     |> letDeclarationContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
                             )
                     )
                     (expressionLetIn.result
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
 
 letDeclarationContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    -> LetDeclaration type_
+    LetDeclaration (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-letDeclarationContainedTypeVariables typedNodeTypeToExtractVariablesFrom letDeclaration =
+letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
             FastSet.union
                 (letDestructuring.pattern
                     |> patternTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
                 (letDestructuring.expression
                     |> expressionTypedNodeContainedTypeVariables
-                        typedNodeTypeToExtractVariablesFrom
                 )
 
         LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
             FastSet.union
                 (letValueOrFunctionDeclaration.type_
-                    |> typedNodeTypeToExtractVariablesFrom
                     |> typeContainedVariables
                 )
                 (FastSet.union
@@ -7984,32 +7928,26 @@ letDeclarationContainedTypeVariables typedNodeTypeToExtractVariablesFrom letDecl
                             (\parameter ->
                                 parameter
                                     |> patternTypedNodeContainedTypeVariables
-                                        typedNodeTypeToExtractVariablesFrom
                             )
                     )
                     (letValueOrFunctionDeclaration.result
                         |> expressionTypedNodeContainedTypeVariables
-                            typedNodeTypeToExtractVariablesFrom
                     )
                 )
 
 
 expressionCaseOfCaseContainedTypeVariables :
-    (type_ -> Type comparableTypeVariable)
-    ->
-        { pattern : TypedNode (Pattern type_) type_
-        , result : TypedNode (Expression type_) type_
-        }
+    { pattern : TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
+    , result : TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
+    }
     -> FastSet.Set comparableTypeVariable
-expressionCaseOfCaseContainedTypeVariables typedNodeTypeToExtractVariablesFrom syntaxCase =
+expressionCaseOfCaseContainedTypeVariables syntaxCase =
     FastSet.union
         (syntaxCase.pattern
             |> patternTypedNodeContainedTypeVariables
-                typedNodeTypeToExtractVariablesFrom
         )
         (syntaxCase.result
             |> expressionTypedNodeContainedTypeVariables
-                typedNodeTypeToExtractVariablesFrom
         )
 
 
