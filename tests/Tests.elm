@@ -620,6 +620,50 @@ suite =
                             )
                         )
             )
+        , Test.test "directly applied lambda with inexhaustive record pattern: (\\{ a } -> a) ({ a = 1.1, b = \"\" })"
+            (\() ->
+                Elm.Syntax.Expression.Application
+                    [ Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.LambdaExpression
+                            { args =
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.RecordPattern
+                                        [ Elm.Syntax.Node.empty "a" ]
+                                    )
+                                ]
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                            }
+                        )
+                    , Elm.Syntax.Node.empty
+                        (Elm.Syntax.Expression.RecordExpr
+                            [ Elm.Syntax.Node.empty
+                                ( Elm.Syntax.Node.empty "a"
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 1.1)
+                                )
+                            , Elm.Syntax.Node.empty
+                                ( Elm.Syntax.Node.empty "b"
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Literal "")
+                                )
+                            ]
+                        )
+                    ]
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Basics" ]
+                                    , name = "Float"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
