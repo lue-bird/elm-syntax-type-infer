@@ -3703,7 +3703,8 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             (\(Elm.Syntax.Node.Node fieldRange fieldName) ->
                                 { range = fieldRange
                                 , value = fieldName
-                                , type_ = TypeVariable ( context.path, fieldName )
+                                , type_ =
+                                    TypeVariable ( "field" :: context.path, fieldName )
                                 }
                             )
             in
@@ -3712,15 +3713,18 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                 , value = PatternRecord fieldTypedNodes
                 , type_ =
                     TypeNotVariable
-                        (TypeRecord
-                            (fieldTypedNodes
-                                |> listMapToFastDict
-                                    (\fieldVariable ->
-                                        { key = fieldVariable.value
-                                        , value = fieldVariable.type_
-                                        }
-                                    )
-                            )
+                        (TypeRecordExtension
+                            { recordVariable =
+                                ( context.path, "record" )
+                            , fields =
+                                fieldTypedNodes
+                                    |> listMapToFastDict
+                                        (\fieldVariable ->
+                                            { key = fieldVariable.value
+                                            , value = fieldVariable.type_
+                                            }
+                                        )
+                            }
                         )
                 }
 
