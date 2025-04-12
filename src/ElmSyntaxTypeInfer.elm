@@ -3017,18 +3017,12 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
             let
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    ( -- creating a new variable safely
-                      "_of"
-                        :: ([ (aRecordExtension.recordVariable |> typeVariableIgnoringContext)
-                                :: (aRecordExtension.recordVariable |> Tuple.first)
-                            , (bRecordExtension.recordVariable |> typeVariableIgnoringContext)
-                                :: (bRecordExtension.recordVariable |> Tuple.first)
-                            ]
-                                |> List.sort
-                                |> List.intersperse [ "_and" ]
-                                |> List.concat
-                           )
-                    , "base"
+                    let
+                        ( aRecordVariableContext, aRecordVariableWithoutContext ) =
+                            aRecordExtension.recordVariable
+                    in
+                    ( "base" :: aRecordVariableContext
+                    , aRecordVariableWithoutContext
                     )
             in
             Result.map
@@ -4167,12 +4161,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 TypeNotVariable
                                     (TypeRecordExtension
                                         { recordVariable =
-                                            ( context.path
-                                            , "recordWith"
-                                                ++ (fieldName
-                                                        |> stringFirstCharToUpper
-                                                   )
-                                            )
+                                            ( context.path, "accessedRecord" )
                                         , fields =
                                             FastDict.singleton fieldName
                                                 fieldValueType

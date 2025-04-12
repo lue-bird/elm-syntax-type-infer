@@ -162,7 +162,7 @@ suite =
                                                                   , ElmSyntaxTypeInfer.TypeVariable "a"
                                                                   )
                                                                 ]
-                                                        , recordVariable = "base"
+                                                        , recordVariable = "accessedRecordBase"
                                                         }
                                                     )
                                             , output =
@@ -801,7 +801,7 @@ suite =
                                 { input =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable = "base"
+                                            { recordVariable = "recordBase"
                                             , fields =
                                                 FastDict.fromList
                                                     [ ( "a"
@@ -832,7 +832,7 @@ suite =
                                             , arguments =
                                                 [ ElmSyntaxTypeInfer.TypeNotVariable
                                                     (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                        { recordVariable = "base"
+                                                        { recordVariable = "recordBase"
                                                         , fields =
                                                             FastDict.fromList
                                                                 [ ( "a"
