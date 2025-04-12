@@ -4151,7 +4151,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
                 fieldValueType : Type TypeVariableFromContext
                 fieldValueType =
-                    TypeVariable ( context.path, fieldName )
+                    TypeVariable ( "field" :: context.path, fieldName )
 
                 type_ : Type TypeVariableFromContext
                 type_ =
