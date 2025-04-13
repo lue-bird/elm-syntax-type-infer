@@ -679,7 +679,7 @@ suite =
                                 { input =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable = "recordWithField"
+                                            { recordVariable = "record"
                                             , fields =
                                                 FastDict.singleton "field"
                                                     (ElmSyntaxTypeInfer.TypeVariable
