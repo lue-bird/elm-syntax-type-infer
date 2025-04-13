@@ -1281,7 +1281,10 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                         }
 
                                 else
-                                    Err "cannot unify number type variable with types other than Int/Float"
+                                    Err
+                                        ("cannot unify number type variable with types other than Int/Float, found: "
+                                            ++ (replacement.type_ |> typeNotVariableToInfoString)
+                                        )
 
                             TypeVariableConstraintAppendable ->
                                 if replacement.type_ |> typeNotVariableIsAppendable then
@@ -1330,6 +1333,99 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                     |> typeNotVariableSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
+
+
+typeToInfoString : Type TypeVariableFromContext -> String
+typeToInfoString type_ =
+    case type_ of
+        TypeVariable typeVariable ->
+            typeVariable |> typeVariableFromContextToInfoString
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariable |> typeNotVariableToInfoString
+
+
+typeVariableFromContextToInfoString : TypeVariableFromContext -> String
+typeVariableFromContextToInfoString ( context, variable ) =
+    variable ++ "_" ++ (context |> String.join "_")
+
+
+typeNotVariableToInfoString : TypeNotVariable TypeVariableFromContext -> String
+typeNotVariableToInfoString typeNotVariable =
+    case typeNotVariable of
+        TypeUnit ->
+            "()"
+
+        TypeFunction typeFunction ->
+            "("
+                ++ (typeFunction.input |> typeToInfoString)
+                ++ " -> "
+                ++ (typeFunction.output |> typeToInfoString)
+                ++ ")"
+
+        TypeConstruct typeConstruct ->
+            let
+                typeReferenceAsString : String
+                typeReferenceAsString =
+                    qualifiedToString
+                        { qualification = typeConstruct.moduleOrigin
+                        , name = typeConstruct.name
+                        }
+            in
+            case typeConstruct.arguments of
+                [] ->
+                    typeReferenceAsString
+
+                argument0 :: argument1Up ->
+                    "("
+                        ++ typeReferenceAsString
+                        ++ (argument0
+                                :: argument1Up
+                                |> List.map (\argument -> " " ++ (argument |> typeToInfoString))
+                                |> String.concat
+                           )
+                        ++ ")"
+
+        TypeTuple parts ->
+            "( "
+                ++ (parts.part0 |> typeToInfoString)
+                ++ ", "
+                ++ (parts.part1 |> typeToInfoString)
+                ++ " )"
+
+        TypeTriple parts ->
+            "( "
+                ++ (parts.part0 |> typeToInfoString)
+                ++ ", "
+                ++ (parts.part1 |> typeToInfoString)
+                ++ ", "
+                ++ (parts.part2 |> typeToInfoString)
+                ++ " )"
+
+        TypeRecord fields ->
+            "{ "
+                ++ (fields
+                        |> FastDict.toList
+                        |> List.map
+                            (\( name, value ) ->
+                                name ++ " : " ++ (value |> typeToInfoString)
+                            )
+                        |> String.join ", "
+                   )
+                ++ " }"
+
+        TypeRecordExtension recordExtension ->
+            "{ "
+                ++ (recordExtension.recordVariable |> typeVariableFromContextToInfoString)
+                ++ (recordExtension.fields
+                        |> FastDict.toList
+                        |> List.map
+                            (\( name, value ) ->
+                                name ++ " : " ++ (value |> typeToInfoString)
+                            )
+                        |> String.join ", "
+                   )
+                ++ " }"
 
 
 typeNotVariableSubstituteVariableByNotVariable :
@@ -4577,30 +4673,10 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 resultType : Type TypeVariableFromContext
                                 resultType =
                                     TypeVariable ( context.path, "callResult" )
-
-                                calledTypeInferredFromArguments : Type TypeVariableFromContext
-                                calledTypeInferredFromArguments =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = argument0Inferred.node.type_
-                                            , output =
-                                                argument1UpInferred.nodesReverse
-                                                    |> List.foldl
-                                                        (\argumentInferred output ->
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = argumentInferred.type_
-                                                                    , output = output
-                                                                    }
-                                                                )
-                                                        )
-                                                        resultType
-                                            }
-                                        )
                             in
                             Result.andThen
-                                (\callType ->
-                                    Result.map
+                                (\callTypeUnified ->
+                                    Result.andThen
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
                                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
@@ -4621,16 +4697,38 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , type_ = resultType
                                                 }
                                             }
+                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                    { declarationTypes = context.declarationTypes
+                                                    , locallyIntroducedExpressionVariables =
+                                                        context.locallyIntroducedExpressionVariables
+                                                    }
+                                                    callTypeUnified.substitutions
                                         )
-                                        (variableSubstitutionsMerge4 context.declarationTypes
+                                        (variableSubstitutionsMerge3 context.declarationTypes
                                             calledInferred.substitutions
                                             argument0Inferred.substitutions
                                             argument1UpInferred.substitutions
-                                            callType.substitutions
                                         )
                                 )
                                 (typeUnify context.declarationTypes
-                                    calledTypeInferredFromArguments
+                                    (TypeNotVariable
+                                        (TypeFunction
+                                            { input = argument0Inferred.node.type_
+                                            , output =
+                                                argument1UpInferred.nodesReverse
+                                                    |> List.foldl
+                                                        (\argumentInferred output ->
+                                                            TypeNotVariable
+                                                                (TypeFunction
+                                                                    { input = argumentInferred.type_
+                                                                    , output = output
+                                                                    }
+                                                                )
+                                                        )
+                                                        resultType
+                                            }
+                                        )
+                                    )
                                     calledInferred.node.type_
                                 )
                         )
