@@ -5096,7 +5096,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (\matchedInferred case0Inferred case1UpInferred ->
                             Result.andThen
                                 (\unifiedTypes ->
-                                    Result.map
+                                    Result.andThen
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
                                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
@@ -5114,15 +5114,20 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             case1UpInferred.nodesReverse
                                                                 |> List.reverse
                                                         }
-                                                , type_ = unifiedTypes.resultType
+                                                , type_ = case0Inferred.node.result.type_
                                                 }
                                             }
+                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                    { declarationTypes = context.declarationTypes
+                                                    , locallyIntroducedExpressionVariables =
+                                                        context.locallyIntroducedExpressionVariables
+                                                    }
+                                                    unifiedTypes.substitutions
                                         )
-                                        (variableSubstitutionsMerge4 context.declarationTypes
+                                        (variableSubstitutionsMerge3 context.declarationTypes
                                             matchedInferred.substitutions
                                             case0Inferred.substitutions
                                             case1UpInferred.substitutions
-                                            unifiedTypes.substitutions
                                         )
                                 )
                                 (Result.andThen
