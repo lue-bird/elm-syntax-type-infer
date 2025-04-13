@@ -8900,14 +8900,14 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 , node = expression
                 }
 
-        ExpressionInteger _ ->
+        ExpressionInteger integer ->
             Result.map
-                (\substituted ->
-                    { substitutions = substituted.substitutions
+                (\typeSubstituted ->
+                    { substitutions = typeSubstituted.substitutions
                     , node =
                         { range = expression.range
-                        , value = expression.value
-                        , type_ = substituted.type_
+                        , value = ExpressionInteger integer
+                        , type_ = typeSubstituted.type_
                         }
                     }
                 )
@@ -8916,14 +8916,14 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
 
-        ExpressionReference _ ->
+        ExpressionReference reference ->
             Result.map
-                (\substituted ->
-                    { substitutions = substituted.substitutions
+                (\typeSubstituted ->
+                    { substitutions = typeSubstituted.substitutions
                     , node =
                         { range = expression.range
-                        , value = expression.value
-                        , type_ = substituted.type_
+                        , value = ExpressionReference reference
+                        , type_ = typeSubstituted.type_
                         }
                     }
                 )
@@ -8932,14 +8932,14 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
 
-        ExpressionOperatorFunction _ ->
+        ExpressionOperatorFunction symbol ->
             Result.map
-                (\substituted ->
-                    { substitutions = substituted.substitutions
+                (\typeSubstituted ->
+                    { substitutions = typeSubstituted.substitutions
                     , node =
                         { range = expression.range
-                        , value = expression.value
-                        , type_ = substituted.type_
+                        , value = ExpressionOperatorFunction symbol
+                        , type_ = typeSubstituted.type_
                         }
                     }
                 )
