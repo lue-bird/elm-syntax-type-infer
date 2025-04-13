@@ -2452,6 +2452,8 @@ suite =
                                                                     (Elm.Syntax.Expression.Integer 1)
                                                                 )
                                                             )
+                                                        , Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.Integer 1)
                                                         ]
                                                     )
                                                 )
