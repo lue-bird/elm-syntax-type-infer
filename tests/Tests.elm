@@ -508,6 +508,79 @@ suite =
                             )
                         )
             )
+        , Test.test "argument pattern variable as if-then-else condition \\a -> if a then () else ()"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.IfBlock
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                )
+                                (Elm.Syntax.Node.empty
+                                    Elm.Syntax.Expression.UnitExpr
+                                )
+                                (Elm.Syntax.Node.empty
+                                    Elm.Syntax.Expression.UnitExpr
+                                )
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { arguments = []
+                                            , moduleOrigin = [ "Basics" ]
+                                            , name = "Bool"
+                                            }
+                                        )
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                }
+                            )
+                        )
+            )
+        , Test.test "argument pattern variable unified with unit in if-then-else branch \\a -> if a then () else ()"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.IfBlock
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "True")
+                                )
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                )
+                                (Elm.Syntax.Node.empty
+                                    Elm.Syntax.Expression.UnitExpr
+                                )
+                            )
+                    }
+                    |> expressionExpectInferredType
+                        (ElmSyntaxTypeInfer.TypeNotVariable
+                            (ElmSyntaxTypeInfer.TypeFunction
+                                { input =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                , output =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                }
+                            )
+                        )
+            )
         , Test.test "argument pattern variable negated parenthesized \\(a) -> -(a)"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
