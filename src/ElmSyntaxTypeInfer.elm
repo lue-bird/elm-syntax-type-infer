@@ -8873,31 +8873,31 @@ expressionTypedNodeSubstituteVariableByNotVariable :
                     (Expression (Type TypeVariableFromContext))
                     (Type TypeVariableFromContext)
             }
-expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement expression =
+expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement expressionTypedNode =
     -- IGNORE TCO
-    case expression.value of
+    case expressionTypedNode.value of
         ExpressionUnit ->
             Ok
                 { substitutions = variableSubstitutionsNone
-                , node = expression
+                , node = expressionTypedNode
                 }
 
         ExpressionFloat _ ->
             Ok
                 { substitutions = variableSubstitutionsNone
-                , node = expression
+                , node = expressionTypedNode
                 }
 
         ExpressionChar _ ->
             Ok
                 { substitutions = variableSubstitutionsNone
-                , node = expression
+                , node = expressionTypedNode
                 }
 
         ExpressionString _ ->
             Ok
                 { substitutions = variableSubstitutionsNone
-                , node = expression
+                , node = expressionTypedNode
                 }
 
         ExpressionInteger integer ->
@@ -8905,13 +8905,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\typeSubstituted ->
                     { substitutions = typeSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionInteger integer
                         , type_ = typeSubstituted.type_
                         }
                     }
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -8921,13 +8921,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\typeSubstituted ->
                     { substitutions = typeSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionReference reference
                         , type_ = typeSubstituted.type_
                         }
                     }
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -8937,13 +8937,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\typeSubstituted ->
                     { substitutions = typeSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionOperatorFunction symbol
                         , type_ = typeSubstituted.type_
                         }
                     }
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -8953,7 +8953,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\negatedSubstituted ->
                     { substitutions = negatedSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionNegation negatedSubstituted.node
                         , type_ = negatedSubstituted.node.type_
                         }
@@ -8969,7 +8969,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\inParensSubstituted ->
                     { substitutions = inParensSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionParenthesized inParensSubstituted.node
                         , type_ = inParensSubstituted.node.type_
                         }
@@ -8987,7 +8987,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionRecordAccess
                                         { fieldName = recordAccess.fieldName
@@ -9003,7 +9003,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             recordSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9017,13 +9017,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 (\typeSubstituted ->
                     { substitutions = typeSubstituted.substitutions
                     , node =
-                        { range = expression.range
+                        { range = expressionTypedNode.range
                         , value = ExpressionRecordAccessFunction field
                         , type_ = typeSubstituted.type_
                         }
                     }
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9035,7 +9035,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionInfixOperation
                                         { symbol = expressionInfixOperation.symbol
@@ -9052,7 +9052,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9072,7 +9072,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionTuple
                                         { part0 = part0Substituted.node
@@ -9088,7 +9088,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9108,7 +9108,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionTuple
                                         { part0 = part0Substituted.node
@@ -9125,7 +9125,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9149,7 +9149,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionTuple
                                         { part0 = conditionSubstituted.node
@@ -9166,7 +9166,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9190,7 +9190,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionList
                                         (elementsSubstituted.nodesReverse
@@ -9205,7 +9205,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9244,7 +9244,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionCall
                                         { called = calledSubstituted.node
@@ -9264,7 +9264,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9312,7 +9312,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionRecord
                                         (fieldsSubstituted.nodesReverse
@@ -9327,7 +9327,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9371,7 +9371,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionRecordUpdate
                                         { recordVariable =
@@ -9394,7 +9394,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9454,7 +9454,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionLambda
                                         { parameter0 = parameter0Substituted.node
@@ -9474,7 +9474,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9522,7 +9522,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionCaseOf
                                         { case0 = case0Substituted.node
@@ -9542,7 +9542,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             typeSubstituted.substitutions
                         )
                 )
-                (expression.type_
+                (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
@@ -9617,7 +9617,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
                             , node =
-                                { range = expression.range
+                                { range = expressionTypedNode.range
                                 , value =
                                     ExpressionLetIn
                                         { declaration0 =
@@ -10248,13 +10248,13 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 , node = patternTypedNode
                 }
 
-        PatternVariable _ ->
+        PatternVariable name ->
             Result.map
                 (\substituted ->
                     { substitutions = substituted.substitutions
                     , node =
                         { range = patternTypedNode.range
-                        , value = patternTypedNode.value
+                        , value = PatternVariable name
                         , type_ = substituted.type_
                         }
                     }
@@ -10306,7 +10306,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
 
         PatternListCons patternListCons ->
             resultAndThen3
-                (\headSubstituted tailSubstituted typeSubstituted ->
+                (\typeSubstituted headSubstituted tailSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10322,10 +10322,14 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             }
                         )
                         (variableSubstitutionsMerge3 declarationTypes
+                            typeSubstituted.substitutions
                             headSubstituted.substitutions
                             tailSubstituted.substitutions
-                            typeSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternListCons.head
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10335,14 +10339,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
 
         PatternTuple patternTuple ->
             resultAndThen3
-                (\part0Substituted part1Substituted typeSubstituted ->
+                (\typeSubstituted part0Substituted part1Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10358,10 +10358,14 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             }
                         )
                         (variableSubstitutionsMerge3 declarationTypes
+                            typeSubstituted.substitutions
                             part0Substituted.substitutions
                             part1Substituted.substitutions
-                            typeSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternTuple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10371,14 +10375,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
 
         PatternTriple patternTriple ->
             resultAndThen4
-                (\part0Substituted part1Substituted part2Substituted typeSubstituted ->
+                (\typeSubstituted part0Substituted part1Substituted part2Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10395,11 +10395,15 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             }
                         )
                         (variableSubstitutionsMerge4 declarationTypes
+                            typeSubstituted.substitutions
                             part0Substituted.substitutions
                             part1Substituted.substitutions
                             part2Substituted.substitutions
-                            typeSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternTriple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10413,14 +10417,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
 
         PatternRecord patternRecordFields ->
             resultAndThen2
-                (\fieldsSubstituted typeSubstituted ->
+                (\typeSubstituted fieldsSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10436,9 +10436,13 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             }
                         )
                         (variableSubstitutionsMerge declarationTypes
-                            fieldsSubstituted.substitutions
                             typeSubstituted.substitutions
+                            fieldsSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternRecordFields
                     |> listFoldlWhileOkFrom
@@ -10470,14 +10474,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                 )
                         )
                 )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
 
         PatternListExact patternListElement ->
             resultAndThen2
-                (\elementsSubstituted typeSubstituted ->
+                (\typeSubstituted elementsSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10496,6 +10496,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             elementsSubstituted.substitutions
                             typeSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternListElement
                     |> listFoldlWhileOkFrom
@@ -10524,14 +10528,10 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                 )
                         )
                 )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
 
         PatternVariant patternVariant ->
             resultAndThen2
-                (\elementsSubstituted typeSubstituted ->
+                (\typeSubstituted elementsSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10551,9 +10551,13 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                             }
                         )
                         (variableSubstitutionsMerge declarationTypes
-                            elementsSubstituted.substitutions
                             typeSubstituted.substitutions
+                            elementsSubstituted.substitutions
                         )
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (patternVariant.values
                     |> listFoldlWhileOkFrom
@@ -10581,10 +10585,6 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         replacement
                                 )
                         )
-                )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
 
 
