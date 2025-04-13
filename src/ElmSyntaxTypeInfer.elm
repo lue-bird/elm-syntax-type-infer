@@ -4339,10 +4339,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             (TypeNotVariable
                                 (TypeRecordExtension
                                     { recordVariable =
-                                        ( context.path
-                                        , "recordWith"
-                                            ++ (fieldName |> stringFirstCharToUpper)
-                                        )
+                                        ( context.path, "record" )
                                     , fields =
                                         FastDict.singleton fieldName
                                             fieldValueType
