@@ -4488,7 +4488,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 { range = fullRange
                                 , value =
                                     ExpressionList
-                                        elementsInferred.elementNodesReverse
+                                        (elementsInferred.elementNodesReverse
+                                            |> List.reverse
+                                        )
                                 , type_ =
                                     typeListList elementsInferred.elementType
                                 }
