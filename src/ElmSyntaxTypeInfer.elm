@@ -4479,76 +4479,86 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         }
 
                 head :: tail ->
-                    Result.map
-                        (\elementsInferred ->
-                            { substitutions = elementsInferred.substitutions
-                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                elementsInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                            , node =
-                                { range = fullRange
-                                , value =
-                                    ExpressionList
-                                        (elementsInferred.elementNodesReverse
-                                            |> List.reverse
+                    resultAndThen2
+                        (\headInferred tailElementsInferred ->
+                            Result.andThen
+                                (\elementTypeUnified ->
+                                    Result.andThen
+                                        (\substitutionsAcrossElements ->
+                                            { substitutions = substitutionsAcrossElements
+                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge
+                                                    headInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                    tailElementsInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                            , node =
+                                                { range = fullRange
+                                                , value =
+                                                    ExpressionList
+                                                        (headInferred.node
+                                                            :: (tailElementsInferred.nodesReverse
+                                                                    |> List.reverse
+                                                               )
+                                                        )
+                                                , type_ = typeListList headInferred.node.type_
+                                                }
+                                            }
+                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                    { declarationTypes = context.declarationTypes
+                                                    , locallyIntroducedExpressionVariables =
+                                                        context.locallyIntroducedExpressionVariables
+                                                    }
+                                                    elementTypeUnified.substitutions
                                         )
-                                , type_ =
-                                    typeListList elementsInferred.elementType
-                                }
-                            }
+                                        (variableSubstitutionsMerge context.declarationTypes
+                                            headInferred.substitutions
+                                            tailElementsInferred.substitutions
+                                        )
+                                )
+                                (listFilledMapAndTypesUnify context.declarationTypes
+                                    .type_
+                                    ( headInferred.node, tailElementsInferred.nodesReverse )
+                                )
                         )
-                        (Result.andThen
-                            (\headInferred ->
-                                tail
-                                    |> listFoldlWhileOkFrom
-                                        { substitutions = headInferred.substitutions
-                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
-                                        , elementType = headInferred.node.type_
-                                        , elementNodesReverse = [ headInferred.node ]
-                                        , index = 1
-                                        }
-                                        (\elementNode soFar ->
-                                            Result.andThen
-                                                (\elementInferred ->
-                                                    Result.andThen
-                                                        (\elementTypeWithCurrent ->
-                                                            Result.map
-                                                                (\substitutionsWithElement ->
-                                                                    { index = soFar.index + 1
-                                                                    , elementNodesReverse =
-                                                                        elementInferred.node
-                                                                            :: soFar.elementNodesReverse
-                                                                    , elementType = elementTypeWithCurrent.type_
-                                                                    , substitutions = substitutionsWithElement
-                                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                                                        usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge
-                                                                            elementInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                                            soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                                    }
-                                                                )
-                                                                (variableSubstitutionsMerge3 context.declarationTypes
-                                                                    elementInferred.substitutions
-                                                                    elementTypeWithCurrent.substitutions
-                                                                    soFar.substitutions
-                                                                )
-                                                        )
-                                                        (typeUnify context.declarationTypes
-                                                            elementInferred.node.type_
-                                                            soFar.elementType
-                                                        )
+                        (expressionTypeInfer
+                            (context |> expressionContextToInPath "0")
+                            head
+                        )
+                        (tail
+                            |> listFoldlWhileOkFrom
+                                { substitutions = variableSubstitutionsNone
+                                , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                                , nodesReverse = []
+                                , index = 1
+                                }
+                                (\elementNode soFar ->
+                                    Result.andThen
+                                        (\elementInferred ->
+                                            Result.map
+                                                (\substitutionsWithElement ->
+                                                    { index = soFar.index + 1
+                                                    , nodesReverse =
+                                                        elementInferred.node
+                                                            :: soFar.nodesReverse
+                                                    , substitutions = substitutionsWithElement
+                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                        usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge
+                                                            elementInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                            soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                    }
                                                 )
-                                                (expressionTypeInfer
-                                                    (context
-                                                        |> expressionContextToInPath
-                                                            (soFar.index |> String.fromInt)
-                                                    )
-                                                    elementNode
+                                                (variableSubstitutionsMerge context.declarationTypes
+                                                    elementInferred.substitutions
+                                                    soFar.substitutions
                                                 )
                                         )
-                            )
-                            (expressionTypeInfer
-                                (context |> expressionContextToInPath "0")
-                                head
-                            )
+                                        (expressionTypeInfer
+                                            (context
+                                                |> expressionContextToInPath
+                                                    (soFar.index |> String.fromInt)
+                                            )
+                                            elementNode
+                                        )
+                                )
                         )
 
         Elm.Syntax.Expression.Application application ->
@@ -4673,8 +4683,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.RecordExpr fields ->
             Result.map
                 (\fieldsInferred ->
-                    { substitutions =
-                        fieldsInferred.substitutions
+                    { substitutions = fieldsInferred.substitutions
                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                         fieldsInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                     , node =
@@ -10111,24 +10120,45 @@ expressionTypeInferResultAddOrApplySubstitutions :
             }
 expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApply expressionTypeInferResult =
     let
+        -- we don't want to apply a substitution locally if a non-local substitution could be substituted
+        -- into such a variable
+        nonLocalSubstitutionResultTypeVariables : FastSet.Set TypeVariableFromContext
+        nonLocalSubstitutionResultTypeVariables =
+            FastSet.union
+                (expressionTypeInferResult.substitutions.equivalentVariables
+                    |> listMapAndFastSetsUnify identity
+                )
+                (expressionTypeInferResult.substitutions.variableToType
+                    |> FastDict.foldl
+                        (\_ replacementType soFar ->
+                            FastSet.union soFar
+                                (replacementType |> typeNotVariableContainedVariables)
+                        )
+                        FastSet.empty
+                )
+
         ( substitutionsVariableToTypeToAdd, substitutionsVariableToTypeToApply ) =
             substitutionsToAddOrApply.variableToType
                 |> FastDict.partition
                     (\variable _ ->
-                        context.locallyIntroducedExpressionVariables
+                        (context.locallyIntroducedExpressionVariables
                             |> fastDictAny
                                 (\expressionVariableType ->
                                     expressionVariableType
                                         |> typeContainedVariables
                                         |> FastSet.member variable
                                 )
+                        )
+                            || (nonLocalSubstitutionResultTypeVariables
+                                    |> FastSet.member variable
+                               )
                     )
 
         ( substitutionsOfEquivalentVariablesToAdd, substitutionsOfEquivalentVariablesToApply ) =
             substitutionsToAddOrApply.equivalentVariables
                 |> List.partition
                     (\equivalentVariablesSet ->
-                        context.locallyIntroducedExpressionVariables
+                        (context.locallyIntroducedExpressionVariables
                             |> fastDictAny
                                 (\expressionVariableType ->
                                     fastSetAreIntersecting
@@ -10137,6 +10167,10 @@ expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApp
                                             |> typeContainedVariables
                                         )
                                 )
+                        )
+                            || (nonLocalSubstitutionResultTypeVariables
+                                    |> fastSetAreIntersecting equivalentVariablesSet
+                               )
                     )
 
         substitutionsToApply : VariableSubstitutions
@@ -10147,8 +10181,7 @@ expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApp
     in
     Result.map3
         (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
-            { substitutions =
-                substitutionsWithAdded
+            { substitutions = substitutionsWithAdded
             , node = nodeSubstituted
             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                 expressionTypeInferResult.usesOfTypeVariablesFromPartiallyInferredDeclarations
