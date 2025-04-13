@@ -2072,30 +2072,6 @@ variableSubstitutionsMerge4 declarationTypes a b c d =
             )
 
 
-variableSubstitutionsMerge5 :
-    ModuleLevelDeclarationTypesAvailableInModule
-    -> VariableSubstitutions
-    -> VariableSubstitutions
-    -> VariableSubstitutions
-    -> VariableSubstitutions
-    -> VariableSubstitutions
-    -> Result String VariableSubstitutions
-variableSubstitutionsMerge5 declarationTypes a b c d e =
-    variableSubstitutionsMerge4
-        declarationTypes
-        a
-        b
-        c
-        d
-        |> Result.andThen
-            (\abcSubstitutions ->
-                variableSubstitutionsMerge
-                    declarationTypes
-                    abcSubstitutions
-                    e
-            )
-
-
 equivalentVariablesMergeWithSetOf2 :
     comparable
     -> comparable
@@ -4126,7 +4102,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.FunctionOrValue qualification name ->
             Result.map
                 (\inferred ->
-                    { substitutions = inferred.substitutions
+                    { substitutions = variableSubstitutionsNone
                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                         inferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                     , node =
@@ -4152,31 +4128,28 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 fieldValueType : Type TypeVariableFromContext
                 fieldValueType =
                     TypeVariable ( "field" :: context.path, fieldName )
-
-                type_ : Type TypeVariableFromContext
-                type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input =
-                                TypeNotVariable
-                                    (TypeRecordExtension
-                                        { recordVariable =
-                                            ( context.path, "record" )
-                                        , fields =
-                                            FastDict.singleton fieldName
-                                                fieldValueType
-                                        }
-                                    )
-                            , output = fieldValueType
-                            }
-                        )
             in
             Ok
                 { node =
                     { range = fullRange
                     , value =
                         ExpressionRecordAccessFunction fieldName
-                    , type_ = type_
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input =
+                                    TypeNotVariable
+                                        (TypeRecordExtension
+                                            { recordVariable =
+                                                ( context.path, "record" )
+                                            , fields =
+                                                FastDict.singleton fieldName
+                                                    fieldValueType
+                                            }
+                                        )
+                                , output = fieldValueType
+                                }
+                            )
                     }
                 , substitutions = variableSubstitutionsNone
                 , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
@@ -4202,30 +4175,25 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.Negation toNegate ->
             Result.andThen
                 (\toNegateInferred ->
-                    Result.andThen
-                        (\fullType ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { node =
-                                        { range = fullRange
-                                        , value =
-                                            ExpressionNegation toNegateInferred.node
-                                        , type_ = fullType.type_
-                                        }
-                                    , substitutions = fullSubstitutions
-                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                        toNegateInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                    }
-                                )
-                                (variableSubstitutionsMerge context.declarationTypes
-                                    toNegateInferred.substitutions
-                                    fullType.substitutions
-                                )
-                        )
-                        (typeUnify context.declarationTypes
-                            toNegateInferred.node.type_
-                            (TypeVariable ( context.path, "number" ))
-                        )
+                    { node =
+                        { range = fullRange
+                        , value =
+                            ExpressionNegation toNegateInferred.node
+                        , type_ = toNegateInferred.node.type_
+                        }
+                    , substitutions = toNegateInferred.substitutions
+                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                        toNegateInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                    }
+                        |> expressionTypeInferResultAddOrApplySubstitutions
+                            { declarationTypes = context.declarationTypes
+                            , locallyIntroducedExpressionVariables =
+                                context.locallyIntroducedExpressionVariables
+                            }
+                            (variableSubstitutionsFromVariableToType
+                                ( context.path, "number" )
+                                toNegateInferred.node.type_
+                            )
                 )
                 (toNegate
                     |> expressionTypeInfer
@@ -4248,28 +4216,27 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     in
                     Result.andThen
                         (\recordWithAccessedField ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { node =
-                                        { range = fullRange
-                                        , value =
-                                            ExpressionRecordAccess
-                                                { record = accessedRecordInferred.node
-                                                , fieldName = fieldName
-                                                , fieldNameRange =
-                                                    fieldNameNode |> Elm.Syntax.Node.range
-                                                }
-                                        , type_ = fieldValueType
+                            { node =
+                                { range = fullRange
+                                , value =
+                                    ExpressionRecordAccess
+                                        { record = accessedRecordInferred.node
+                                        , fieldName = fieldName
+                                        , fieldNameRange =
+                                            fieldNameNode |> Elm.Syntax.Node.range
                                         }
-                                    , substitutions = fullSubstitutions
-                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                        accessedRecordInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                , type_ = fieldValueType
+                                }
+                            , substitutions = accessedRecordInferred.substitutions
+                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                accessedRecordInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                            }
+                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                    { declarationTypes = context.declarationTypes
+                                    , locallyIntroducedExpressionVariables =
+                                        context.locallyIntroducedExpressionVariables
                                     }
-                                )
-                                (variableSubstitutionsMerge context.declarationTypes
-                                    accessedRecordInferred.substitutions
                                     recordWithAccessedField.substitutions
-                                )
                         )
                         (typeUnify context.declarationTypes
                             accessedRecordInferred.node.type_
@@ -4307,9 +4274,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
             resultAndThen3
                 (\conditionInferred onTrueInferred onFalseInferred ->
                     resultAndThen2
-                        (\conditionTypeInferredAsBool resultType ->
-                            Result.map
-                                (\fullSubstitutions ->
+                        (\conditionTypeInferredUnifiedWithBool resultTypesUnified ->
+                            resultAndThen2
+                                (\fullSubstitutions unificationSubstitutions ->
                                     { substitutions = fullSubstitutions
                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                         usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge3
@@ -4324,16 +4291,24 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , onTrue = onTrueInferred.node
                                                 , onFalse = onFalseInferred.node
                                                 }
-                                        , type_ = resultType.type_
+                                        , type_ = onTrueInferred.node.type_
                                         }
                                     }
+                                        |> expressionTypeInferResultAddOrApplySubstitutions
+                                            { declarationTypes = context.declarationTypes
+                                            , locallyIntroducedExpressionVariables =
+                                                context.locallyIntroducedExpressionVariables
+                                            }
+                                            unificationSubstitutions
                                 )
-                                (variableSubstitutionsMerge5 context.declarationTypes
+                                (variableSubstitutionsMerge3 context.declarationTypes
                                     conditionInferred.substitutions
                                     onTrueInferred.substitutions
                                     onFalseInferred.substitutions
-                                    conditionTypeInferredAsBool.substitutions
-                                    resultType.substitutions
+                                )
+                                (variableSubstitutionsMerge context.declarationTypes
+                                    conditionTypeInferredUnifiedWithBool.substitutions
+                                    resultTypesUnified.substitutions
                                 )
                         )
                         (typeUnify context.declarationTypes
@@ -4800,9 +4775,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 }
                                             }
                                         )
-                                        (variableSubstitutionsMerge4 context.declarationTypes
+                                        (variableSubstitutionsMerge3 context.declarationTypes
                                             typeUnified.substitutions
-                                            recordVariableInferred.substitutions
                                             field0Inferred.substitutions
                                             field1UpInferred.substitutions
                                         )
@@ -5462,8 +5436,7 @@ expressionReferenceTypeInfer :
     ->
         Result
             String
-            { substitutions : VariableSubstitutions
-            , node :
+            { node :
                 TypedNode
                     { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
                     , qualification : Elm.Syntax.ModuleName.ModuleName
@@ -5479,8 +5452,7 @@ expressionReferenceTypeInfer context expressionReference =
     let
         useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration :
             Maybe
-                { substitutions : VariableSubstitutions
-                , node :
+                { node :
                     TypedNode
                         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
                         , qualification : Elm.Syntax.ModuleName.ModuleName
@@ -5496,8 +5468,7 @@ expressionReferenceTypeInfer context expressionReference =
             case context.locallyIntroducedExpressionVariables |> FastDict.get expressionReference.name of
                 Just locallyIntroducedExpressionVariable ->
                     Just
-                        { substitutions = variableSubstitutionsNone
-                        , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                        { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
                         , node =
                             { range = expressionReference.fullRange
                             , value =
@@ -5529,8 +5500,7 @@ expressionReferenceTypeInfer context expressionReference =
                                         |> typeMapVariables partiallyInferredTypeVariableNameToInContext
                             in
                             Just
-                                { substitutions = variableSubstitutionsNone
-                                , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                { usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                     partiallyInferredType
                                         |> typeContainedVariables
                                         |> FastSet.foldl
@@ -5584,8 +5554,7 @@ expressionReferenceTypeInfer context expressionReference =
                     case originModuleDeclarationTypes.signatures |> FastDict.get expressionReference.name of
                         Just signatureType ->
                             Ok
-                                { substitutions = variableSubstitutionsNone
-                                , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                                { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
                                 , node =
                                     { range = expressionReference.fullRange
                                     , value =
@@ -5647,8 +5616,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                     (\variableName -> ( context.path, variableName ))
                                     in
                                     Ok
-                                        { substitutions = variableSubstitutionsNone
-                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                                        { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
                                         , node =
                                             { range = expressionReference.fullRange
                                             , value =
@@ -5666,8 +5634,7 @@ expressionReferenceTypeInfer context expressionReference =
                                             case ( originTypeAliasDeclaration.recordFieldOrder, originTypeAliasDeclaration.type_ ) of
                                                 ( Just fieldOrder, TypeNotVariable (TypeRecord fields) ) ->
                                                     Ok
-                                                        { substitutions = variableSubstitutionsNone
-                                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
+                                                        { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
                                                         , node =
                                                             { range = expressionReference.fullRange
                                                             , value =
@@ -6139,9 +6106,9 @@ expressionInfixOperationTypeInfer context infixOperation =
             in
             Result.andThen
                 (\unifiedType ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
+                    Result.andThen
+                        (\leftRightSubstitutions ->
+                            { substitutions = leftRightSubstitutions
                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                 usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge
                                     leftInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
@@ -6157,11 +6124,16 @@ expressionInfixOperationTypeInfer context infixOperation =
                                 , type_ = resultType
                                 }
                             }
+                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                    { declarationTypes = context.declarationTypes
+                                    , locallyIntroducedExpressionVariables =
+                                        context.locallyIntroducedExpressionVariables
+                                    }
+                                    unifiedType.substitutions
                         )
-                        (variableSubstitutionsMerge3 context.declarationTypes
+                        (variableSubstitutionsMerge context.declarationTypes
                             leftInferred.substitutions
                             rightInferred.substitutions
-                            unifiedType.substitutions
                         )
                 )
                 (typeUnify context.declarationTypes
@@ -10103,6 +10075,195 @@ letDeclarationMapTypes typeChange expressionLetDeclaration =
                     letValueOrFunction.type_
                         |> typeChange
                 }
+
+
+expressionTypeInferResultAddOrApplySubstitutions :
+    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , locallyIntroducedExpressionVariables :
+        FastDict.Dict String (Type TypeVariableFromContext)
+    }
+    -> VariableSubstitutions
+    ->
+        { substitutions : VariableSubstitutions
+        , node :
+            TypedNode
+                (Expression (Type TypeVariableFromContext))
+                (Type TypeVariableFromContext)
+        , usesOfTypeVariablesFromPartiallyInferredDeclarations :
+            FastDict.Dict
+                TypeVariableFromContext
+                (FastSet.Set TypeVariableFromContext)
+        }
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , node :
+                TypedNode
+                    (Expression (Type TypeVariableFromContext))
+                    (Type TypeVariableFromContext)
+            , usesOfTypeVariablesFromPartiallyInferredDeclarations :
+                FastDict.Dict
+                    TypeVariableFromContext
+                    (FastSet.Set TypeVariableFromContext)
+            }
+expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApply expressionTypeInferResult =
+    let
+        ( substitutionsVariableToTypeToAdd, substitutionsVariableToTypeToApply ) =
+            substitutionsToAddOrApply.variableToType
+                |> FastDict.partition
+                    (\variable _ ->
+                        context.locallyIntroducedExpressionVariables
+                            |> fastDictAny
+                                (\expressionVariableType ->
+                                    expressionVariableType
+                                        |> typeContainedVariables
+                                        |> FastSet.member variable
+                                )
+                    )
+
+        ( substitutionsOfEquivalentVariablesToAdd, substitutionsOfEquivalentVariablesToApply ) =
+            substitutionsToAddOrApply.equivalentVariables
+                |> List.partition
+                    (\equivalentVariablesSet ->
+                        context.locallyIntroducedExpressionVariables
+                            |> fastDictAny
+                                (\expressionVariableType ->
+                                    fastSetAreIntersecting
+                                        equivalentVariablesSet
+                                        (expressionVariableType
+                                            |> typeContainedVariables
+                                        )
+                                )
+                    )
+
+        substitutionsToApply : VariableSubstitutions
+        substitutionsToApply =
+            { equivalentVariables = substitutionsOfEquivalentVariablesToApply
+            , variableToType = substitutionsVariableToTypeToApply
+            }
+    in
+    Result.map3
+        (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
+            { substitutions =
+                substitutionsWithAdded
+            , node = nodeSubstituted
+            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                expressionTypeInferResult.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                    |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
+                        variableToCondensedLookup
+            }
+        )
+        (expressionTypeInferResult.node
+            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                substitutionsToApply
+        )
+        (createEquivalentVariablesToCondensedVariableLookup
+            substitutionsOfEquivalentVariablesToApply
+        )
+        (variableSubstitutionsMerge context.declarationTypes
+            expressionTypeInferResult.substitutions
+            { equivalentVariables = substitutionsOfEquivalentVariablesToAdd
+            , variableToType = substitutionsVariableToTypeToAdd
+            }
+        )
+
+
+fastSetAreIntersecting : FastSet.Set comparable -> FastSet.Set comparable -> Bool
+fastSetAreIntersecting a b =
+    -- not sure there's a faster alternative since FastSet does not offer restructure
+    Basics.not (FastSet.isEmpty (a |> FastSet.intersect b))
+
+
+expressionTypedNodeApplyVariableSubstitutions :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> VariableSubstitutions
+    ->
+        TypedNode
+            (Expression (Type TypeVariableFromContext))
+            (Type TypeVariableFromContext)
+    ->
+        Result
+            String
+            (TypedNode
+                (Expression (Type TypeVariableFromContext))
+                (Type TypeVariableFromContext)
+            )
+expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions expressionTypedNode =
+    case substitutions.equivalentVariables of
+        equivalentVariableSet0 :: equivalentVariableSet1Up ->
+            case
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
+            of
+                Err error ->
+                    Err error
+
+                Ok variableToCondensedLookup ->
+                    case
+                        substitutions.variableToType
+                            |> variableToTypeSubstitutionsCondenseVariables declarationTypes
+                                variableToCondensedLookup
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeWithCondensedVariables ->
+                            expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                variableToTypeWithCondensedVariables
+                                (expressionTypedNode
+                                    |> expressionTypedNodeMapTypeVariables
+                                        (\originalTypeVariable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get originalTypeVariable
+                                                |> Maybe.withDefault originalTypeVariable
+                                        )
+                                )
+
+        [] ->
+            case substitutions.variableToType |> FastDict.popMin of
+                Nothing ->
+                    Ok expressionTypedNode
+
+                Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
+                    let
+                        variableToTypeSubstitutionToApplyNext :
+                            { variable : TypeVariableFromContext
+                            , type_ : TypeNotVariable TypeVariableFromContext
+                            }
+                        variableToTypeSubstitutionToApplyNext =
+                            { variable = variableToSubstituteNext, type_ = typeToSubstituteByNext }
+                    in
+                    case
+                        expressionTypedNode
+                            |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                variableToTypeSubstitutionToApplyNext
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok expressionTypedNodeWithVariableToTypeSubstitutionApplied ->
+                            case
+                                remainingVariableToTypeSubstitutions
+                                    |> variableToTypeSubstitutionsSubstituteVariableByNotVariable declarationTypes
+                                        variableToTypeSubstitutionToApplyNext
+                            of
+                                Err error ->
+                                    Err error
+
+                                Ok remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied ->
+                                    case
+                                        variableSubstitutionsMerge declarationTypes
+                                            expressionTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
+                                            remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied
+                                    of
+                                        Err error ->
+                                            Err error
+
+                                        Ok fullRemainingSubstitutions ->
+                                            expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                fullRemainingSubstitutions
+                                                expressionTypedNodeWithVariableToTypeSubstitutionApplied.node
 
 
 patternTypedNodeApplyVariableSubstitutions :
