@@ -4850,8 +4850,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     resultAndThen3
                         (\recordVariableInferred field0Inferred field1UpInferred ->
                             Result.andThen
-                                (\typeUnified ->
-                                    Result.map
+                                (\recordVariableUnifiedWithUpdate ->
+                                    Result.andThen
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
                                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
@@ -4870,19 +4870,24 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                                     recordVariableInferred.node.value.moduleOrigin
                                                                 , name = recordVariableInferred.node.value.name
                                                                 }
-                                                            , type_ = typeUnified.type_
+                                                            , type_ = recordVariableInferred.node.type_
                                                             }
                                                         , field0 = field0Inferred.node
                                                         , field1Up =
                                                             field1UpInferred.nodesReverse
                                                                 |> List.reverse
                                                         }
-                                                , type_ = typeUnified.type_
+                                                , type_ = recordVariableInferred.node.type_
                                                 }
                                             }
+                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                    { declarationTypes = context.declarationTypes
+                                                    , locallyIntroducedExpressionVariables =
+                                                        context.locallyIntroducedExpressionVariables
+                                                    }
+                                                    recordVariableUnifiedWithUpdate.substitutions
                                         )
-                                        (variableSubstitutionsMerge3 context.declarationTypes
-                                            typeUnified.substitutions
+                                        (variableSubstitutionsMerge context.declarationTypes
                                             field0Inferred.substitutions
                                             field1UpInferred.substitutions
                                         )
@@ -4891,7 +4896,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     recordVariableInferred.node.type_
                                     (TypeNotVariable
                                         (TypeRecordExtension
-                                            { recordVariable = ( context.path, "record" )
+                                            { recordVariable = ( context.path, recordVariableInferred.node.value.name )
                                             , fields =
                                                 field1UpInferred.nodesReverse
                                                     |> List.foldl

@@ -821,14 +821,14 @@ suite =
                             )
                         )
             )
-        , Test.test "record update union with same record variable \\(a) -> [ { a | a = (), b = 1 }, { a | c = (), b = 2.2 } ]"
+        , Test.test "record update union with same record variable \\(rec) -> [ { a | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
                         [ Elm.Syntax.Node.empty
                             (Elm.Syntax.Pattern.ParenthesizedPattern
                                 (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                                    (Elm.Syntax.Pattern.VarPattern "rec")
                                 )
                             )
                         ]
@@ -837,7 +837,7 @@ suite =
                             (Elm.Syntax.Expression.ListExpr
                                 [ Elm.Syntax.Node.empty
                                     (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "a")
+                                        (Elm.Syntax.Node.empty "rec")
                                         [ Elm.Syntax.Node.empty
                                             ( Elm.Syntax.Node.empty "a"
                                             , Elm.Syntax.Node.empty
@@ -852,7 +852,7 @@ suite =
                                     )
                                 , Elm.Syntax.Node.empty
                                     (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "a")
+                                        (Elm.Syntax.Node.empty "rec")
                                         [ Elm.Syntax.Node.empty
                                             ( Elm.Syntax.Node.empty "c"
                                             , Elm.Syntax.Node.empty
@@ -876,7 +876,7 @@ suite =
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { recordVariable = "record"
+                                                { recordVariable = "rec"
                                                 , fields =
                                                     FastDict.fromList
                                                         [ ( "a"
@@ -907,7 +907,7 @@ suite =
                                                 , arguments =
                                                     [ ElmSyntaxTypeInfer.TypeNotVariable
                                                         (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                            { recordVariable = "record"
+                                                            { recordVariable = "rec"
                                                             , fields =
                                                                 FastDict.fromList
                                                                     [ ( "a"
