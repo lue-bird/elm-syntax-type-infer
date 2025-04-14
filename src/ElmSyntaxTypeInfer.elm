@@ -7732,12 +7732,16 @@ variableSubstitutionsFromVariableToType variableToReplace replacementType =
             }
 
         TypeVariable replacementVariable ->
-            { variableToType = FastDict.empty
-            , equivalentVariables =
-                [ FastSet.singleton variableToReplace
-                    |> FastSet.insert replacementVariable
-                ]
-            }
+            if variableToReplace == replacementVariable then
+                variableSubstitutionsNone
+
+            else
+                { variableToType = FastDict.empty
+                , equivalentVariables =
+                    [ FastSet.singleton variableToReplace
+                        |> FastSet.insert replacementVariable
+                    ]
+                }
 
 
 type alias ValueOrFunctionDeclarationInfo type_ =
