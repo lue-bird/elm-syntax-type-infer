@@ -1294,6 +1294,40 @@ suite =
                             )
                         )
             )
+        , Test.test "same generic pattern in pattern: case ( 1.1, \"\" ) of ( _, _ ) -> ()"
+            (\() ->
+                Elm.Syntax.Expression.CaseExpression
+                    { expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.TupledExpression
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 1.1)
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Literal "")
+                                ]
+                            )
+                    , cases =
+                        [ ( Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.TuplePattern
+                                    [ Elm.Syntax.Node.empty
+                                        Elm.Syntax.Pattern.AllPattern
+                                    , Elm.Syntax.Node.empty
+                                        Elm.Syntax.Pattern.AllPattern
+                                    ]
+                                )
+                          , Elm.Syntax.Node.empty
+                                Elm.Syntax.Expression.UnitExpr
+                          )
+                        ]
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                ElmSyntaxTypeInfer.TypeUnit
+                            )
+                        )
+            )
         , Test.test "case [] of first :: 1 :: _ -> [ first ]; n -> n"
             (\() ->
                 Elm.Syntax.Expression.CaseExpression
