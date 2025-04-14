@@ -5709,56 +5709,15 @@ expressionReferenceTypeInfer context expressionReference =
                         (FastSet.Set TypeVariableFromContext)
                 }
         useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration =
-            case context.locallyIntroducedExpressionVariables |> FastDict.get expressionReference.name of
-                Just locallyIntroducedExpressionVariable ->
-                    Just
-                        { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
-                        , node =
-                            { range = expressionReference.fullRange
-                            , value =
-                                { qualification = []
-                                , moduleOrigin = []
-                                , name = expressionReference.name
-                                }
-                            , type_ = locallyIntroducedExpressionVariable
-                            }
-                        }
+            case expressionReference.qualification of
+                _ :: _ ->
+                    Nothing
 
-                Nothing ->
-                    case context.partiallyInferredDeclarationTypes |> FastDict.get expressionReference.name of
-                        Nothing ->
-                            Nothing
-
-                        Just partiallyInferredType ->
-                            let
-                                partiallyInferredTypeVariableNameToInContext : TypeVariableFromContext -> TypeVariableFromContext
-                                partiallyInferredTypeVariableNameToInContext ( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) =
-                                    ( partiallyInferredTypeVariableContext
-                                        ++ context.path
-                                    , partiallyInferredTypeVariableName
-                                    )
-
-                                type_ : Type TypeVariableFromContext
-                                type_ =
-                                    partiallyInferredType
-                                        |> typeMapVariables partiallyInferredTypeVariableNameToInContext
-                            in
+                [] ->
+                    case context.locallyIntroducedExpressionVariables |> FastDict.get expressionReference.name of
+                        Just locallyIntroducedExpressionVariable ->
                             Just
-                                { usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                    partiallyInferredType
-                                        |> typeContainedVariables
-                                        |> FastSet.foldl
-                                            (\partiallyInferredTypeVariable soFar ->
-                                                soFar
-                                                    |> FastDict.insert
-                                                        partiallyInferredTypeVariable
-                                                        (FastSet.singleton
-                                                            (partiallyInferredTypeVariable
-                                                                |> partiallyInferredTypeVariableNameToInContext
-                                                            )
-                                                        )
-                                            )
-                                            FastDict.empty
+                                { usesOfTypeVariablesFromPartiallyInferredDeclarations = FastDict.empty
                                 , node =
                                     { range = expressionReference.fullRange
                                     , value =
@@ -5766,9 +5725,55 @@ expressionReferenceTypeInfer context expressionReference =
                                         , moduleOrigin = []
                                         , name = expressionReference.name
                                         }
-                                    , type_ = type_
+                                    , type_ = locallyIntroducedExpressionVariable
                                     }
                                 }
+
+                        Nothing ->
+                            case context.partiallyInferredDeclarationTypes |> FastDict.get expressionReference.name of
+                                Nothing ->
+                                    Nothing
+
+                                Just partiallyInferredType ->
+                                    let
+                                        partiallyInferredTypeVariableNameToInContext : TypeVariableFromContext -> TypeVariableFromContext
+                                        partiallyInferredTypeVariableNameToInContext ( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) =
+                                            ( partiallyInferredTypeVariableContext
+                                                ++ context.path
+                                            , partiallyInferredTypeVariableName
+                                            )
+
+                                        type_ : Type TypeVariableFromContext
+                                        type_ =
+                                            partiallyInferredType
+                                                |> typeMapVariables partiallyInferredTypeVariableNameToInContext
+                                    in
+                                    Just
+                                        { usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                            partiallyInferredType
+                                                |> typeContainedVariables
+                                                |> FastSet.foldl
+                                                    (\partiallyInferredTypeVariable soFar ->
+                                                        soFar
+                                                            |> FastDict.insert
+                                                                partiallyInferredTypeVariable
+                                                                (FastSet.singleton
+                                                                    (partiallyInferredTypeVariable
+                                                                        |> partiallyInferredTypeVariableNameToInContext
+                                                                    )
+                                                                )
+                                                    )
+                                                    FastDict.empty
+                                        , node =
+                                            { range = expressionReference.fullRange
+                                            , value =
+                                                { qualification = []
+                                                , moduleOrigin = []
+                                                , name = expressionReference.name
+                                                }
+                                            , type_ = type_
+                                            }
+                                        }
     in
     case useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration of
         Just inferred ->
