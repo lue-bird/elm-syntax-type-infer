@@ -2584,10 +2584,11 @@ typeNotVariableUnify declarationTypes a b =
                         TypeUnit ->
                             Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeConstruct _ ->
+                        TypeConstruct bTypeConstruct ->
                             Err
                                 (aDescription
-                                    ++ " cannot be unified be with a choice type with a different name"
+                                    ++ " cannot be unified be with a choice type with a different name: "
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                 )
 
                         TypeTuple _ ->
@@ -2799,22 +2800,40 @@ typeNotVariableUnify declarationTypes a b =
                                 (typeUnify declarationTypes aFunction.output bFunction.output)
 
                         TypeUnit ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeUnit |> typeNotVariableToInfoString)
+                                )
 
-                        TypeConstruct _ ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeConstruct bTypeConstruct ->
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTuple _ ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeTuple bTypeTuple ->
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTriple _ ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeTriple bTypeTriple ->
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
+                                )
 
-                        TypeRecord _ ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeRecord bTypeRecord ->
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
+                                )
 
-                        TypeRecordExtension _ ->
-                            Err "function (`... -> ...`) cannot be unified with types other than function"
+                        TypeRecordExtension bTypeRecordExtension ->
+                            Err
+                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                    ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
+                                )
 
 
 typeUnifyWithTryToExpandTypeConstruct :
@@ -3604,15 +3623,10 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Err "float patterns are invalid syntax"
 
         Elm.Syntax.Pattern.AllPattern ->
-            let
-                type_ : Type TypeVariableFromContext
-                type_ =
-                    TypeVariable ( context.path, "ignored" )
-            in
             Ok
                 { range = fullRange
                 , value = PatternIgnored
-                , type_ = type_
+                , type_ = TypeVariable ( context.path, "ignored" )
                 }
 
         Elm.Syntax.Pattern.UnitPattern ->
@@ -3730,8 +3744,18 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                     )
                             }
                         )
-                        (tuplePart0 |> patternTypeInfer context)
-                        (tuplePart1 |> patternTypeInfer context)
+                        (tuplePart0
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath "part0"
+                                )
+                        )
+                        (tuplePart1
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath "part1"
+                                )
+                        )
 
                 [ tuplePart0, tuplePart1, tuplePart2 ] ->
                     Result.map3
@@ -3753,9 +3777,24 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                     )
                             }
                         )
-                        (tuplePart0 |> patternTypeInfer context)
-                        (tuplePart1 |> patternTypeInfer context)
-                        (tuplePart2 |> patternTypeInfer context)
+                        (tuplePart0
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath "part0"
+                                )
+                        )
+                        (tuplePart1
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath "part1"
+                                )
+                        )
+                        (tuplePart2
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath "part2"
+                                )
+                        )
 
                 _ :: _ :: _ :: _ :: _ ->
                     Err "too many tuple parts"
@@ -3887,7 +3926,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         (head
                             |> patternTypeInfer
                                 (context
-                                    |> patternContextToInPath "0"
+                                    |> patternContextToInPath "element0"
                                 )
                         )
                         (tail
@@ -3907,7 +3946,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                         (patternTypeInfer
                                             (context
                                                 |> patternContextToInPath
-                                                    (soFar.index |> String.fromInt)
+                                                    ("element" ++ (soFar.index |> String.fromInt))
                                             )
                                             elementNode
                                         )
@@ -3915,63 +3954,81 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         )
 
         Elm.Syntax.Pattern.NamedPattern qualified values ->
-            case context.moduleOriginLookup.references |> FastDict.get ( qualified.moduleName, qualified.name ) of
-                Nothing ->
-                    Err
-                        ("no module origin found for the pattern variant "
-                            ++ qualifiedToString
-                                { qualification = qualified.moduleName
-                                , name = qualified.name
-                                }
-                        )
-
-                Just moduleOrigin ->
-                    case context.declarationTypes |> FastDict.get moduleOrigin of
+            let
+                moduleOriginInfoOrError :
+                    Result
+                        String
+                        { name : Elm.Syntax.ModuleName.ModuleName
+                        , declarationTypes : ModuleTypes
+                        }
+                moduleOriginInfoOrError =
+                    case context.moduleOriginLookup.references |> FastDict.get ( qualified.moduleName, qualified.name ) of
                         Nothing ->
                             Err
-                                ("no declaration types found at the module origin of the variant reference "
+                                ("no module origin found for the pattern variant "
                                     ++ qualifiedToString
-                                        { qualification = moduleOrigin
+                                        { qualification = qualified.moduleName
                                         , name = qualified.name
                                         }
                                 )
 
-                        Just moduleOriginDeclarationTypes ->
-                            case
-                                moduleOriginDeclarationTypes.choiceTypes
-                                    |> fastDictMapAndSmallestJust
-                                        (\choiceTypeName choiceTypeInfo ->
-                                            choiceTypeInfo.variants
-                                                |> FastDict.get qualified.name
-                                                |> Maybe.map
-                                                    (\variantParameters ->
-                                                        { variantParameters = variantParameters
-                                                        , choiceTypeName = choiceTypeName
-                                                        , choiceTypeParameters = choiceTypeInfo.parameters
-                                                        }
-                                                    )
-                                        )
-                            of
+                        Just moduleOrigin ->
+                            case context.declarationTypes |> FastDict.get moduleOrigin of
                                 Nothing ->
                                     Err
-                                        ("no choice type found at the module origin with the variant reference "
+                                        ("no declaration types found at the module origin of the variant reference "
                                             ++ qualifiedToString
                                                 { qualification = moduleOrigin
                                                 , name = qualified.name
                                                 }
                                         )
 
-                                Just variant ->
-                                    patternVariantTypeInfer context
-                                        { fullRange = fullRange
-                                        , qualification = qualified.moduleName
-                                        , moduleOrigin = moduleOrigin
-                                        , name = qualified.name
-                                        , variantValueTypes = variant.variantParameters
-                                        , choiceTypeName = variant.choiceTypeName
-                                        , choiceTypeParameters = variant.choiceTypeParameters
-                                        , values = values
+                                Just moduleOriginDeclarationTypes ->
+                                    Ok
+                                        { name = moduleOrigin
+                                        , declarationTypes = moduleOriginDeclarationTypes
                                         }
+            in
+            case moduleOriginInfoOrError of
+                Err error ->
+                    Err error
+
+                Ok moduleOriginInfo ->
+                    case
+                        moduleOriginInfo.declarationTypes.choiceTypes
+                            |> fastDictMapAndSmallestJust
+                                (\choiceTypeName choiceTypeInfo ->
+                                    choiceTypeInfo.variants
+                                        |> FastDict.get qualified.name
+                                        |> Maybe.map
+                                            (\variantParameters ->
+                                                { variantParameters = variantParameters
+                                                , choiceTypeName = choiceTypeName
+                                                , choiceTypeParameters = choiceTypeInfo.parameters
+                                                }
+                                            )
+                                )
+                    of
+                        Nothing ->
+                            Err
+                                ("no choice type found at the module origin with the variant reference "
+                                    ++ qualifiedToString
+                                        { qualification = moduleOriginInfo.name
+                                        , name = qualified.name
+                                        }
+                                )
+
+                        Just variant ->
+                            patternVariantTypeInfer context
+                                { fullRange = fullRange
+                                , qualification = qualified.moduleName
+                                , moduleOrigin = moduleOriginInfo.name
+                                , name = qualified.name
+                                , variantValueTypes = variant.variantParameters
+                                , choiceTypeName = variant.choiceTypeName
+                                , choiceTypeParameters = variant.choiceTypeParameters
+                                , values = values
+                                }
 
 
 patternVariantTypeInfer :
@@ -4024,7 +4081,8 @@ patternVariantTypeInfer context patternVariant =
             patternVariant.variantValueTypes
             patternVariant.values
             |> listFoldlWhileOkFrom
-                { nodesReverse = []
+                { index = 0
+                , nodesReverse = []
                 , resultType =
                     TypeNotVariable
                         (TypeConstruct
@@ -4046,7 +4104,8 @@ patternVariantTypeInfer context patternVariant =
                                 (\valueTypeUnified ->
                                     Result.map2
                                         (\resultTypeAfterUnification valueInferredAfterUnification ->
-                                            { resultType = resultTypeAfterUnification
+                                            { index = soFar.index + 1
+                                            , resultType = resultTypeAfterUnification
                                             , nodesReverse =
                                                 valueInferredAfterUnification
                                                     :: soFar.nodesReverse
@@ -4067,10 +4126,28 @@ patternVariantTypeInfer context patternVariant =
                                 )
                         )
                         (argument.pattern
-                            |> patternTypeInfer context
+                            |> patternTypeInfer
+                                (context
+                                    |> patternContextToInPath
+                                        ("value" ++ (soFar.index |> String.fromInt))
+                                )
                         )
                 )
         )
+
+
+rangeToInfoString : Elm.Syntax.Range.Range -> String
+rangeToInfoString range =
+    (range.start |> locationToInfoString)
+        ++ "-"
+        ++ (range.end |> locationToInfoString)
+
+
+locationToInfoString : Elm.Syntax.Range.Location -> String
+locationToInfoString location =
+    (location.row |> String.fromInt)
+        ++ ":"
+        ++ (location.column |> String.fromInt)
 
 
 expressionTypeInfer :
@@ -4097,7 +4174,46 @@ expressionTypeInfer :
                     TypeVariableFromContext
                     (FastSet.Set TypeVariableFromContext)
             }
-expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
+expressionTypeInfer context syntaxExpressionNode =
+    Result.mapError
+        (\error ->
+            if error |> String.startsWith "(" then
+                error
+
+            else
+                "("
+                    ++ (syntaxExpressionNode |> Elm.Syntax.Node.range |> rangeToInfoString)
+                    ++ ") "
+                    ++ error
+        )
+        (expressionTypeInferInner context syntaxExpressionNode)
+
+
+expressionTypeInferInner :
+    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , locallyIntroducedExpressionVariables :
+        FastDict.Dict String (Type TypeVariableFromContext)
+    , partiallyInferredDeclarationTypes :
+        FastDict.Dict String (Type TypeVariableFromContext)
+    , containingDeclarationName : String
+    , path : List String
+    , moduleOriginLookup : ModuleOriginLookup
+    }
+    -> Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , node :
+                TypedNode
+                    (Expression (Type TypeVariableFromContext))
+                    (Type TypeVariableFromContext)
+            , usesOfTypeVariablesFromPartiallyInferredDeclarations :
+                FastDict.Dict
+                    TypeVariableFromContext
+                    (FastSet.Set TypeVariableFromContext)
+            }
+expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
     -- IGNORE TCO
     case expression of
         Elm.Syntax.Expression.UnitExpr ->
