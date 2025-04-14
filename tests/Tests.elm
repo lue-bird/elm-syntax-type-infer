@@ -939,6 +939,7 @@ suite =
                         )
             )
         , let
+            recordExtensionTypeInExample : ElmSyntaxTypeInfer.Type String
             recordExtensionTypeInExample =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeRecordExtension
