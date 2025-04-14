@@ -1645,6 +1645,49 @@ suite =
                             )
                         )
             )
+        , Test.test "determine lambda parameter type by unification with pattern in let destructuring: \\a -> let () = a in a"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "a")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetExpression
+                                { declarations =
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.LetDestructuring
+                                            (Elm.Syntax.Node.empty
+                                                Elm.Syntax.Pattern.UnitPattern
+                                            )
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                            )
+                                        )
+                                    ]
+                                , expression =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                }
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "curried call: Tuple.pair \"\""
             (\() ->
                 Elm.Syntax.Expression.Application
