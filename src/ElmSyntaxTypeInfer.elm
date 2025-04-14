@@ -1074,26 +1074,31 @@ syntaxToType moduleOriginLookup syntaxType =
                 )
 
         Elm.Syntax.TypeAnnotation.GenericRecord (Elm.Syntax.Node.Node _ recordVariableName) (Elm.Syntax.Node.Node _ recordExtensionFields) ->
-            Result.map
-                (\fields ->
-                    TypeNotVariable
-                        (TypeRecordExtension
-                            { recordVariable = recordVariableName
-                            , fields = fields
-                            }
-                        )
-                )
-                (recordExtensionFields
-                    |> listFoldlWhileOkFrom
-                        FastDict.empty
-                        (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, Elm.Syntax.Node.Node _ fieldValue )) soFar ->
-                            Result.map
-                                (\fieldValueType ->
-                                    soFar |> FastDict.insert fieldName fieldValueType
+            case recordExtensionFields of
+                [] ->
+                    Err "record extension by 0 fields is invalid syntax"
+
+                field0 :: field1Up ->
+                    Result.map
+                        (\fields ->
+                            TypeNotVariable
+                                (TypeRecordExtension
+                                    { recordVariable = recordVariableName
+                                    , fields = fields
+                                    }
                                 )
-                                (fieldValue |> syntaxToType moduleOriginLookup)
                         )
-                )
+                        ((field0 :: field1Up)
+                            |> listFoldlWhileOkFrom
+                                FastDict.empty
+                                (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, Elm.Syntax.Node.Node _ fieldValue )) soFar ->
+                                    Result.map
+                                        (\fieldValueType ->
+                                            soFar |> FastDict.insert fieldName fieldValueType
+                                        )
+                                        (fieldValue |> syntaxToType moduleOriginLookup)
+                                )
+                        )
 
         Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation (Elm.Syntax.Node.Node _ syntaxInput) (Elm.Syntax.Node.Node _ syntaxOutput) ->
             Result.map2
@@ -2699,18 +2704,18 @@ typeNotVariableUnify declarationTypes a b =
                     case b of
                         TypeRecord bRecord ->
                             Result.map
-                                (\typeAndSubstitutions ->
-                                    { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                    , substitutions = typeAndSubstitutions.substitutions
+                                (\unified ->
+                                    { type_ = TypeNotVariable unified.type_
+                                    , substitutions = unified.substitutions
                                     }
                                 )
                                 (typeRecordUnify declarationTypes aRecord bRecord)
 
                         TypeRecordExtension bRecordExtension ->
                             Result.map
-                                (\typeAndSubstitutions ->
-                                    { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                    , substitutions = typeAndSubstitutions.substitutions
+                                (\unified ->
+                                    { type_ = TypeNotVariable unified.type_
+                                    , substitutions = unified.substitutions
                                     }
                                 )
                                 (typeRecordExtensionUnifyWithRecord declarationTypes
@@ -2737,9 +2742,9 @@ typeNotVariableUnify declarationTypes a b =
                     case b of
                         TypeRecord bRecord ->
                             Result.map
-                                (\typeAndSubstitutions ->
-                                    { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                    , substitutions = typeAndSubstitutions.substitutions
+                                (\unified ->
+                                    { type_ = TypeNotVariable unified.type_
+                                    , substitutions = unified.substitutions
                                     }
                                 )
                                 (typeRecordExtensionUnifyWithRecord declarationTypes
@@ -2749,9 +2754,9 @@ typeNotVariableUnify declarationTypes a b =
 
                         TypeRecordExtension bRecordExtension ->
                             Result.map
-                                (\typeAndSubstitutions ->
-                                    { type_ = TypeNotVariable typeAndSubstitutions.type_
-                                    , substitutions = typeAndSubstitutions.substitutions
+                                (\unified ->
+                                    { type_ = TypeNotVariable unified.type_
+                                    , substitutions = unified.substitutions
                                     }
                                 )
                                 (typeRecordExtensionUnifyWithRecordExtension declarationTypes
@@ -3127,6 +3132,18 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                     ( "base" :: aRecordVariableContext
                     , aRecordVariableWithoutContext
                     )
+
+                bVariableReplacementFields : FastDict.Dict String (Type TypeVariableFromContext)
+                bVariableReplacementFields =
+                    FastDict.diff
+                        aRecordExtension.fields
+                        bRecordExtension.fields
+
+                aVariableReplacementFields : FastDict.Dict String (Type TypeVariableFromContext)
+                aVariableReplacementFields =
+                    FastDict.diff
+                        bRecordExtension.fields
+                        aRecordExtension.fields
             in
             Result.map
                 (\fullSubstitutions ->
@@ -3138,31 +3155,36 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                             }
                     }
                 )
-                (variableSubstitutionsMerge declarationTypes
+                (variableSubstitutionsMerge3 declarationTypes
                     fieldsUnified.substitutions
-                    { equivalentVariables = []
-                    , variableToType =
-                        FastDict.singleton
-                            aRecordExtension.recordVariable
-                            (TypeRecordExtension
-                                { recordVariable = newBaseVariable
-                                , fields =
-                                    FastDict.diff
-                                        bRecordExtension.fields
-                                        aRecordExtension.fields
-                                }
-                            )
-                            |> FastDict.insert
-                                bRecordExtension.recordVariable
+                    (variableSubstitutionsFromVariableToType
+                        aRecordExtension.recordVariable
+                        (if aVariableReplacementFields |> FastDict.isEmpty then
+                            TypeVariable newBaseVariable
+
+                         else
+                            TypeNotVariable
                                 (TypeRecordExtension
                                     { recordVariable = newBaseVariable
-                                    , fields =
-                                        FastDict.diff
-                                            aRecordExtension.fields
-                                            bRecordExtension.fields
+                                    , fields = aVariableReplacementFields
                                     }
                                 )
-                    }
+                        )
+                    )
+                    (variableSubstitutionsFromVariableToType
+                        bRecordExtension.recordVariable
+                        (if bVariableReplacementFields |> FastDict.isEmpty then
+                            TypeVariable newBaseVariable
+
+                         else
+                            TypeNotVariable
+                                (TypeRecordExtension
+                                    { recordVariable = newBaseVariable
+                                    , fields = bVariableReplacementFields
+                                    }
+                                )
+                        )
+                    )
                 )
         )
         (FastDict.merge
