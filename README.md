@@ -58,10 +58,10 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   add local types in a fully separate (optional!) step
 -   add more tests
--   never substitute partial variable uses
+-   never substitute partial variable uses (maybe by instead tracking partials as only the variable name necessary to search for instances)
 -   (mutually) recursive type aliases can run into an infinite loop
+-   add local types in a fully separate (optional!) step
 
 ### performance problems?
 
