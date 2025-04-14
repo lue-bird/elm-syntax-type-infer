@@ -2801,37 +2801,49 @@ typeNotVariableUnify declarationTypes a b =
 
                         TypeUnit ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeUnit |> typeNotVariableToInfoString)
                                 )
 
                         TypeConstruct bTypeConstruct ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                 )
 
                         TypeTuple bTypeTuple ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
                                 )
 
                         TypeTriple bTypeTriple ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
                                 )
 
                         TypeRecord bTypeRecord ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
                                 )
 
                         TypeRecordExtension bTypeRecordExtension ->
                             Err
-                                ("function (`... -> ...`) cannot be unified with types other than function: "
+                                ("function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
                                     ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
                                 )
 
