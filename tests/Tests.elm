@@ -821,7 +821,7 @@ suite =
                             )
                         )
             )
-        , Test.test "record update union with same record variable \\(rec) -> [ { a | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]"
+        , Test.test "record update union with same record variable \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
                     { args =
@@ -931,6 +931,105 @@ suite =
                                                             }
                                                         )
                                                     ]
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , let
+            recordExtensionTypeInExample =
+                ElmSyntaxTypeInfer.TypeNotVariable
+                    (ElmSyntaxTypeInfer.TypeRecordExtension
+                        { recordVariable = "x"
+                        , fields =
+                            FastDict.fromList
+                                [ ( "a"
+                                  , ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                  )
+                                , ( "c"
+                                  , ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                  )
+                                , ( "b"
+                                  , ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                            { arguments = []
+                                            , moduleOrigin = [ "Basics" ]
+                                            , name = "Float"
+                                            }
+                                        )
+                                  )
+                                ]
+                        }
+                    )
+          in
+          Test.test "record update union with record update over different record variable \\x y -> [ { x | a = (), b = 1 }, { y | c = (), b = 2.2 } ]"
+            (\() ->
+                Elm.Syntax.Expression.LambdaExpression
+                    { args =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "x")
+                        , Elm.Syntax.Node.empty
+                            (Elm.Syntax.Pattern.VarPattern "y")
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.ListExpr
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.RecordUpdateExpression
+                                        (Elm.Syntax.Node.empty "x")
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "a"
+                                            , Elm.Syntax.Node.empty
+                                                Elm.Syntax.Expression.UnitExpr
+                                            )
+                                        , Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "b"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Integer 1)
+                                            )
+                                        ]
+                                    )
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.RecordUpdateExpression
+                                        (Elm.Syntax.Node.empty "y")
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "c"
+                                            , Elm.Syntax.Node.empty
+                                                Elm.Syntax.Expression.UnitExpr
+                                            )
+                                        , Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "b"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                            )
+                                        ]
+                                    )
+                                ]
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = recordExtensionTypeInExample
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input = recordExtensionTypeInExample
+                                                , output =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "List" ]
+                                                            , name = "List"
+                                                            , arguments =
+                                                                [ recordExtensionTypeInExample ]
+                                                            }
+                                                        )
                                                 }
                                             )
                                     }
