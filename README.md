@@ -60,8 +60,6 @@ exampleModuleOriginLookup =
 
 -   add local types in a fully separate (optional!) step
 -   add more tests
--   optimize substitution scope similar to how patterns are currently inferred:
-    Substitutions should be applied as they are created except for partials and local variables
 -   never substitute partial variable uses
 -   (mutually) recursive type aliases can run into an infinite loop
 

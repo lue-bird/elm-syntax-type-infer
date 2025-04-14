@@ -5908,8 +5908,6 @@ letDeclarationTypeInfer :
         Result
             String
             { substitutions : VariableSubstitutions
-            , introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
             , usesOfTypeVariablesFromPartiallyInferredDeclarations :
                 FastDict.Dict
                     TypeVariableFromContext
@@ -5925,27 +5923,49 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
             resultAndThen2
                 (\patternInferred expressionInferred ->
                     Result.andThen
-                        (\patternExpressionUnifiedType ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , introducedExpressionVariables =
-                                        patternInferred |> patternTypedNodeIntroducedVariables
+                        (\patternExpressionUnified ->
+                            let
+                                unificationSubstitutions : { toAdd : VariableSubstitutions, toApply : VariableSubstitutions }
+                                unificationSubstitutions =
+                                    variableSubstitutionsSplitOffDirectlyApplicable
+                                        { declarationTypes = context.declarationTypes
+                                        , locallyIntroducedExpressionVariables =
+                                            context.locallyIntroducedExpressionVariables
+                                        , substitutions = expressionInferred.substitutions
+                                        }
+                                        patternExpressionUnified.substitutions
+                            in
+                            Result.map4
+                                (\substitutionsWithUnification unificationEquivalentVariablesToCondensedLookup patternInferredAfterSubstitutions expressionInferredAfterSubstitution ->
+                                    { substitutions = substitutionsWithUnification
                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                         expressionInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                            |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
+                                                unificationEquivalentVariablesToCondensedLookup
                                     , node =
                                         { range = letDeclarationRange
                                         , declaration =
                                             LetDestructuring
-                                                { pattern = patternInferred
-                                                , expression = expressionInferred.node
+                                                { pattern = patternInferredAfterSubstitutions
+                                                , expression = expressionInferredAfterSubstitution
                                                 }
                                         }
                                     }
                                 )
                                 (variableSubstitutionsMerge context.declarationTypes
                                     expressionInferred.substitutions
-                                    patternExpressionUnifiedType.substitutions
+                                    unificationSubstitutions.toAdd
+                                )
+                                (createEquivalentVariablesToCondensedVariableLookup
+                                    unificationSubstitutions.toApply.equivalentVariables
+                                )
+                                (patternInferred
+                                    |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                        unificationSubstitutions.toApply
+                                )
+                                (expressionInferred.node
+                                    |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                        unificationSubstitutions.toApply
                                 )
                         )
                         (typeUnify context.declarationTypes
@@ -5968,15 +5988,6 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
         Elm.Syntax.Expression.LetFunction letValueOrFunction ->
             letFunctionOrValueDeclarationTypeInfer context
                 (Elm.Syntax.Node.Node letDeclarationRange letValueOrFunction)
-                |> Result.map
-                    (\letFunctionOrValueDeclarationInferred ->
-                        { substitutions = letFunctionOrValueDeclarationInferred.substitutions
-                        , introducedExpressionVariables = FastDict.empty
-                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                            letFunctionOrValueDeclarationInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                        , node = letFunctionOrValueDeclarationInferred.node
-                        }
-                    )
 
 
 letFunctionOrValueDeclarationTypeInfer :
@@ -10225,15 +10236,60 @@ expressionTypeInferResultAddOrApplySubstitutions :
             }
 expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApply expressionTypeInferResult =
     let
+        substitutionsSplitIntoToAddAndToApply : { toAdd : VariableSubstitutions, toApply : VariableSubstitutions }
+        substitutionsSplitIntoToAddAndToApply =
+            variableSubstitutionsSplitOffDirectlyApplicable
+                { declarationTypes = context.declarationTypes
+                , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
+                , substitutions = expressionTypeInferResult.substitutions
+                }
+                substitutionsToAddOrApply
+    in
+    Result.map3
+        (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
+            { substitutions = substitutionsWithAdded
+            , node = nodeSubstituted
+            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                expressionTypeInferResult.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                    |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
+                        variableToCondensedLookup
+            }
+        )
+        (expressionTypeInferResult.node
+            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                substitutionsSplitIntoToAddAndToApply.toApply
+        )
+        (createEquivalentVariablesToCondensedVariableLookup
+            substitutionsSplitIntoToAddAndToApply.toApply.equivalentVariables
+        )
+        (variableSubstitutionsMerge context.declarationTypes
+            expressionTypeInferResult.substitutions
+            substitutionsSplitIntoToAddAndToApply.toAdd
+        )
+
+
+variableSubstitutionsSplitOffDirectlyApplicable :
+    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , locallyIntroducedExpressionVariables :
+        FastDict.Dict String (Type TypeVariableFromContext)
+    , substitutions : VariableSubstitutions
+    }
+    -> VariableSubstitutions
+    ->
+        { toAdd : VariableSubstitutions
+        , toApply : VariableSubstitutions
+        }
+variableSubstitutionsSplitOffDirectlyApplicable context substitutionsToAddOrApply =
+    let
         -- we don't want to apply a substitution locally if a non-local substitution could be substituted
         -- into such a variable
         nonLocalSubstitutionResultTypeVariables : FastSet.Set TypeVariableFromContext
         nonLocalSubstitutionResultTypeVariables =
             FastSet.union
-                (expressionTypeInferResult.substitutions.equivalentVariables
+                (context.substitutions.equivalentVariables
                     |> listMapAndFastSetsUnify identity
                 )
-                (expressionTypeInferResult.substitutions.variableToType
+                (context.substitutions.variableToType
                     |> FastDict.foldl
                         (\_ replacementType soFar ->
                             FastSet.union soFar
@@ -10277,36 +10333,16 @@ expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApp
                                     |> fastSetAreIntersecting equivalentVariablesSet
                                )
                     )
-
-        substitutionsToApply : VariableSubstitutions
-        substitutionsToApply =
-            { equivalentVariables = substitutionsOfEquivalentVariablesToApply
-            , variableToType = substitutionsVariableToTypeToApply
-            }
     in
-    Result.map3
-        (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
-            { substitutions = substitutionsWithAdded
-            , node = nodeSubstituted
-            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                expressionTypeInferResult.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                    |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
-                        variableToCondensedLookup
-            }
-        )
-        (expressionTypeInferResult.node
-            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                substitutionsToApply
-        )
-        (createEquivalentVariablesToCondensedVariableLookup
-            substitutionsOfEquivalentVariablesToApply
-        )
-        (variableSubstitutionsMerge context.declarationTypes
-            expressionTypeInferResult.substitutions
-            { equivalentVariables = substitutionsOfEquivalentVariablesToAdd
-            , variableToType = substitutionsVariableToTypeToAdd
-            }
-        )
+    { toAdd =
+        { equivalentVariables = substitutionsOfEquivalentVariablesToAdd
+        , variableToType = substitutionsVariableToTypeToAdd
+        }
+    , toApply =
+        { equivalentVariables = substitutionsOfEquivalentVariablesToApply
+        , variableToType = substitutionsVariableToTypeToApply
+        }
+    }
 
 
 fastSetAreIntersecting : FastSet.Set comparable -> FastSet.Set comparable -> Bool
