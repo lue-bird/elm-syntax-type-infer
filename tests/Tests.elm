@@ -2577,15 +2577,7 @@ suite =
                         { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
-                            [ Elm.Syntax.Declaration.AliasDeclaration
-                                { documentation = Nothing
-                                , name = Elm.Syntax.Node.empty "Just"
-                                , generics = [ Elm.Syntax.Node.empty "a" ]
-                                , typeAnnotation =
-                                    Elm.Syntax.Node.empty
-                                        (Elm.Syntax.TypeAnnotation.GenericType "a")
-                                }
-                            ]
+                            []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     exampleModuleOriginLookup
                                 |> .types
@@ -2619,6 +2611,132 @@ suite =
                                                         (ElmSyntaxTypeInfer.TypeConstruct
                                                             { moduleOrigin = [ "Basics" ]
                                                             , name = "Int"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "same name for parameter and imported but one is qualified: stringResizePadLeftWith0s : Int -> String -> String ; stringResizePadLeftWith0s length unpaddedString = if length < (unpaddedString |> String.length) then \"\" else unpaddedString"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "stringResizePadLeftWith0s"
+                            , arguments =
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "length")
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "unpaddedString")
+                                ]
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.IfBlock
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.OperatorApplication
+                                                "<"
+                                                Elm.Syntax.Infix.Non
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.FunctionOrValue [] "length")
+                                                )
+                                                (Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.OperatorApplication
+                                                        "|>"
+                                                        Elm.Syntax.Infix.Left
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.FunctionOrValue [] "unpaddedString")
+                                                        )
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.FunctionOrValue [ "String" ] "length")
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "unpaddedString")
+                                        )
+                                    )
+                            }
+                  , signature =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                { name = Elm.Syntax.Node.empty "stringResizePadLeftWith0s"
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                    []
+                                                )
+                                            )
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                    (Elm.Syntax.Node.empty
+                                                        (Elm.Syntax.TypeAnnotation.Typed
+                                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                                            []
+                                                        )
+                                                    )
+                                                    (Elm.Syntax.Node.empty
+                                                        (Elm.Syntax.TypeAnnotation.Typed
+                                                            (Elm.Syntax.Node.empty ( [], "String" ))
+                                                            []
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                }
+                            )
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Int"
+                                                , arguments = []
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "String" ]
+                                                            , name = "String"
+                                                            , arguments = []
+                                                            }
+                                                        )
+                                                , output =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeConstruct
+                                                            { moduleOrigin = [ "String" ]
+                                                            , name = "String"
                                                             , arguments = []
                                                             }
                                                         )
