@@ -2880,6 +2880,208 @@ suite =
                             )
                         )
             )
+        , Test.test "single annotated let value declaration: let a : Float ; a = 2.2 in a"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Floatable 2.2)
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "a"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty
+                                                            ( [], "Float" )
+                                                        )
+                                                        []
+                                                    )
+                                            }
+                                        )
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Basics" ]
+                                    , name = "Float"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "single annotated let function declaration with multiple arguments, called: let a : Float -> String -> () ; a x y = () in a 1.1 \"\""
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Pattern.VarPattern "x")
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Pattern.VarPattern "y")
+                                            ]
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                Elm.Syntax.Expression.UnitExpr
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "a"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty
+                                                                    ( [], "Float" )
+                                                                )
+                                                                []
+                                                            )
+                                                        )
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                                (Elm.Syntax.Node.empty
+                                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                                        (Elm.Syntax.Node.empty
+                                                                            ( [], "String" )
+                                                                        )
+                                                                        []
+                                                                    )
+                                                                )
+                                                                (Elm.Syntax.Node.empty
+                                                                    Elm.Syntax.TypeAnnotation.Unit
+                                                                )
+                                                            )
+                                                        )
+                                                    )
+                                            }
+                                        )
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.Application
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 1.1)
+                                , Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Literal "")
+                                ]
+                            )
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                ElmSyntaxTypeInfer.TypeUnit
+                            )
+                        )
+            )
+        , Test.test "single annotated let function declaration with multiple arguments: let a : Float ; a = 2.2 in a"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "a"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Pattern.VarPattern "x")
+                                            ]
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.FunctionOrValue [] "x")
+                                        }
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "a"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty
+                                                                    ( [], "Float" )
+                                                                )
+                                                                []
+                                                            )
+                                                        )
+                                                        (Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                                (Elm.Syntax.Node.empty
+                                                                    ( [], "Float" )
+                                                                )
+                                                                []
+                                                            )
+                                                        )
+                                                    )
+                                            }
+                                        )
+                                , documentation = Nothing
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Float"
+                                                , arguments = []
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Float"
+                                                , arguments = []
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "single un-annotated let declaration getting its type from unification: \\a -> let b = [ a, 2.2 ] in a"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
