@@ -7354,7 +7354,6 @@ valueAndFunctionDeclarations :
                     Maybe
                         { range : Elm.Syntax.Range.Range
                         , nameRange : Elm.Syntax.Range.Range
-                        , annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
                         , annotationTypeRange : Elm.Syntax.Range.Range
                         }
                 , parameters :
@@ -7633,7 +7632,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                         Just
                                                                             { range = signatureRange
                                                                             , nameRange = signature.name |> Elm.Syntax.Node.range
-                                                                            , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
                                                                             , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
                                                                             }
                                                                     , result = resultInferredSubstituted
@@ -7901,7 +7899,6 @@ type alias ValueOrFunctionDeclarationInfo type_ =
         Maybe
             { range : Elm.Syntax.Range.Range
             , nameRange : Elm.Syntax.Range.Range
-            , annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
             , annotationTypeRange : Elm.Syntax.Range.Range
             }
     , parameters :
@@ -9237,7 +9234,6 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
             |> Maybe.map
                 (\signature ->
                     { range = signature.range
-                    , annotationType = signature.annotationType
                     , annotationTypeRange = signature.annotationTypeRange
                     , nameRange = signature.nameRange
                     }
