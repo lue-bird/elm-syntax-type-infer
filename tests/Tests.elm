@@ -2497,13 +2497,7 @@ suite =
                         Elm.Syntax.Node.empty
                             { expression =
                                 Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Application
-                                        [ Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "Just")
-                                        , Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.Literal "")
-                                        ]
-                                    )
+                                    (Elm.Syntax.Expression.Literal "")
                             , name = Elm.Syntax.Node.empty "just"
                             , arguments = []
                             }
