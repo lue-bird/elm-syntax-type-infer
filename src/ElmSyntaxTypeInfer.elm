@@ -9510,9 +9510,10 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             , node =
                                 { range = expressionTypedNode.range
                                 , value =
-                                    ExpressionTuple
+                                    ExpressionTriple
                                         { part0 = part0Substituted.node
                                         , part1 = part1Substituted.node
+                                        , part2 = part2Substituted.node
                                         }
                                 , type_ = typeSubstituted.type_
                                 }
@@ -9551,9 +9552,10 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                             , node =
                                 { range = expressionTypedNode.range
                                 , value =
-                                    ExpressionTuple
-                                        { part0 = conditionSubstituted.node
-                                        , part1 = onTrueSubstituted.node
+                                    ExpressionIfThenElse
+                                        { condition = conditionSubstituted.node
+                                        , onTrue = onTrueSubstituted.node
+                                        , onFalse = onFalseSubstituted.node
                                         }
                                 , type_ = typeSubstituted.type_
                                 }
