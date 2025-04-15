@@ -7784,8 +7784,8 @@ typeNotVariableSetLocalToOrigin :
     Elm.Syntax.ModuleName.ModuleName
     -> TypeNotVariable variable
     -> TypeNotVariable variable
-typeNotVariableSetLocalToOrigin moduleOrigin type_ =
-    case type_ of
+typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
+    case typeNotVariable of
         TypeConstruct typeConstruct ->
             TypeConstruct
                 { name = typeConstruct.name
