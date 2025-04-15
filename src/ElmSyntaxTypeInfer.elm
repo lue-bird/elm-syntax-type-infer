@@ -5163,8 +5163,8 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             resultInferred.substitutions.equivalentVariables
                                                 |> List.partition
                                                     (\equivalentVariableSet ->
-                                                        equivalentVariableSet
-                                                            |> fastSetIsSupersetOf parameterTypesContainedVariables
+                                                        parameterTypesContainedVariables
+                                                            |> fastSetIsSupersetOf equivalentVariableSet
                                                     )
 
                                         substitutionsToApply : VariableSubstitutions
@@ -5625,17 +5625,60 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                     in
                     resultAndThen3
                         (\declaration0Inferred declaration1UpInferred resultInferred ->
-                            Result.map
+                            Result.andThen
                                 (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                        usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge3
-                                            declaration0Inferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                            declaration1UpInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                            resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                    , node =
-                                        { range = fullRange
-                                        , value =
+                                    let
+                                        destructurePatternTypesContainedVariables : FastSet.Set TypeVariableFromContext
+                                        destructurePatternTypesContainedVariables =
+                                            acrossLetIn.introducedExpressionVariables
+                                                |> FastDict.foldl
+                                                    (\_ destructurePatternType soFar ->
+                                                        FastSet.union soFar
+                                                            (destructurePatternType |> typeContainedVariables)
+                                                    )
+                                                    FastSet.empty
+
+                                        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
+                                            fullSubstitutions.variableToType
+                                                |> FastDict.partition
+                                                    (\variableToReplace _ ->
+                                                        destructurePatternTypesContainedVariables
+                                                            |> FastSet.member variableToReplace
+                                                    )
+
+                                        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
+                                            fullSubstitutions.equivalentVariables
+                                                |> List.partition
+                                                    (\equivalentVariableSet ->
+                                                        destructurePatternTypesContainedVariables
+                                                            |> fastSetIsSupersetOf equivalentVariableSet
+                                                    )
+
+                                        substitutionsToApply : VariableSubstitutions
+                                        substitutionsToApply =
+                                            { equivalentVariables = equivalentVariableSubstitutionsToApply
+                                            , variableToType = substitutionsVariableToTypeToApply
+                                            }
+
+                                        substitutionsToAdd : VariableSubstitutions
+                                        substitutionsToAdd =
+                                            { equivalentVariables = equivalentVariableSubstitutionsToAdd
+                                            , variableToType = substitutionsVariableToTypeToAdd
+                                            }
+                                    in
+                                    Result.map2
+                                        (\nodeSubstituted substitutionsToAddAfterSubstitutions ->
+                                            { substitutions = substitutionsToAddAfterSubstitutions
+                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                usesOfTypeVariablesFromPartiallyInferredDeclarationsMerge3
+                                                    declaration0Inferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                    declaration1UpInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                    resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                            , node = nodeSubstituted
+                                            }
+                                        )
+                                        ({ range = fullRange
+                                         , value =
                                             ExpressionLetIn
                                                 { declaration0 = declaration0Inferred.node
                                                 , declaration1Up =
@@ -5643,9 +5686,15 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         |> List.reverse
                                                 , result = resultInferred.node
                                                 }
-                                        , type_ = resultInferred.node.type_
-                                        }
-                                    }
+                                         , type_ = resultInferred.node.type_
+                                         }
+                                            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                substitutionsToApply
+                                        )
+                                        (substitutionsToAdd
+                                            |> variableSubstitutionsApplyVariableSubstitutions context.declarationTypes
+                                                substitutionsToApply
+                                        )
                                 )
                                 (variableSubstitutionsMerge3 acrossLetInIncludingContextSoFar.declarationTypes
                                     declaration0Inferred.substitutions
