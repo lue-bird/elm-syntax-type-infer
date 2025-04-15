@@ -372,7 +372,7 @@ typeNotVariableContainedVariables typeNotVariable =
 
         TypeConstruct typeConstruct ->
             typeConstruct.arguments
-                |> listMapAndFastSetsUnify typeContainedVariables
+                |> listMapToFastSetsAndUnify typeContainedVariables
 
         TypeRecord typeRecordFields ->
             typeRecordFields
@@ -3611,11 +3611,11 @@ patternTypedNodeIntroducedVariables patternTypedNode =
 
         PatternListExact elements ->
             elements
-                |> listMapAndFastDictsUnify patternTypedNodeIntroducedVariables
+                |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
 
         PatternVariant variant ->
             variant.values
-                |> listMapAndFastDictsUnify patternTypedNodeIntroducedVariables
+                |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
 
 
 patternContextToInPath :
@@ -5146,7 +5146,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         parameterTypesContainedVariables : FastSet.Set TypeVariableFromContext
                                         parameterTypesContainedVariables =
                                             (parameter0Inferred :: parameter1UpInferred.nodesReverse)
-                                                |> listMapAndFastSetsUnify
+                                                |> listMapToFastSetsAndUnify
                                                     (\parameterInferred ->
                                                         parameterInferred.type_ |> typeContainedVariables
                                                     )
@@ -6254,7 +6254,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                         parametersInferredContainedTypeVariables : FastSet.Set TypeVariableFromContext
                         parametersInferredContainedTypeVariables =
                             parametersInferred.nodesReverse
-                                |> listMapAndFastSetsUnify
+                                |> listMapToFastSetsAndUnify
                                     (\parameterInferred ->
                                         parameterInferred.type_ |> typeContainedVariables
                                     )
@@ -7534,46 +7534,32 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                             inferredFullType =
                                 parametersInferred.nodesReverse
                                     |> List.foldl
-                                        (\argumentTypedNode typeSoFar ->
+                                        (\parameterTypedNode typeSoFar ->
                                             TypeNotVariable
                                                 (TypeFunction
-                                                    { input = argumentTypedNode.type_
+                                                    { input = parameterTypedNode.type_
                                                     , output = typeSoFar
                                                     }
                                                 )
                                         )
                                         (TypeVariable resultTypeVariable)
 
-                            fullType : Type TypeVariableFromContext
-                            fullType =
-                                case acrossValueAndFunctionDeclarationsToInfer.annotated |> FastDict.get name of
-                                    Just annotationType ->
-                                        annotationType
-                                            |> typeMapVariables
-                                                (\variable ->
-                                                    ( [ name ], variable )
-                                                )
-
+                            maybeDocumentationAndRange : Maybe { range : Elm.Syntax.Range.Range, content : String }
+                            maybeDocumentationAndRange =
+                                case valueOrFunctionDeclarationToInfer.documentation of
                                     Nothing ->
-                                        inferredFullType
+                                        Nothing
+
+                                    Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
+                                        Just
+                                            { range = documentationRange
+                                            , content = documentationContent
+                                            }
                         in
-                        Result.andThen
-                            (\resultInferred ->
-                                let
-                                    maybeDocumentationAndRange : Maybe { range : Elm.Syntax.Range.Range, content : String }
-                                    maybeDocumentationAndRange =
-                                        case valueOrFunctionDeclarationToInfer.documentation of
-                                            Nothing ->
-                                                Nothing
-
-                                            Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
-                                                Just
-                                                    { range = documentationRange
-                                                    , content = documentationContent
-                                                    }
-                                in
-                                case valueOrFunctionDeclarationToInfer.signature of
-                                    Nothing ->
+                        case valueOrFunctionDeclarationToInfer.signature of
+                            Nothing ->
+                                Result.andThen
+                                    (\resultInferred ->
                                         let
                                             fullTypeVariable : TypeVariableFromContext
                                             fullTypeVariable =
@@ -7594,7 +7580,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             , documentation = maybeDocumentationAndRange
                                                             , signature = Nothing
                                                             , result = resultInferred.node
-                                                            , type_ = fullType
+                                                            , type_ = inferredFullType
                                                             , parameters =
                                                                 parametersInferred.nodesReverse |> List.reverse
                                                             }
@@ -7609,19 +7595,58 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 )
                                                 (variableSubstitutionsFromVariableToType
                                                     fullTypeVariable
-                                                    fullType
+                                                    inferredFullType
                                                 )
                                             )
+                                    )
+                                    (implementation.expression
+                                        |> expressionTypeInfer
+                                            { declarationTypes = declarationTypes
+                                            , locallyIntroducedExpressionVariables =
+                                                case valueOrFunctionDeclarationToInfer.signature of
+                                                    Just _ ->
+                                                        parametersInferred.introducedExpressionVariables
 
-                                    Just (Elm.Syntax.Node.Node signatureRange signature) ->
+                                                    Nothing ->
+                                                        -- elm declarations do not allow "polymorphic recursion"
+                                                        -- https://github.com/elm/compiler/issues/2275
+                                                        -- so instead of putting it in partiallyInferredDeclarationTypes
+                                                        -- we treat it as an introduced variable (sharing the same type variables)
+                                                        parametersInferred.introducedExpressionVariables
+                                                            |> FastDict.insert name inferredFullType
+                                            , partiallyInferredDeclarationTypes =
+                                                acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                            , containingDeclarationName = name
+                                            , path = [ "declarationResult", name ]
+                                            , moduleOriginLookup = moduleOriginLookup
+                                            }
+                                    )
+
+                            Just (Elm.Syntax.Node.Node signatureRange signature) ->
+                                let
+                                    fullType : Type TypeVariableFromContext
+                                    fullType =
+                                        case acrossValueAndFunctionDeclarationsToInfer.annotated |> FastDict.get name of
+                                            Just annotationType ->
+                                                annotationType
+                                                    |> typeMapVariables
+                                                        (\variable ->
+                                                            ( [ name ], variable )
+                                                        )
+
+                                            Nothing ->
+                                                inferredFullType
+                                in
+                                Result.andThen
+                                    (\parameterAndResultAndTypeUnified ->
                                         Result.andThen
-                                            (\parameterAndResultAndTypeUnifySubstitutions ->
-                                                Result.map2
-                                                    (\parametersInferredSubstituted resultInferredSubstituted ->
+                                            (\parametersInferredSubstituted ->
+                                                Result.map
+                                                    (\resultInferredSubstituted ->
                                                         { usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                                             FastDict.union
                                                                 soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                resultInferredSubstituted.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                                         , substitutions = soFar.substitutions
                                                         , declarationsTyped =
                                                             soFar.declarationsTyped
@@ -7634,64 +7659,107 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                             , nameRange = signature.name |> Elm.Syntax.Node.range
                                                                             , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
                                                                             }
-                                                                    , result = resultInferredSubstituted
+                                                                    , result = resultInferredSubstituted.node
                                                                     , type_ = fullType
                                                                     , parameters = parametersInferredSubstituted
                                                                     }
                                                         }
                                                     )
-                                                    (parametersInferred.nodesReverse
-                                                        |> listFoldlWhileOkFrom []
-                                                            (\parameter parametersSubstitutedSoFar ->
-                                                                Result.map
-                                                                    (\parameterInferredSubstituted ->
-                                                                        parameterInferredSubstituted :: parametersSubstitutedSoFar
-                                                                    )
-                                                                    (parameter
-                                                                        |> patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                                                            parameterAndResultAndTypeUnifySubstitutions
-                                                                    )
+                                                    (implementation.expression
+                                                        |> expressionTypeInfer
+                                                            { declarationTypes = declarationTypes
+                                                            , locallyIntroducedExpressionVariables =
+                                                                parametersInferredSubstituted
+                                                                    |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
+                                                            , partiallyInferredDeclarationTypes =
+                                                                acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                                            , containingDeclarationName = name
+                                                            , path = [ "declarationResult", name ]
+                                                            , moduleOriginLookup = moduleOriginLookup
+                                                            }
+                                                        |> Result.andThen
+                                                            (\resultInferred ->
+                                                                case
+                                                                    parameterAndResultAndTypeUnified.substitutions.variableToType
+                                                                        |> FastDict.get resultTypeVariable
+                                                                of
+                                                                    Just resultTypeVariableReplacementType ->
+                                                                        Result.andThen
+                                                                            (\unifiedWithAnnotatedResultType ->
+                                                                                resultInferred.node
+                                                                                    |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                                        unifiedWithAnnotatedResultType.substitutions
+                                                                                    |> Result.map
+                                                                                        (\resultInferredSubstituted ->
+                                                                                            { node = resultInferredSubstituted
+                                                                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                                            }
+                                                                                        )
+                                                                            )
+                                                                            (typeUnify declarationTypes
+                                                                                (TypeNotVariable resultTypeVariableReplacementType)
+                                                                                resultInferred.node.type_
+                                                                            )
+
+                                                                    Nothing ->
+                                                                        case
+                                                                            parameterAndResultAndTypeUnified.substitutions.equivalentVariables
+                                                                                |> listMapAndFirstJust
+                                                                                    (\equivalentVariablesSet ->
+                                                                                        if equivalentVariablesSet |> FastSet.member resultTypeVariable then
+                                                                                            Just equivalentVariablesSet
+
+                                                                                        else
+                                                                                            Nothing
+                                                                                    )
+                                                                        of
+                                                                            Nothing ->
+                                                                                Ok
+                                                                                    { node = resultInferred.node
+                                                                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                                        resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                                    }
+
+                                                                            Just variablesEquivalentToResult ->
+                                                                                Result.map
+                                                                                    (\condensedVariable ->
+                                                                                        { node =
+                                                                                            resultInferred.node
+                                                                                                |> expressionTypedNodeMapTypeVariables
+                                                                                                    (\typeVariable ->
+                                                                                                        if variablesEquivalentToResult |> FastSet.member resultTypeVariable then
+                                                                                                            condensedVariable
+
+                                                                                                        else
+                                                                                                            typeVariable
+                                                                                                    )
+                                                                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                                                            resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                                        }
+                                                                                    )
+                                                                                    (variablesEquivalentToResult |> equivalentVariablesCreateCondensedVariable)
                                                             )
                                                     )
-                                                    (resultInferred.node
-                                                        |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                                            parameterAndResultAndTypeUnifySubstitutions
+                                            )
+                                            (parametersInferred.nodesReverse
+                                                |> listFoldlWhileOkFrom []
+                                                    (\parameter parametersSubstitutedSoFar ->
+                                                        Result.map
+                                                            (\parameterInferredSubstituted ->
+                                                                parameterInferredSubstituted :: parametersSubstitutedSoFar
+                                                            )
+                                                            (parameter
+                                                                |> patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                    parameterAndResultAndTypeUnified.substitutions
+                                                            )
                                                     )
                                             )
-                                            (Result.andThen
-                                                (\inferredUnifiedWithAnnotated ->
-                                                    variableSubstitutionsMerge declarationTypes
-                                                        resultInferred.substitutions
-                                                        inferredUnifiedWithAnnotated.substitutions
-                                                )
-                                                (typeUnify declarationTypes
-                                                    fullType
-                                                    inferredFullType
-                                                )
-                                            )
-                            )
-                            (implementation.expression
-                                |> expressionTypeInfer
-                                    { declarationTypes = declarationTypes
-                                    , locallyIntroducedExpressionVariables =
-                                        case valueOrFunctionDeclarationToInfer.signature of
-                                            Just _ ->
-                                                parametersInferred.introducedExpressionVariables
-
-                                            Nothing ->
-                                                -- elm declarations do not allow "polymorphic recursion"
-                                                -- https://github.com/elm/compiler/issues/2275
-                                                -- so instead of putting it in partiallyInferredDeclarationTypes
-                                                -- we treat it as an introduced variable (sharing the same type variables)
-                                                parametersInferred.introducedExpressionVariables
-                                                    |> FastDict.insert name fullType
-                                    , partiallyInferredDeclarationTypes =
-                                        acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
-                                    , containingDeclarationName = name
-                                    , path = [ "declarationResult", name ]
-                                    , moduleOriginLookup = moduleOriginLookup
-                                    }
-                            )
+                                    )
+                                    (typeUnify declarationTypes
+                                        fullType
+                                        inferredFullType
+                                    )
                     )
                     (implementation.arguments
                         |> parameterPatternsTypeInfer
@@ -8050,7 +8118,7 @@ patternContainedTypeVariables pattern =
 
         PatternListExact elements ->
             elements
-                |> listMapAndFastSetsUnify
+                |> listMapToFastSetsAndUnify
                     (\element ->
                         element
                             |> patternTypedNodeContainedTypeVariables
@@ -8058,7 +8126,7 @@ patternContainedTypeVariables pattern =
 
         PatternVariant patternVariant ->
             patternVariant.values
-                |> listMapAndFastSetsUnify
+                |> listMapToFastSetsAndUnify
                     (\value ->
                         value
                             |> patternTypedNodeContainedTypeVariables
@@ -8066,15 +8134,15 @@ patternContainedTypeVariables pattern =
 
         PatternRecord fields ->
             fields
-                |> listMapAndFastSetsUnify
+                |> listMapToFastSetsAndUnify
                     (\fieldTypedNode ->
                         fieldTypedNode.type_
                             |> typeContainedVariables
                     )
 
 
-listMapAndFastSetsUnify : (a -> FastSet.Set comparable) -> List a -> FastSet.Set comparable
-listMapAndFastSetsUnify elementToSet elements =
+listMapToFastSetsAndUnify : (a -> FastSet.Set comparable) -> List a -> FastSet.Set comparable
+listMapToFastSetsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
@@ -8085,11 +8153,11 @@ listMapAndFastSetsUnify elementToSet elements =
             FastSet.empty
 
 
-listMapAndFastDictsUnify :
+listMapToFastDictsAndUnify :
     (a -> FastDict.Dict comparable value)
     -> List a
     -> FastDict.Dict comparable value
-listMapAndFastDictsUnify elementToSet elements =
+listMapToFastDictsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
@@ -8202,7 +8270,7 @@ expressionContainedTypeVariables expression =
 
         ExpressionList elements ->
             elements
-                |> listMapAndFastSetsUnify
+                |> listMapToFastSetsAndUnify
                     (\element ->
                         element
                             |> expressionTypedNodeContainedTypeVariables
@@ -8210,7 +8278,7 @@ expressionContainedTypeVariables expression =
 
         ExpressionRecord fields ->
             fields
-                |> listMapAndFastSetsUnify
+                |> listMapToFastSetsAndUnify
                     (\field ->
                         field.value
                             |> expressionTypedNodeContainedTypeVariables
@@ -8226,7 +8294,7 @@ expressionContainedTypeVariables expression =
                         |> expressionTypedNodeContainedTypeVariables
                     )
                     (expressionCall.argument1Up
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             (\argument ->
                                 argument
                                     |> expressionTypedNodeContainedTypeVariables
@@ -8241,7 +8309,7 @@ expressionContainedTypeVariables expression =
                 )
                 (FastSet.union
                     (expressionLambda.parameter1Up
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             (\parameter ->
                                 parameter
                                     |> patternTypedNodeContainedTypeVariables
@@ -8262,7 +8330,7 @@ expressionContainedTypeVariables expression =
                         |> expressionTypedNodeContainedTypeVariables
                     )
                     (expressionRecordUpdate.field1Up
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             (\field ->
                                 field.value
                                     |> expressionTypedNodeContainedTypeVariables
@@ -8280,7 +8348,7 @@ expressionContainedTypeVariables expression =
                         |> expressionCaseOfCaseContainedTypeVariables
                     )
                     (expressionCaseOf.case1Up
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             expressionCaseOfCaseContainedTypeVariables
                     )
                 )
@@ -8292,7 +8360,7 @@ expressionContainedTypeVariables expression =
                 )
                 (FastSet.union
                     (expressionLetIn.declaration1Up
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             (\letDeclaration ->
                                 letDeclaration.declaration
                                     |> letDeclarationContainedTypeVariables
@@ -8325,7 +8393,7 @@ letDeclarationContainedTypeVariables letDeclaration =
                 )
                 (FastSet.union
                     (letValueOrFunctionDeclaration.parameters
-                        |> listMapAndFastSetsUnify
+                        |> listMapToFastSetsAndUnify
                             (\parameter ->
                                 parameter
                                     |> patternTypedNodeContainedTypeVariables
@@ -10592,7 +10660,7 @@ variableSubstitutionsSplitOffDirectlyApplicable context substitutionsToAddOrAppl
         nonLocalSubstitutionResultTypeVariables =
             FastSet.union
                 (context.substitutions.equivalentVariables
-                    |> listMapAndFastSetsUnify identity
+                    |> listMapToFastSetsAndUnify identity
                 )
                 (context.substitutions.variableToType
                     |> FastDict.foldl

@@ -59,7 +59,7 @@ exampleModuleOriginLookup =
 ## TODO
 
 -   add more tests
--   apply parameter unification with annotated type much, much earlier
+-   apply let function declaration parameter unification with annotated type much, much earlier
 -   never substitute partial variable uses (maybe by instead tracking partials as only the variable name necessary to search for instances)
 -   (mutually) recursive type aliases can run into an infinite loop
 -   add local types in a fully separate (optional!) step
