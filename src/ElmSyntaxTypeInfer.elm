@@ -1032,7 +1032,7 @@ syntaxToType moduleOriginLookup syntaxType =
         Elm.Syntax.TypeAnnotation.Tupled tupleParts ->
             case tupleParts of
                 [] ->
-                    Err "empty tuple"
+                    Ok (TypeNotVariable TypeUnit)
 
                 [ Elm.Syntax.Node.Node _ inParens ] ->
                     inParens |> syntaxToType moduleOriginLookup
@@ -4699,7 +4699,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         )
 
                 _ :: _ :: _ :: _ :: _ ->
-                    Err "too many tuple parts. Should not exist in a valid parse result"
+                    Err "too many tuple parts"
 
         Elm.Syntax.Expression.ListExpr elements ->
             case elements of
@@ -5140,14 +5140,55 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                 parameter0 :: parameter1Up ->
                     resultAndThen2
                         (\parameter0Inferred parameter1UpInferred ->
-                            Result.map
+                            Result.andThen
                                 (\resultInferred ->
-                                    { substitutions = resultInferred.substitutions
-                                    , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                        resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                    , node =
-                                        { range = fullRange
-                                        , value =
+                                    let
+                                        parameterTypesContainedVariables : FastSet.Set TypeVariableFromContext
+                                        parameterTypesContainedVariables =
+                                            (parameter0Inferred :: parameter1UpInferred.nodesReverse)
+                                                |> listMapAndFastSetsUnify
+                                                    (\parameterInferred ->
+                                                        parameterInferred.type_ |> typeContainedVariables
+                                                    )
+
+                                        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
+                                            resultInferred.substitutions.variableToType
+                                                |> FastDict.partition
+                                                    (\variableToReplace _ ->
+                                                        parameterTypesContainedVariables
+                                                            |> FastSet.member variableToReplace
+                                                    )
+
+                                        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
+                                            resultInferred.substitutions.equivalentVariables
+                                                |> List.partition
+                                                    (\equivalentVariableSet ->
+                                                        equivalentVariableSet
+                                                            |> fastSetIsSupersetOf parameterTypesContainedVariables
+                                                    )
+
+                                        substitutionsToApply : VariableSubstitutions
+                                        substitutionsToApply =
+                                            { equivalentVariables = equivalentVariableSubstitutionsToApply
+                                            , variableToType = substitutionsVariableToTypeToApply
+                                            }
+
+                                        substitutionsToAdd : VariableSubstitutions
+                                        substitutionsToAdd =
+                                            { equivalentVariables = equivalentVariableSubstitutionsToAdd
+                                            , variableToType = substitutionsVariableToTypeToAdd
+                                            }
+                                    in
+                                    Result.map2
+                                        (\nodeSubstituted substitutionsToAddAfterSubstitutions ->
+                                            { substitutions = substitutionsToAddAfterSubstitutions
+                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                            , node = nodeSubstituted
+                                            }
+                                        )
+                                        ({ range = fullRange
+                                         , value =
                                             ExpressionLambda
                                                 { parameter0 = parameter0Inferred
                                                 , parameter1Up =
@@ -5155,7 +5196,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         |> List.reverse
                                                 , result = resultInferred.node
                                                 }
-                                        , type_ =
+                                         , type_ =
                                             TypeNotVariable
                                                 (TypeFunction
                                                     { input = parameter0Inferred.type_
@@ -5173,8 +5214,14 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                                 resultInferred.node.type_
                                                     }
                                                 )
-                                        }
-                                    }
+                                         }
+                                            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                substitutionsToApply
+                                        )
+                                        (substitutionsToAdd
+                                            |> variableSubstitutionsApplyVariableSubstitutions context.declarationTypes
+                                                substitutionsToApply
+                                        )
                                 )
                                 (lambda.expression
                                     |> expressionTypeInfer
@@ -5678,7 +5725,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         )
 
         Elm.Syntax.Expression.Operator _ ->
-            Err "Elm.Syntax.Expression.Operator should not exist in a valid parse result"
+            Err "Elm.Syntax.Expression.Operator is not valid syntax"
 
         Elm.Syntax.Expression.GLSLExpression _ ->
             Err "glsl shader expressions not supported"
@@ -10508,6 +10555,145 @@ fastSetAreIntersecting : FastSet.Set comparable -> FastSet.Set comparable -> Boo
 fastSetAreIntersecting a b =
     -- not sure there's a faster alternative since FastSet does not offer restructure
     Basics.not (FastSet.isEmpty (a |> FastSet.intersect b))
+
+
+fastSetIsSupersetOf : FastSet.Set comparable -> FastSet.Set comparable -> Bool
+fastSetIsSupersetOf sub super =
+    -- not sure there's a faster alternative since FastSet does not offer restructure
+    FastSet.isEmpty (FastSet.diff sub super)
+
+
+variableSubstitutionsApplyVariableSubstitutions :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+    ->
+        Result
+            String
+            VariableSubstitutions
+variableSubstitutionsApplyVariableSubstitutions declarationTypes substitutionsToApply substitutionsToApplySubstitutionsTo =
+    case substitutionsToApply.equivalentVariables of
+        equivalentVariableSet0 :: equivalentVariableSet1Up ->
+            case
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
+            of
+                Err error ->
+                    Err error
+
+                Ok variableToCondensedLookup ->
+                    case
+                        substitutionsToApply.variableToType
+                            |> variableToTypeSubstitutionsCondenseVariables declarationTypes
+                                variableToCondensedLookup
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeWithCondensedVariables ->
+                            variableSubstitutionsApplyVariableSubstitutions declarationTypes
+                                variableToTypeWithCondensedVariables
+                                (substitutionsToApplySubstitutionsTo
+                                    |> variableSubstitutionsMapTypeVariables
+                                        (\originalTypeVariable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get originalTypeVariable
+                                                |> Maybe.withDefault originalTypeVariable
+                                        )
+                                )
+
+        [] ->
+            case substitutionsToApply.variableToType |> FastDict.popMin of
+                Nothing ->
+                    Ok substitutionsToApplySubstitutionsTo
+
+                Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
+                    if typeToSubstituteByNext |> typeNotVariableContainedVariables |> FastSet.member variableToSubstituteNext then
+                        Err
+                            ("self-referential type "
+                                ++ (variableToSubstituteNext |> typeVariableFromContextToInfoString)
+                                ++ " = "
+                                ++ (typeToSubstituteByNext |> typeNotVariableToInfoString)
+                            )
+
+                    else
+                        let
+                            variableToTypeSubstitutionToApplyNext :
+                                { variable : TypeVariableFromContext
+                                , type_ : TypeNotVariable TypeVariableFromContext
+                                }
+                            variableToTypeSubstitutionToApplyNext =
+                                { variable = variableToSubstituteNext, type_ = typeToSubstituteByNext }
+                        in
+                        case
+                            substitutionsToApplySubstitutionsTo
+                                |> variableSubstitutionsSubstituteVariableByNotVariable declarationTypes
+                                    variableToTypeSubstitutionToApplyNext
+                        of
+                            Err error ->
+                                Err error
+
+                            Ok substitutionsAfterSubstitution ->
+                                case
+                                    remainingVariableToTypeSubstitutions
+                                        |> variableToTypeSubstitutionsSubstituteVariableByNotVariable declarationTypes
+                                            variableToTypeSubstitutionToApplyNext
+                                of
+                                    Err error ->
+                                        Err error
+
+                                    Ok remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied ->
+                                        variableSubstitutionsApplyVariableSubstitutions declarationTypes
+                                            remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied
+                                            substitutionsAfterSubstitution
+
+
+variableSubstitutionsMapTypeVariables :
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> VariableSubstitutions
+    -> VariableSubstitutions
+variableSubstitutionsMapTypeVariables typeVariableChange variableSubstitutions =
+    { equivalentVariables =
+        variableSubstitutions.equivalentVariables
+            |> List.map
+                (\equivalentVariablesSet ->
+                    equivalentVariablesSet |> FastSet.map typeVariableChange
+                )
+    , variableToType =
+        variableSubstitutions.variableToType
+            |> fastDictMapToFastDict
+                (\variable replacementType ->
+                    { key = variable |> typeVariableChange
+                    , value =
+                        replacementType
+                            |> typeNotVariableMapVariables typeVariableChange
+                    }
+                )
+    }
+
+
+variableSubstitutionsSubstituteVariableByNotVariable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    ->
+        { variable : TypeVariableFromContext
+        , type_ : TypeNotVariable TypeVariableFromContext
+        }
+    -> VariableSubstitutions
+    -> Result String VariableSubstitutions
+variableSubstitutionsSubstituteVariableByNotVariable declarationTypes substitution variableSubstitutions =
+    Result.map
+        (\variableToTypeSubstituted ->
+            { equivalentVariables =
+                equivalentVariableSetMerge
+                    variableSubstitutions.equivalentVariables
+                    variableToTypeSubstituted.equivalentVariables
+            , variableToType = variableToTypeSubstituted.variableToType
+            }
+        )
+        (variableSubstitutions.variableToType
+            |> variableToTypeSubstitutionsSubstituteVariableByNotVariable declarationTypes
+                substitution
+        )
 
 
 expressionTypedNodeApplyVariableSubstitutions :
