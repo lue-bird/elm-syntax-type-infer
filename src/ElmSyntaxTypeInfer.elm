@@ -5151,33 +5151,12 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         parameterInferred.type_ |> typeContainedVariables
                                                     )
 
-                                        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
-                                            resultInferred.substitutions.variableToType
-                                                |> FastDict.partition
-                                                    (\variableToReplace _ ->
-                                                        parameterTypesContainedVariables
-                                                            |> FastSet.member variableToReplace
-                                                    )
-
-                                        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
-                                            resultInferred.substitutions.equivalentVariables
-                                                |> List.partition
-                                                    (\equivalentVariableSet ->
-                                                        parameterTypesContainedVariables
-                                                            |> fastSetIsSupersetOf equivalentVariableSet
-                                                    )
-
-                                        substitutionsToApply : VariableSubstitutions
-                                        substitutionsToApply =
-                                            { equivalentVariables = equivalentVariableSubstitutionsToApply
-                                            , variableToType = substitutionsVariableToTypeToApply
-                                            }
-
-                                        substitutionsToAdd : VariableSubstitutions
-                                        substitutionsToAdd =
-                                            { equivalentVariables = equivalentVariableSubstitutionsToAdd
-                                            , variableToType = substitutionsVariableToTypeToAdd
-                                            }
+                                        resultInferredSubstitutionsSplit : { toAdd : Result String VariableSubstitutions, toApply : VariableSubstitutions }
+                                        resultInferredSubstitutionsSplit =
+                                            resultInferred.substitutions
+                                                |> variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+                                                    context.declarationTypes
+                                                    parameterTypesContainedVariables
                                     in
                                     Result.map2
                                         (\nodeSubstituted substitutionsToAddAfterSubstitutions ->
@@ -5216,12 +5195,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 )
                                          }
                                             |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                substitutionsToApply
+                                                resultInferredSubstitutionsSplit.toApply
                                         )
-                                        (substitutionsToAdd
-                                            |> variableSubstitutionsApplyVariableSubstitutions context.declarationTypes
-                                                substitutionsToApply
-                                        )
+                                        resultInferredSubstitutionsSplit.toAdd
                                 )
                                 (lambda.expression
                                     |> expressionTypeInfer
@@ -5638,33 +5614,12 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     )
                                                     FastSet.empty
 
-                                        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
-                                            fullSubstitutions.variableToType
-                                                |> FastDict.partition
-                                                    (\variableToReplace _ ->
-                                                        destructurePatternTypesContainedVariables
-                                                            |> FastSet.member variableToReplace
-                                                    )
-
-                                        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
-                                            fullSubstitutions.equivalentVariables
-                                                |> List.partition
-                                                    (\equivalentVariableSet ->
-                                                        destructurePatternTypesContainedVariables
-                                                            |> fastSetIsSupersetOf equivalentVariableSet
-                                                    )
-
-                                        substitutionsToApply : VariableSubstitutions
-                                        substitutionsToApply =
-                                            { equivalentVariables = equivalentVariableSubstitutionsToApply
-                                            , variableToType = substitutionsVariableToTypeToApply
-                                            }
-
-                                        substitutionsToAdd : VariableSubstitutions
-                                        substitutionsToAdd =
-                                            { equivalentVariables = equivalentVariableSubstitutionsToAdd
-                                            , variableToType = substitutionsVariableToTypeToAdd
-                                            }
+                                        fullSubstitutionsSplit : { toAdd : Result String VariableSubstitutions, toApply : VariableSubstitutions }
+                                        fullSubstitutionsSplit =
+                                            fullSubstitutions
+                                                |> variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+                                                    context.declarationTypes
+                                                    destructurePatternTypesContainedVariables
                                     in
                                     Result.map2
                                         (\nodeSubstituted substitutionsToAddAfterSubstitutions ->
@@ -5689,12 +5644,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                          , type_ = resultInferred.node.type_
                                          }
                                             |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                substitutionsToApply
+                                                fullSubstitutionsSplit.toApply
                                         )
-                                        (substitutionsToAdd
-                                            |> variableSubstitutionsApplyVariableSubstitutions context.declarationTypes
-                                                substitutionsToApply
-                                        )
+                                        fullSubstitutionsSplit.toAdd
                                 )
                                 (variableSubstitutionsMerge3 acrossLetInIncludingContextSoFar.declarationTypes
                                     declaration0Inferred.substitutions
@@ -6272,7 +6224,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
             letValueOrFunction.declaration |> Elm.Syntax.Node.value
     in
     Result.andThen
-        (\argumentsInferred ->
+        (\parametersInferred ->
             let
                 letDeclarationTypeVariable : TypeVariableFromContext
                 letDeclarationTypeVariable =
@@ -6287,7 +6239,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                     let
                         letDeclarationPartiallyInferredType : Type TypeVariableFromContext
                         letDeclarationPartiallyInferredType =
-                            argumentsInferred.nodesReverse
+                            parametersInferred.nodesReverse
                                 |> List.foldl
                                     (\parameterTypedNode outputSoFar ->
                                         TypeNotVariable
@@ -6298,40 +6250,96 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             )
                                     )
                                     resultInferred.node.type_
-                    in
-                    Result.andThen
-                        (\fullSubstitutionsIgnoringAnnotation ->
-                            case letValueOrFunction.signature of
-                                Nothing ->
-                                    Ok
-                                        { substitutions = fullSubstitutionsIgnoringAnnotation
-                                        , node =
-                                            { range = letDeclarationRange
-                                            , declaration =
-                                                LetValueOrFunctionDeclaration
-                                                    { signature =
-                                                        Nothing
-                                                    , nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                    , name = name
-                                                    , parameters =
-                                                        argumentsInferred.nodesReverse
-                                                            |> List.reverse
-                                                    , result = resultInferred.node
-                                                    , type_ = letDeclarationPartiallyInferredType
-                                                    }
-                                            }
-                                        , usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                            resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                        }
 
-                                Just (Elm.Syntax.Node.Node signatureRange letValueOrFunctionSignature) ->
-                                    Result.andThen
-                                        (\annotationAsType ->
-                                            Result.andThen
-                                                (\typeUnifiedWithAnnotation ->
+                        parametersInferredContainedTypeVariables : FastSet.Set TypeVariableFromContext
+                        parametersInferredContainedTypeVariables =
+                            parametersInferred.nodesReverse
+                                |> listMapAndFastSetsUnify
+                                    (\parameterInferred ->
+                                        parameterInferred.type_ |> typeContainedVariables
+                                    )
+                    in
+                    case letValueOrFunction.signature of
+                        Nothing ->
+                            let
+                                resultInferredSubstitutionsSplit : { toAdd : Result String VariableSubstitutions, toApply : VariableSubstitutions }
+                                resultInferredSubstitutionsSplit =
+                                    resultInferred.substitutions
+                                        |> variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+                                            context.declarationTypes
+                                            parametersInferredContainedTypeVariables
+                            in
+                            Result.andThen
+                                (\resultInferredSubstitutionsToAdd ->
+                                    Result.map2
+                                        (\fullSubstitutionsIgnoringAnnotation parametersInferredSubstituted ->
+                                            { substitutions = fullSubstitutionsIgnoringAnnotation
+                                            , node =
+                                                { range = letDeclarationRange
+                                                , declaration =
+                                                    LetValueOrFunctionDeclaration
+                                                        { signature = Nothing
+                                                        , nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                        , name = name
+                                                        , parameters = parametersInferredSubstituted
+                                                        , result = resultInferred.node
+                                                        , type_ = letDeclarationPartiallyInferredType
+                                                        }
+                                                }
+                                            , usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge context.declarationTypes
+                                            resultInferredSubstitutionsToAdd
+                                            (variableSubstitutionsFromVariableToType
+                                                letDeclarationTypeVariable
+                                                letDeclarationPartiallyInferredType
+                                            )
+                                        )
+                                        (parametersInferred.nodesReverse
+                                            |> listFoldlWhileOkFrom []
+                                                (\parameter soFar ->
                                                     Result.map
-                                                        (\fullSubstitutions ->
-                                                            { substitutions = fullSubstitutions
+                                                        (\parameterInferredSubstituted ->
+                                                            parameterInferredSubstituted :: soFar
+                                                        )
+                                                        (parameter
+                                                            |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                                resultInferredSubstitutionsSplit.toApply
+                                                        )
+                                                )
+                                        )
+                                )
+                                resultInferredSubstitutionsSplit.toAdd
+
+                        Just (Elm.Syntax.Node.Node signatureRange letValueOrFunctionSignature) ->
+                            Result.andThen
+                                (\annotationAsType ->
+                                    let
+                                        annotationAsTypeWithContext : Type TypeVariableFromContext
+                                        annotationAsTypeWithContext =
+                                            annotationAsType
+                                                |> typeMapVariables
+                                                    (\variable ->
+                                                        ( [ context.containingDeclarationName ], variable )
+                                                    )
+                                    in
+                                    Result.andThen
+                                        (\typeUnifiedWithAnnotation ->
+                                            Result.andThen
+                                                (\fullSubstitutions ->
+                                                    let
+                                                        fullSubstitutionsSplit : { toAdd : Result String VariableSubstitutions, toApply : VariableSubstitutions }
+                                                        fullSubstitutionsSplit =
+                                                            fullSubstitutions
+                                                                |> variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+                                                                    context.declarationTypes
+                                                                    parametersInferredContainedTypeVariables
+                                                    in
+                                                    Result.map3
+                                                        (\fullSubstitutionsToAdd parametersInferredSubstituted resultInferredSubstituted ->
+                                                            { substitutions = fullSubstitutionsToAdd
                                                             , node =
                                                                 { range = letDeclarationRange
                                                                 , declaration =
@@ -6350,10 +6358,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                                 }
                                                                         , nameRange = implementation.name |> Elm.Syntax.Node.range
                                                                         , name = name
-                                                                        , parameters =
-                                                                            argumentsInferred.nodesReverse
-                                                                                |> List.reverse
-                                                                        , result = resultInferred.node
+                                                                        , parameters = parametersInferredSubstituted
+                                                                        , result = resultInferredSubstituted
                                                                         , type_ = typeUnifiedWithAnnotation.type_
                                                                         }
                                                                 }
@@ -6361,33 +6367,39 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                 resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
                                                             }
                                                         )
-                                                        (variableSubstitutionsMerge context.declarationTypes
-                                                            fullSubstitutionsIgnoringAnnotation
-                                                            typeUnifiedWithAnnotation.substitutions
+                                                        fullSubstitutionsSplit.toAdd
+                                                        (parametersInferred.nodesReverse
+                                                            |> listFoldlWhileOkFrom []
+                                                                (\parameter soFar ->
+                                                                    Result.map
+                                                                        (\parameterInferredSubstituted ->
+                                                                            parameterInferredSubstituted :: soFar
+                                                                        )
+                                                                        (parameter
+                                                                            |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                                                fullSubstitutionsSplit.toApply
+                                                                        )
+                                                                )
+                                                        )
+                                                        (resultInferred.node
+                                                            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                                fullSubstitutionsSplit.toApply
                                                         )
                                                 )
-                                                (typeUnify context.declarationTypes
-                                                    letDeclarationPartiallyInferredType
-                                                    (annotationAsType
-                                                        |> typeMapVariables
-                                                            (\variable ->
-                                                                ( [ context.containingDeclarationName ], variable )
-                                                            )
-                                                    )
+                                                (variableSubstitutionsMerge context.declarationTypes
+                                                    resultInferred.substitutions
+                                                    typeUnifiedWithAnnotation.substitutions
                                                 )
                                         )
-                                        (letValueOrFunctionSignature.typeAnnotation
-                                            |> Elm.Syntax.Node.value
-                                            |> syntaxToType context.moduleOriginLookup
+                                        (typeUnify context.declarationTypes
+                                            letDeclarationPartiallyInferredType
+                                            annotationAsTypeWithContext
                                         )
-                        )
-                        (variableSubstitutionsMerge context.declarationTypes
-                            resultInferred.substitutions
-                            (variableSubstitutionsFromVariableToType
-                                letDeclarationTypeVariable
-                                letDeclarationPartiallyInferredType
-                            )
-                        )
+                                )
+                                (letValueOrFunctionSignature.typeAnnotation
+                                    |> Elm.Syntax.Node.value
+                                    |> syntaxToType context.moduleOriginLookup
+                                )
                 )
                 (implementation.expression
                     |> expressionTypeInfer
@@ -6404,7 +6416,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                    FastDict.remove name
                         , locallyIntroducedExpressionVariables =
                             FastDict.union
-                                argumentsInferred.introducedExpressionVariables
+                                parametersInferred.introducedExpressionVariables
                                 context.locallyIntroducedExpressionVariables
                                 |> FastDict.insert name
                                     (TypeVariable letDeclarationTypeVariable)
@@ -7548,68 +7560,48 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                         in
                         Result.andThen
                             (\resultInferred ->
-                                Result.map
-                                    (\soFarAndArgumentAndResultAndTypeUnifySubstitutions ->
-                                        { usesOfTypeVariablesFromPartiallyInferredDeclarations =
-                                            FastDict.union
-                                                soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                        , substitutions =
-                                            soFarAndArgumentAndResultAndTypeUnifySubstitutions
-                                        , declarationsTyped =
-                                            FastDict.insert name
-                                                { nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                , documentation =
-                                                    case valueOrFunctionDeclarationToInfer.documentation of
-                                                        Nothing ->
-                                                            Nothing
+                                let
+                                    maybeDocumentationAndRange : Maybe { range : Elm.Syntax.Range.Range, content : String }
+                                    maybeDocumentationAndRange =
+                                        case valueOrFunctionDeclarationToInfer.documentation of
+                                            Nothing ->
+                                                Nothing
 
-                                                        Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
-                                                            Just
-                                                                { range = documentationRange
-                                                                , content = documentationContent
-                                                                }
-                                                , signature =
-                                                    case valueOrFunctionDeclarationToInfer.signature of
-                                                        Nothing ->
-                                                            Nothing
-
-                                                        Just (Elm.Syntax.Node.Node signatureRange signature) ->
-                                                            Just
-                                                                { range = signatureRange
-                                                                , nameRange = signature.name |> Elm.Syntax.Node.range
-                                                                , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
-                                                                , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
-                                                                }
-                                                , result = resultInferred.node
-                                                , type_ = fullType
-                                                , parameters =
-                                                    parametersInferred.nodesReverse |> List.reverse
+                                            Just (Elm.Syntax.Node.Node documentationRange documentationContent) ->
+                                                Just
+                                                    { range = documentationRange
+                                                    , content = documentationContent
+                                                    }
+                                in
+                                case valueOrFunctionDeclarationToInfer.signature of
+                                    Nothing ->
+                                        let
+                                            fullTypeVariable : TypeVariableFromContext
+                                            fullTypeVariable =
+                                                ( [ name ], "type" )
+                                        in
+                                        Result.map
+                                            (\soFarAndArgumentAndResultAndTypeUnifySubstitutions ->
+                                                { usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                    FastDict.union
+                                                        soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                        resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                , substitutions =
+                                                    soFarAndArgumentAndResultAndTypeUnifySubstitutions
+                                                , declarationsTyped =
+                                                    soFar.declarationsTyped
+                                                        |> FastDict.insert name
+                                                            { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                            , documentation = maybeDocumentationAndRange
+                                                            , signature = Nothing
+                                                            , result = resultInferred.node
+                                                            , type_ = fullType
+                                                            , parameters =
+                                                                parametersInferred.nodesReverse |> List.reverse
+                                                            }
                                                 }
-                                                soFar.declarationsTyped
-                                        }
-                                    )
-                                    (case valueOrFunctionDeclarationToInfer.signature of
-                                        Just _ ->
-                                            Result.andThen
-                                                (\inferredUnifiedWithAnnotated ->
-                                                    variableSubstitutionsMerge3 declarationTypes
-                                                        soFar.substitutions
-                                                        resultInferred.substitutions
-                                                        inferredUnifiedWithAnnotated.substitutions
-                                                )
-                                                (typeUnify declarationTypes
-                                                    fullType
-                                                    inferredFullType
-                                                )
-
-                                        Nothing ->
-                                            let
-                                                fullTypeVariable : TypeVariableFromContext
-                                                fullTypeVariable =
-                                                    ( [ name ], "type" )
-                                            in
-                                            variableSubstitutionsMerge4 declarationTypes
+                                            )
+                                            (variableSubstitutionsMerge4 declarationTypes
                                                 soFar.substitutions
                                                 resultInferred.substitutions
                                                 (variableSubstitutionsFromVariableToType
@@ -7620,7 +7612,65 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                     fullTypeVariable
                                                     fullType
                                                 )
-                                    )
+                                            )
+
+                                    Just (Elm.Syntax.Node.Node signatureRange signature) ->
+                                        Result.andThen
+                                            (\parameterAndResultAndTypeUnifySubstitutions ->
+                                                Result.map2
+                                                    (\parametersInferredSubstituted resultInferredSubstituted ->
+                                                        { usesOfTypeVariablesFromPartiallyInferredDeclarations =
+                                                            FastDict.union
+                                                                soFar.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                                resultInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                                                        , substitutions = soFar.substitutions
+                                                        , declarationsTyped =
+                                                            soFar.declarationsTyped
+                                                                |> FastDict.insert name
+                                                                    { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                                    , documentation = maybeDocumentationAndRange
+                                                                    , signature =
+                                                                        Just
+                                                                            { range = signatureRange
+                                                                            , nameRange = signature.name |> Elm.Syntax.Node.range
+                                                                            , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
+                                                                            , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
+                                                                            }
+                                                                    , result = resultInferredSubstituted
+                                                                    , type_ = fullType
+                                                                    , parameters = parametersInferredSubstituted
+                                                                    }
+                                                        }
+                                                    )
+                                                    (parametersInferred.nodesReverse
+                                                        |> listFoldlWhileOkFrom []
+                                                            (\parameter parametersSubstitutedSoFar ->
+                                                                Result.map
+                                                                    (\parameterInferredSubstituted ->
+                                                                        parameterInferredSubstituted :: parametersSubstitutedSoFar
+                                                                    )
+                                                                    (parameter
+                                                                        |> patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                            parameterAndResultAndTypeUnifySubstitutions
+                                                                    )
+                                                            )
+                                                    )
+                                                    (resultInferred.node
+                                                        |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                            parameterAndResultAndTypeUnifySubstitutions
+                                                    )
+                                            )
+                                            (Result.andThen
+                                                (\inferredUnifiedWithAnnotated ->
+                                                    variableSubstitutionsMerge declarationTypes
+                                                        resultInferred.substitutions
+                                                        inferredUnifiedWithAnnotated.substitutions
+                                                )
+                                                (typeUnify declarationTypes
+                                                    fullType
+                                                    inferredFullType
+                                                )
+                                            )
                             )
                             (implementation.expression
                                 |> expressionTypeInfer
@@ -10523,6 +10573,8 @@ expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApp
         )
 
 
+{-| @deprecated in favor of variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+-}
 variableSubstitutionsSplitOffDirectlyApplicable :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
@@ -10597,6 +10649,52 @@ variableSubstitutionsSplitOffDirectlyApplicable context substitutionsToAddOrAppl
         { equivalentVariables = substitutionsOfEquivalentVariablesToApply
         , variableToType = substitutionsVariableToTypeToApply
         }
+    }
+
+
+variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> FastSet.Set TypeVariableFromContext
+    -> VariableSubstitutions
+    ->
+        { toAdd : Result String VariableSubstitutions
+        , toApply : VariableSubstitutions
+        }
+variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables declarationTypes introducedVariableTypesContainedTypeVariables substitutionsToAddOrApply =
+    let
+        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
+            substitutionsToAddOrApply.variableToType
+                |> FastDict.partition
+                    (\variableToReplace _ ->
+                        introducedVariableTypesContainedTypeVariables
+                            |> FastSet.member variableToReplace
+                    )
+
+        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
+            substitutionsToAddOrApply.equivalentVariables
+                |> List.partition
+                    (\equivalentVariableSet ->
+                        introducedVariableTypesContainedTypeVariables
+                            |> fastSetIsSupersetOf equivalentVariableSet
+                    )
+
+        substitutionsToApply : VariableSubstitutions
+        substitutionsToApply =
+            { equivalentVariables = equivalentVariableSubstitutionsToApply
+            , variableToType = substitutionsVariableToTypeToApply
+            }
+
+        substitutionsToAdd : VariableSubstitutions
+        substitutionsToAdd =
+            { equivalentVariables = equivalentVariableSubstitutionsToAdd
+            , variableToType = substitutionsVariableToTypeToAdd
+            }
+    in
+    { toAdd =
+        substitutionsToAdd
+            |> variableSubstitutionsApplyVariableSubstitutions declarationTypes
+                substitutionsToApply
+    , toApply = substitutionsToApply
     }
 
 
