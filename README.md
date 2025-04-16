@@ -58,10 +58,11 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   track introduced type variables bottom-up
+-   add type and origin module and type to expression.infix operation
+-   remove tracking of usesOfPartiallyInferredTypeVariables. never substitute partial variable uses (maybe by instead tracking partials as only the variable name necessary to search for instances)
+-   finish tracking introduced type variables bottom-up
 -   add more tests
 -   apply let function declaration parameter unification with annotated type much, much earlier
--   never substitute partial variable uses (maybe by instead tracking partials as only the variable name necessary to search for instances)
 -   (mutually) recursive type aliases can run into an infinite loop
 -   add local types in a fully separate (optional!) step
 
