@@ -4421,6 +4421,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.Negation toNegate ->
             Result.andThen
                 (\toNegateInferred ->
+                    let
+                        introducedNumberTypeVariable : TypeVariableFromContext
+                        introducedNumberTypeVariable =
+                            ( context.path, "number" )
+                    in
                     { node =
                         { range = fullRange
                         , value =
@@ -4430,14 +4435,14 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                     , substitutions = toNegateInferred.substitutions
                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                         toNegateInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                    , introducedTypeVariables =
+                        FastSet.singleton introducedNumberTypeVariable
                     }
-                        |> expressionTypeInferResultAddOrApplySubstitutions
+                        |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                             { declarationTypes = context.declarationTypes
-                            , locallyIntroducedExpressionVariables =
-                                context.locallyIntroducedExpressionVariables
                             }
                             (variableSubstitutionsFromVariableToType
-                                ( context.path, "number" )
+                                introducedNumberTypeVariable
                                 toNegateInferred.node.type_
                             )
                 )
@@ -4456,12 +4461,16 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         fieldName =
                             fieldNameNode |> Elm.Syntax.Node.value
 
-                        fieldValueType : Type TypeVariableFromContext
-                        fieldValueType =
-                            TypeVariable ( context.path, fieldName )
+                        introducedFieldValueTypeVariable : TypeVariableFromContext
+                        introducedFieldValueTypeVariable =
+                            ( "field" :: context.path, fieldName )
+
+                        introducedRecordTypeVariable : TypeVariableFromContext
+                        introducedRecordTypeVariable =
+                            ( context.path, "record" )
                     in
                     Result.andThen
-                        (\recordWithAccessedField ->
+                        (\recordWithAccessedFieldUnified ->
                             { node =
                                 { range = fullRange
                                 , value =
@@ -4471,28 +4480,28 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         , fieldNameRange =
                                             fieldNameNode |> Elm.Syntax.Node.range
                                         }
-                                , type_ = fieldValueType
+                                , type_ = TypeVariable introducedFieldValueTypeVariable
                                 }
                             , substitutions = accessedRecordInferred.substitutions
                             , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                 accessedRecordInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
+                            , introducedTypeVariables =
+                                FastSet.singleton introducedRecordTypeVariable
+                                    |> FastSet.insert introducedFieldValueTypeVariable
                             }
-                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                     { declarationTypes = context.declarationTypes
-                                    , locallyIntroducedExpressionVariables =
-                                        context.locallyIntroducedExpressionVariables
                                     }
-                                    recordWithAccessedField.substitutions
+                                    recordWithAccessedFieldUnified.substitutions
                         )
                         (typeUnify context.declarationTypes
                             accessedRecordInferred.node.type_
                             (TypeNotVariable
                                 (TypeRecordExtension
-                                    { recordVariable =
-                                        ( context.path, "record" )
+                                    { recordVariable = introducedRecordTypeVariable
                                     , fields =
                                         FastDict.singleton fieldName
-                                            fieldValueType
+                                            (TypeVariable introducedFieldValueTypeVariable)
                                     }
                                 )
                             )
@@ -4536,11 +4545,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 }
                                         , type_ = onTrueInferred.node.type_
                                         }
+                                    , introducedTypeVariables =
+                                        FastSet.empty
                                     }
-                                        |> expressionTypeInferResultAddOrApplySubstitutions
+                                        |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                             { declarationTypes = context.declarationTypes
-                                            , locallyIntroducedExpressionVariables =
-                                                context.locallyIntroducedExpressionVariables
                                             }
                                             unificationSubstitutions
                                 )
@@ -4744,11 +4753,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         )
                                                 , type_ = typeListList headInferred.node.type_
                                                 }
+                                            , introducedTypeVariables =
+                                                FastSet.empty
                                             }
-                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                                     { declarationTypes = context.declarationTypes
-                                                    , locallyIntroducedExpressionVariables =
-                                                        context.locallyIntroducedExpressionVariables
                                                     }
                                                     elementTypeUnified.substitutions
                                         )
@@ -4817,9 +4826,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                     resultAndThen3
                         (\calledInferred argument0Inferred argument1UpInferred ->
                             let
-                                resultType : Type TypeVariableFromContext
-                                resultType =
-                                    TypeVariable ( context.path, "callResult" )
+                                introducedResultTypeVariable : TypeVariableFromContext
+                                introducedResultTypeVariable =
+                                    ( context.path, "callResult" )
                             in
                             Result.andThen
                                 (\callTypeUnified ->
@@ -4841,13 +4850,13 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                             argument1UpInferred.nodesReverse
                                                                 |> List.reverse
                                                         }
-                                                , type_ = resultType
+                                                , type_ = TypeVariable introducedResultTypeVariable
                                                 }
+                                            , introducedTypeVariables =
+                                                FastSet.singleton introducedResultTypeVariable
                                             }
-                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                                     { declarationTypes = context.declarationTypes
-                                                    , locallyIntroducedExpressionVariables =
-                                                        context.locallyIntroducedExpressionVariables
                                                     }
                                                     callTypeUnified.substitutions
                                         )
@@ -4872,7 +4881,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                                     }
                                                                 )
                                                         )
-                                                        resultType
+                                                        (TypeVariable introducedResultTypeVariable)
                                             }
                                         )
                                     )
@@ -4999,6 +5008,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                 (Elm.Syntax.Node.Node field0Range ( Elm.Syntax.Node.Node field0NameRange field0Name, field0ValueNode )) :: field1Up ->
                     resultAndThen3
                         (\recordVariableInferred field0Inferred field1UpInferred ->
+                            let
+                                introducedRecordTypeVariable : TypeVariableFromContext
+                                introducedRecordTypeVariable =
+                                    ( context.path, recordVariableInferred.node.value.name )
+                            in
                             Result.andThen
                                 (\recordVariableUnifiedWithUpdate ->
                                     Result.andThen
@@ -5029,11 +5043,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         }
                                                 , type_ = recordVariableInferred.node.type_
                                                 }
+                                            , introducedTypeVariables =
+                                                FastSet.singleton introducedRecordTypeVariable
                                             }
-                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                                     { declarationTypes = context.declarationTypes
-                                                    , locallyIntroducedExpressionVariables =
-                                                        context.locallyIntroducedExpressionVariables
                                                     }
                                                     recordVariableUnifiedWithUpdate.substitutions
                                         )
@@ -5046,7 +5060,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     recordVariableInferred.node.type_
                                     (TypeNotVariable
                                         (TypeRecordExtension
-                                            { recordVariable = ( context.path, recordVariableInferred.node.value.name )
+                                            { recordVariable = introducedRecordTypeVariable
                                             , fields =
                                                 field1UpInferred.nodesReverse
                                                     |> List.foldl
@@ -5289,11 +5303,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         }
                                                 , type_ = case0Inferred.node.result.type_
                                                 }
+                                            , introducedTypeVariables =
+                                                FastSet.empty
                                             }
-                                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                                     { declarationTypes = context.declarationTypes
-                                                    , locallyIntroducedExpressionVariables =
-                                                        context.locallyIntroducedExpressionVariables
                                                     }
                                                     unifiedTypes.substitutions
                                         )
@@ -6127,48 +6141,24 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                 (\patternInferred expressionInferred ->
                     Result.andThen
                         (\patternExpressionUnified ->
-                            let
-                                unificationSubstitutions : { toAdd : VariableSubstitutions, toApply : VariableSubstitutions }
-                                unificationSubstitutions =
-                                    variableSubstitutionsSplitOffDirectlyApplicable
-                                        { declarationTypes = context.declarationTypes
-                                        , locallyIntroducedExpressionVariables =
-                                            context.locallyIntroducedExpressionVariables
-                                        , substitutions = expressionInferred.substitutions
-                                        }
-                                        patternExpressionUnified.substitutions
-                            in
-                            Result.map4
-                                (\substitutionsWithUnification unificationEquivalentVariablesToCondensedLookup patternInferredAfterSubstitutions expressionInferredAfterSubstitution ->
+                            Result.map
+                                (\substitutionsWithUnification ->
                                     { substitutions = substitutionsWithUnification
                                     , usesOfTypeVariablesFromPartiallyInferredDeclarations =
                                         expressionInferred.usesOfTypeVariablesFromPartiallyInferredDeclarations
-                                            |> usesOfTypeVariablesFromPartiallyInferredDeclarationsCondenseVariables
-                                                unificationEquivalentVariablesToCondensedLookup
                                     , node =
                                         { range = letDeclarationRange
                                         , declaration =
                                             LetDestructuring
-                                                { pattern = patternInferredAfterSubstitutions
-                                                , expression = expressionInferredAfterSubstitution
+                                                { pattern = patternInferred
+                                                , expression = expressionInferred.node
                                                 }
                                         }
                                     }
                                 )
                                 (variableSubstitutionsMerge context.declarationTypes
                                     expressionInferred.substitutions
-                                    unificationSubstitutions.toAdd
-                                )
-                                (createEquivalentVariablesToCondensedVariableLookup
-                                    unificationSubstitutions.toApply.equivalentVariables
-                                )
-                                (patternInferred
-                                    |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                        unificationSubstitutions.toApply
-                                )
-                                (expressionInferred.node
-                                    |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                        unificationSubstitutions.toApply
+                                    patternExpressionUnified.substitutions
                                 )
                         )
                         (typeUnify context.declarationTypes
@@ -6490,9 +6480,9 @@ expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
         (\operatorAsFunctionType leftInferred rightInferred ->
             let
-                resultType : Type TypeVariableFromContext
-                resultType =
-                    TypeVariable ( context.path, "operationResult" )
+                introducedResultTypeVariable : TypeVariableFromContext
+                introducedResultTypeVariable =
+                    ( context.path, "operationResult" )
             in
             Result.andThen
                 (\unifiedType ->
@@ -6511,13 +6501,13 @@ expressionInfixOperationTypeInfer context infixOperation =
                                         , left = leftInferred.node
                                         , right = rightInferred.node
                                         }
-                                , type_ = resultType
+                                , type_ = TypeVariable introducedResultTypeVariable
                                 }
+                            , introducedTypeVariables =
+                                FastSet.singleton introducedResultTypeVariable
                             }
-                                |> expressionTypeInferResultAddOrApplySubstitutions
+                                |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
                                     { declarationTypes = context.declarationTypes
-                                    , locallyIntroducedExpressionVariables =
-                                        context.locallyIntroducedExpressionVariables
                                     }
                                     unifiedType.substitutions
                         )
@@ -6535,7 +6525,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                                 TypeNotVariable
                                     (TypeFunction
                                         { input = rightInferred.node.type_
-                                        , output = resultType
+                                        , output = TypeVariable introducedResultTypeVariable
                                         }
                                     )
                             }
@@ -6544,7 +6534,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                 )
         )
         (operatorFunctionType
-            { path = context.path
+            { path = "operation" :: context.path
             , moduleOriginLookup = context.moduleOriginLookup
             }
             infixOperation.operator
@@ -10575,10 +10565,8 @@ letDeclarationMapTypes typeChange expressionLetDeclaration =
                 }
 
 
-expressionTypeInferResultAddOrApplySubstitutions :
+expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
     }
     -> VariableSubstitutions
     ->
@@ -10591,6 +10579,7 @@ expressionTypeInferResultAddOrApplySubstitutions :
             FastDict.Dict
                 TypeVariableFromContext
                 (FastSet.Set TypeVariableFromContext)
+        , introducedTypeVariables : FastSet.Set TypeVariableFromContext
         }
     ->
         Result
@@ -10605,16 +10594,35 @@ expressionTypeInferResultAddOrApplySubstitutions :
                     TypeVariableFromContext
                     (FastSet.Set TypeVariableFromContext)
             }
-expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApply expressionTypeInferResult =
+expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables context substitutionsToAddOrApply expressionTypeInferResult =
     let
-        substitutionsSplitIntoToAddAndToApply : { toAdd : VariableSubstitutions, toApply : VariableSubstitutions }
-        substitutionsSplitIntoToAddAndToApply =
-            variableSubstitutionsSplitOffDirectlyApplicable
-                { declarationTypes = context.declarationTypes
-                , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
-                , substitutions = expressionTypeInferResult.substitutions
-                }
-                substitutionsToAddOrApply
+        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
+            substitutionsToAddOrApply.variableToType
+                |> FastDict.partition
+                    (\variableToReplace _ ->
+                        expressionTypeInferResult.introducedTypeVariables
+                            |> FastSet.member variableToReplace
+                    )
+
+        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
+            substitutionsToAddOrApply.equivalentVariables
+                |> List.partition
+                    (\equivalentVariableSet ->
+                        expressionTypeInferResult.introducedTypeVariables
+                            |> fastSetIsSupersetOf equivalentVariableSet
+                    )
+
+        substitutionsToApply : VariableSubstitutions
+        substitutionsToApply =
+            { equivalentVariables = equivalentVariableSubstitutionsToApply
+            , variableToType = substitutionsVariableToTypeToApply
+            }
+
+        substitutionsToAddNotSubstituted : VariableSubstitutions
+        substitutionsToAddNotSubstituted =
+            { equivalentVariables = equivalentVariableSubstitutionsToAdd
+            , variableToType = substitutionsVariableToTypeToAdd
+            }
     in
     Result.map3
         (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
@@ -10628,96 +10636,27 @@ expressionTypeInferResultAddOrApplySubstitutions context substitutionsToAddOrApp
         )
         (expressionTypeInferResult.node
             |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                substitutionsSplitIntoToAddAndToApply.toApply
+                substitutionsToApply
         )
         (createEquivalentVariablesToCondensedVariableLookup
-            substitutionsSplitIntoToAddAndToApply.toApply.equivalentVariables
+            substitutionsToApply.equivalentVariables
         )
-        (variableSubstitutionsMerge context.declarationTypes
-            expressionTypeInferResult.substitutions
-            substitutionsSplitIntoToAddAndToApply.toAdd
+        (Result.andThen
+            (\substitutionsToKeep ->
+                substitutionsToKeep
+                    |> variableSubstitutionsApplyVariableSubstitutions context.declarationTypes
+                        substitutionsToApply
+            )
+            (variableSubstitutionsMerge context.declarationTypes
+                expressionTypeInferResult.substitutions
+                substitutionsToAddNotSubstituted
+            )
         )
 
 
-{-| @deprecated in favor of variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables
+{-| @deprecated adopt safer alternatives like in
+expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
 -}
-variableSubstitutionsSplitOffDirectlyApplicable :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
-    , substitutions : VariableSubstitutions
-    }
-    -> VariableSubstitutions
-    ->
-        { toAdd : VariableSubstitutions
-        , toApply : VariableSubstitutions
-        }
-variableSubstitutionsSplitOffDirectlyApplicable context substitutionsToAddOrApply =
-    let
-        -- we don't want to apply a substitution locally if a non-local substitution could be substituted
-        -- into such a variable
-        nonLocalSubstitutionResultTypeVariables : FastSet.Set TypeVariableFromContext
-        nonLocalSubstitutionResultTypeVariables =
-            FastSet.union
-                (context.substitutions.equivalentVariables
-                    |> listMapToFastSetsAndUnify identity
-                )
-                (context.substitutions.variableToType
-                    |> FastDict.foldl
-                        (\_ replacementType soFar ->
-                            FastSet.union soFar
-                                (replacementType |> typeNotVariableContainedVariables)
-                        )
-                        FastSet.empty
-                )
-
-        ( substitutionsVariableToTypeToAdd, substitutionsVariableToTypeToApply ) =
-            substitutionsToAddOrApply.variableToType
-                |> FastDict.partition
-                    (\variable _ ->
-                        (context.locallyIntroducedExpressionVariables
-                            |> fastDictAny
-                                (\expressionVariableType ->
-                                    expressionVariableType
-                                        |> typeContainedVariables
-                                        |> FastSet.member variable
-                                )
-                        )
-                            || (nonLocalSubstitutionResultTypeVariables
-                                    |> FastSet.member variable
-                               )
-                    )
-
-        ( substitutionsOfEquivalentVariablesToAdd, substitutionsOfEquivalentVariablesToApply ) =
-            substitutionsToAddOrApply.equivalentVariables
-                |> List.partition
-                    (\equivalentVariablesSet ->
-                        (context.locallyIntroducedExpressionVariables
-                            |> fastDictAny
-                                (\expressionVariableType ->
-                                    fastSetAreIntersecting
-                                        equivalentVariablesSet
-                                        (expressionVariableType
-                                            |> typeContainedVariables
-                                        )
-                                )
-                        )
-                            || (nonLocalSubstitutionResultTypeVariables
-                                    |> fastSetAreIntersecting equivalentVariablesSet
-                               )
-                    )
-    in
-    { toAdd =
-        { equivalentVariables = substitutionsOfEquivalentVariablesToAdd
-        , variableToType = substitutionsVariableToTypeToAdd
-        }
-    , toApply =
-        { equivalentVariables = substitutionsOfEquivalentVariablesToApply
-        , variableToType = substitutionsVariableToTypeToApply
-        }
-    }
-
-
 variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables :
     ModuleLevelDeclarationTypesAvailableInModule
     -> FastSet.Set TypeVariableFromContext
@@ -10762,12 +10701,6 @@ variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables d
                 substitutionsToApply
     , toApply = substitutionsToApply
     }
-
-
-fastSetAreIntersecting : FastSet.Set comparable -> FastSet.Set comparable -> Bool
-fastSetAreIntersecting a b =
-    -- not sure there's a faster alternative since FastSet does not offer restructure
-    Basics.not (FastSet.isEmpty (a |> FastSet.intersect b))
 
 
 fastSetIsSupersetOf : FastSet.Set comparable -> FastSet.Set comparable -> Bool
