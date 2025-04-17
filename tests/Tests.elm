@@ -2849,7 +2849,10 @@ suite =
                             (Elm.Syntax.Expression.LetFunction
                                 { declaration =
                                     Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "a"
+                                        { name =
+                                            Elm.Syntax.Node.Node
+                                                { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
+                                                "a"
                                         , arguments = []
                                         , expression =
                                             Elm.Syntax.Node.empty
@@ -3471,7 +3474,10 @@ suite =
                             (Elm.Syntax.Expression.LetFunction
                                 { declaration =
                                     Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "a"
+                                        { name =
+                                            Elm.Syntax.Node.Node
+                                                { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
+                                                "a"
                                         , arguments = []
                                         , expression =
                                             Elm.Syntax.Node.empty
@@ -3485,7 +3491,10 @@ suite =
                             (Elm.Syntax.Expression.LetFunction
                                 { declaration =
                                     Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "b"
+                                        { name =
+                                            Elm.Syntax.Node.Node
+                                                { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
+                                                "b"
                                         , arguments = []
                                         , expression =
                                             Elm.Syntax.Node.empty
@@ -3510,11 +3519,14 @@ suite =
                             )
                         )
             )
-        , Test.test "transitive un-annotated top level declaration: a = 2.2; b = a"
+        , Test.test "transitive un-annotated top level declarations: a = 2.2; b = a"
             (\() ->
                 [ { declaration =
                         Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "a"
+                            { name =
+                                Elm.Syntax.Node.Node
+                                    { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
+                                    "a"
                             , arguments = []
                             , expression =
                                 Elm.Syntax.Node.empty
@@ -3525,7 +3537,10 @@ suite =
                   }
                 , { declaration =
                         Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "b"
+                            { name =
+                                Elm.Syntax.Node.Node
+                                    { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
+                                    "b"
                             , arguments = []
                             , expression =
                                 Elm.Syntax.Node.empty
@@ -3588,7 +3603,10 @@ suite =
             (\() ->
                 [ { declaration =
                         Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "a"
+                            { name =
+                                Elm.Syntax.Node.Node
+                                    { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
+                                    "a"
                             , arguments = []
                             , expression =
                                 Elm.Syntax.Node.empty
@@ -3608,7 +3626,10 @@ suite =
                   }
                 , { declaration =
                         Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "b"
+                            { name =
+                                Elm.Syntax.Node.Node
+                                    { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
+                                    "b"
                             , arguments = []
                             , expression =
                                 Elm.Syntax.Node.empty
