@@ -58,7 +58,6 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   add typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable _literally everywhere_
 -   add more tests
 -   apply let function declaration parameter unification with annotated type much, much earlier
 -   (mutually) recursive type aliases can run into an infinite loop
