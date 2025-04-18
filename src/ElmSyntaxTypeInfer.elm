@@ -9616,22 +9616,26 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                             allPartiallyInferredDeclarationsAndUsesAfterSubstitution
                                                 |> fastDictMapAndSmallestJust
                                                     (\partiallyInferredDeclarationId info ->
-                                                        if
-                                                            -- TODO optimize
-                                                            Just info.partiallyInferredDeclarationType
-                                                                /= (allPartiallyInferredDeclarationsAndUsesBeforeSubstitution
-                                                                        |> FastDict.get partiallyInferredDeclarationId
-                                                                        |> Maybe.map .partiallyInferredDeclarationType
-                                                                   )
-                                                        then
-                                                            Just
-                                                                { uses = info.uses
-                                                                , partiallyInferredDeclarationType =
-                                                                    info.partiallyInferredDeclarationType
-                                                                }
+                                                        case
+                                                            allPartiallyInferredDeclarationsAndUsesBeforeSubstitution
+                                                                |> FastDict.get partiallyInferredDeclarationId
+                                                        of
+                                                            Nothing ->
+                                                                Nothing
 
-                                                        else
-                                                            Nothing
+                                                            Just infoBeforeSubstitution ->
+                                                                if
+                                                                    info.partiallyInferredDeclarationType
+                                                                        /= infoBeforeSubstitution.partiallyInferredDeclarationType
+                                                                then
+                                                                    Just
+                                                                        { uses = info.uses
+                                                                        , partiallyInferredDeclarationType =
+                                                                            info.partiallyInferredDeclarationType
+                                                                        }
+
+                                                                else
+                                                                    Nothing
                                                     )
                                     in
                                     case maybeSubstitutionOfPartiallyInferredDeclaration of
