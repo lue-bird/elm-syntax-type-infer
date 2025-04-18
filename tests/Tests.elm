@@ -3667,7 +3667,7 @@ suite =
                         )
                     |> Expect.equal
                         (Ok
-                            [ ( "a", ElmSyntaxTypeInfer.TypeVariable "numberDeclarationResult" )
+                            [ ( "a", ElmSyntaxTypeInfer.TypeVariable "numberA" )
                             , ( "b", ElmSyntaxTypeInfer.TypeVariable "numberA" )
                             ]
                         )

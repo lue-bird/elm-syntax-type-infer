@@ -2175,24 +2175,15 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     equivalentVariablesSet1Up
 
 
-equivalentVariableSetMergeWithSet :
-    FastSet.Set comparable
-    -> List (FastSet.Set comparable)
-    -> List (FastSet.Set comparable)
-equivalentVariableSetMergeWithSet a b =
-    -- TODO optimize
-    equivalentVariableSetMerge [ a ] b
-
-
 equivalentVariableSetMerge :
-    List (FastSet.Set comparable)
-    -> List (FastSet.Set comparable)
-    -> List (FastSet.Set comparable)
+    List (FastSet.Set comparableTypeVariable)
+    -> List (FastSet.Set comparableTypeVariable)
+    -> List (FastSet.Set comparableTypeVariable)
 equivalentVariableSetMerge a b =
     let
         mergedIntoA :
-            { sets : List (FastSet.Set comparable)
-            , bRemaining : List (FastSet.Set comparable)
+            { sets : List (FastSet.Set comparableTypeVariable)
+            , bRemaining : List (FastSet.Set comparableTypeVariable)
             }
         mergedIntoA =
             a
@@ -5987,21 +5978,9 @@ rangeAsComparable range =
     )
 
 
-rangeFromAsComparable : RangeAsComparable -> Elm.Syntax.Range.Range
-rangeFromAsComparable ( start, end ) =
-    { start = start |> locationFromAsComparable
-    , end = end |> locationFromAsComparable
-    }
-
-
 locationAsComparable : Elm.Syntax.Range.Location -> LocationAsComparable
 locationAsComparable location =
     ( location.row, location.column )
-
-
-locationFromAsComparable : LocationAsComparable -> Elm.Syntax.Range.Location
-locationFromAsComparable ( row, column ) =
-    { row = row, column = column }
 
 
 expressionTypedNodeUsesOfPartiallyInferredDeclarations :
@@ -6386,7 +6365,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                             (patternInferred |> patternTypedNodeContainedTypeVariables)
                                             expressionInferred.introducedTypeVariables
                                     }
-                                 -- TODO apply patternExpressionUnified.substitutions
+                                 -- TODO directly apply patternExpressionUnified.substitutions
                                 )
                                 (variableSubstitutionsMerge context.declarationTypes
                                     expressionInferred.substitutions
@@ -6476,7 +6455,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                 }
                                         }
                                     , introducedTypeVariables =
-                                        -- TODO include letDeclarationTypeVariable
                                         parametersInferred.nodesReverse
                                             |> listMapToFastSetsAndUnify
                                                 patternTypedNodeContainedTypeVariables
@@ -7836,6 +7814,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             |> FastDict.insert name (TypeVariable fullTypeVariable)
                                             , partiallyInferredDeclarationTypes =
                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                                    |> FastDict.remove name
                                             , containingDeclarationName = name
                                             , path = [ "declarationResult", name ]
                                             , moduleOriginLookup = moduleOriginLookup
@@ -7898,7 +7877,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                     , parameters = parametersInferredSubstituted
                                                                     }
                                                         }
-                                                     -- TODO apply some substitutions directly
                                                     )
                                                     (implementation.expression
                                                         |> expressionTypeInfer
@@ -8008,7 +7986,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
         |> Result.andThen
             (\intermediate ->
                 intermediate.declarationsTyped
-                    |> valueOrFunctionDeclarationsApplySubstitutions
+                    |> valueAndFunctionDeclarationsApplySubstitutions
                         { declarationTypes = declarationTypes
                         , substitutions = intermediate.substitutions
                         }
@@ -8684,7 +8662,35 @@ listMapAndFirstJust elementToMaybe list =
                     listMapAndFirstJust elementToMaybe tail
 
 
-valueOrFunctionDeclarationsApplySubstitutions :
+valueAndFunctionDeclarationsGetPartiallyInferred :
+    FastDict.Dict
+        String
+        (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+    ->
+        FastDict.Dict
+            String
+            { nameRange : Elm.Syntax.Range.Range
+            , type_ : Type TypeVariableFromContext
+            }
+valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoFar =
+    valueAndFunctionDeclarationsSoFar
+        |> FastDict.foldl
+            (\name declarationValueOrFunction moduleLevelPartiallyInferredDeclarationsSoFar ->
+                case declarationValueOrFunction.signature of
+                    Just _ ->
+                        moduleLevelPartiallyInferredDeclarationsSoFar
+
+                    Nothing ->
+                        moduleLevelPartiallyInferredDeclarationsSoFar
+                            |> FastDict.insert name
+                                { nameRange = declarationValueOrFunction.nameRange
+                                , type_ = declarationValueOrFunction.type_
+                                }
+            )
+            FastDict.empty
+
+
+valueAndFunctionDeclarationsApplySubstitutions :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , substitutions : VariableSubstitutions
     }
@@ -8699,7 +8705,7 @@ valueOrFunctionDeclarationsApplySubstitutions :
                 String
                 (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
             )
-valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarationsSoFar =
+valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarationsSoFar =
     let
         moduleLevelPartiallyInferredDeclarations :
             FastDict.Dict
@@ -8709,20 +8715,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                 }
         moduleLevelPartiallyInferredDeclarations =
             valueAndFunctionDeclarationsSoFar
-                |> FastDict.foldl
-                    (\name declarationValueOrFunction moduleLevelPartiallyInferredDeclarationsSoFar ->
-                        case declarationValueOrFunction.signature of
-                            Just _ ->
-                                moduleLevelPartiallyInferredDeclarationsSoFar
-
-                            Nothing ->
-                                moduleLevelPartiallyInferredDeclarationsSoFar
-                                    |> FastDict.insert name
-                                        { nameRange = declarationValueOrFunction.nameRange
-                                        , type_ = declarationValueOrFunction.type_
-                                        }
-                    )
-                    FastDict.empty
+                |> valueAndFunctionDeclarationsGetPartiallyInferred
     in
     case state.substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
@@ -8741,8 +8734,30 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
 
                 ( Ok condensedVariable, Ok variableCondenseLookup ) ->
                     let
-                        _ =
-                            Debug.log "condensed variables " (equivalentVariableSet0 |> FastSet.toList)
+                        allPartiallyInferredDeclarationsAndUsesBeforeSubstitution :
+                            FastDict.Dict
+                                ( RangeAsComparable, String )
+                                { partiallyInferredDeclarationType : Type TypeVariableFromContext
+                                , uses :
+                                    List
+                                        { type_ : Type TypeVariableFromContext
+                                        , range : Elm.Syntax.Range.Range
+                                        }
+                                }
+                        allPartiallyInferredDeclarationsAndUsesBeforeSubstitution =
+                            valueAndFunctionDeclarationsSoFar
+                                |> FastDict.foldl
+                                    (\_ declarationValueOrFunction usesOfTypeVariablesFromPartiallyInferredDeclarationsSoFar ->
+                                        usesOfPartiallyInferredDeclarationsMerge
+                                            usesOfTypeVariablesFromPartiallyInferredDeclarationsSoFar
+                                            (declarationValueOrFunction.result
+                                                |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
+                                                    { partiallyInferredDeclarations =
+                                                        moduleLevelPartiallyInferredDeclarations
+                                                    }
+                                            )
+                                    )
+                                    FastDict.empty
 
                         variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
                         variableToCondensedIfNecessary variable =
@@ -8765,7 +8780,17 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                 variableToCondensedIfNecessary
                                     )
 
-                        allPartiallyInferredDeclarationsAndUses :
+                        moduleLevelPartiallyInferredDeclarationsCondensed :
+                            FastDict.Dict
+                                String
+                                { nameRange : Elm.Syntax.Range.Range
+                                , type_ : Type TypeVariableFromContext
+                                }
+                        moduleLevelPartiallyInferredDeclarationsCondensed =
+                            valueAndFunctionDeclarationsCondensed
+                                |> valueAndFunctionDeclarationsGetPartiallyInferred
+
+                        allPartiallyInferredDeclarationsAndUsesCondensed :
                             FastDict.Dict
                                 ( RangeAsComparable, String )
                                 { partiallyInferredDeclarationType : Type TypeVariableFromContext
@@ -8775,7 +8800,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                         , range : Elm.Syntax.Range.Range
                                         }
                                 }
-                        allPartiallyInferredDeclarationsAndUses =
+                        allPartiallyInferredDeclarationsAndUsesCondensed =
                             valueAndFunctionDeclarationsCondensed
                                 |> FastDict.foldl
                                     (\_ declarationValueOrFunction usesOfTypeVariablesFromPartiallyInferredDeclarationsSoFar ->
@@ -8783,12 +8808,14 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                             usesOfTypeVariablesFromPartiallyInferredDeclarationsSoFar
                                             (declarationValueOrFunction.result
                                                 |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
-                                                    { partiallyInferredDeclarations = moduleLevelPartiallyInferredDeclarations }
+                                                    { partiallyInferredDeclarations =
+                                                        moduleLevelPartiallyInferredDeclarationsCondensed
+                                                    }
                                             )
                                     )
                                     FastDict.empty
 
-                        partialTypeVariablesAmongEquivalentVariables :
+                        partialTypeVariablesAmongEquivalentVariablesThatGotMoreStrictByCondensing :
                             List
                                 { uses :
                                     List
@@ -8797,33 +8824,85 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                         }
                                 , partiallyInferredDeclarationType : Type TypeVariableFromContext
                                 }
-                        partialTypeVariablesAmongEquivalentVariables =
-                            allPartiallyInferredDeclarationsAndUses
+                        partialTypeVariablesAmongEquivalentVariablesThatGotMoreStrictByCondensing =
+                            allPartiallyInferredDeclarationsAndUsesCondensed
                                 |> FastDict.foldl
-                                    (\_ info partialTypeVariableAmongEquivalentVariablesSoFar ->
+                                    (\partiallyInferredDeclarationId info partialTypeVariableAmongEquivalentVariablesSoFar ->
+                                        let
+                                            partiallyInferredDeclarationTypeContainedVariables : FastSet.Set TypeVariableFromContext
+                                            partiallyInferredDeclarationTypeContainedVariables =
+                                                info.partiallyInferredDeclarationType
+                                                    |> typeContainedVariables
+                                        in
                                         if
-                                            FastSet.member condensedVariable
-                                                (info.partiallyInferredDeclarationType |> typeContainedVariables)
+                                            partiallyInferredDeclarationTypeContainedVariables
+                                                |> FastSet.member condensedVariable
                                         then
-                                            let
-                                                _ =
-                                                    Debug.log "affected" info
-                                            in
-                                            info
-                                                :: partialTypeVariableAmongEquivalentVariablesSoFar
+                                            -- if we don't check whether the condensed type
+                                            -- is _actually_ more strict, we could end up in an endless loop
+                                            -- if partially declared types cross-influence each other.
+                                            -- How do we check it's gotten more strict?
+                                            --   - each variable has at most one corresponding condensed variable
+                                            --     so if we have less condensed variables, the type is more limited
+                                            --   - also, if any condensed variable has more constraints,
+                                            --     the type is also more limited
+                                            case
+                                                allPartiallyInferredDeclarationsAndUsesBeforeSubstitution
+                                                    |> FastDict.get partiallyInferredDeclarationId
+                                            of
+                                                Just infoBeforeSubstitution ->
+                                                    let
+                                                        partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables : FastSet.Set TypeVariableFromContext
+                                                        partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables =
+                                                            infoBeforeSubstitution.partiallyInferredDeclarationType
+                                                                |> typeContainedVariables
+                                                    in
+                                                    if
+                                                        (partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
+                                                            |> FastSet.size
+                                                        )
+                                                            == (partiallyInferredDeclarationTypeContainedVariables
+                                                                    |> FastSet.size
+                                                               )
+                                                            && ((partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
+                                                                    |> FastSet.toList
+                                                                    |> List.map
+                                                                        (\( _, variableBeforeSubstitution ) ->
+                                                                            variableBeforeSubstitution
+                                                                                |> typeVariableConstraint
+                                                                                |> maybeTypeVariableConstraintToString
+                                                                        )
+                                                                    |> List.sort
+                                                                )
+                                                                    == (partiallyInferredDeclarationTypeContainedVariables
+                                                                            |> FastSet.toList
+                                                                            |> List.map
+                                                                                (\( _, variableBeforeSubstitution ) ->
+                                                                                    variableBeforeSubstitution
+                                                                                        |> typeVariableConstraint
+                                                                                        |> maybeTypeVariableConstraintToString
+                                                                                )
+                                                                            |> List.sort
+                                                                       )
+                                                               )
+                                                    then
+                                                        partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                    else
+                                                        info
+                                                            :: partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                Nothing ->
+                                                    partialTypeVariableAmongEquivalentVariablesSoFar
 
                                         else
-                                            let
-                                                _ =
-                                                    Debug.log "not affected" info
-                                            in
                                             partialTypeVariableAmongEquivalentVariablesSoFar
                                     )
                                     []
 
                         newSubstitutionsOrError : Result String VariableSubstitutions
                         newSubstitutionsOrError =
-                            partialTypeVariablesAmongEquivalentVariables
+                            partialTypeVariablesAmongEquivalentVariablesThatGotMoreStrictByCondensing
                                 |> listFoldlWhileOkFromResult
                                     (Result.map
                                         (\variableSubstitutionsCondensed ->
@@ -8844,10 +8923,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                     (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
                                         partialTypeVariableAmongEquivalentVariables.uses
                                             |> listFoldlWhileOkFrom
-                                                { equivalentVariables =
-                                                    substitutionsWithPartialUsesUpdatedSoFar.equivalentVariables
-                                                , variableToType = substitutionsWithPartialUsesUpdatedSoFar.variableToType
-                                                }
+                                                substitutionsWithPartialUsesUpdatedSoFar
                                                 (\use unificationSubstitutionsSoFar ->
                                                     let
                                                         usePathSegment : String
@@ -8868,22 +8944,12 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                         (\unified ->
                                                             variableSubstitutionsMerge state.declarationTypes
                                                                 unificationSubstitutionsSoFar
-                                                                -- TODO can partialTypeNewInstance
+                                                                -- TODO partialTypeNewInstance could
                                                                 -- create accidental overlaps in the second
-                                                                -- cycle? YES! We should explicitly
+                                                                -- cycle. We should explicitly
                                                                 -- check that for uses and disambiguate accordingly
                                                                 -- (seems too complicated)
                                                                 unified.substitutions
-                                                                |> Result.andThen
-                                                                    (\fullSubstitutions ->
-                                                                        fullSubstitutions
-                                                                            |> -- otherwise we could end up in an endless loop
-                                                                               -- if partially declared types cross-influence
-                                                                               -- each other
-                                                                               variableSubstitutionsMinimizeUsesOfVariables
-                                                                                state.declarationTypes
-                                                                                (partialTypeNewInstance |> typeContainedVariables)
-                                                                    )
                                                         )
                                                         (typeUnify state.declarationTypes
                                                             partialTypeNewInstance
@@ -8897,7 +8963,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                             Err error
 
                         Ok newSubstitutions ->
-                            valueOrFunctionDeclarationsApplySubstitutions
+                            valueAndFunctionDeclarationsApplySubstitutions
                                 { declarationTypes = state.declarationTypes
                                 , substitutions = newSubstitutions
                                 }
@@ -8920,7 +8986,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                         valueAndFunctionDeclarationsSoFar
                             |> valueAndFunctionDeclarationsSubstituteVariableByNotVariable
                                 state.declarationTypes
-                                (substitutionToApply |> Debug.log "applied substitution")
+                                substitutionToApply
                     of
                         Err error ->
                             Err error
@@ -8960,13 +9026,15 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                     )
                                                     FastDict.empty
 
-                                        _ =
-                                            Debug.log "allPartiallyInferredDeclarationsAndUsesBeforeSubstitution"
-                                                (allPartiallyInferredDeclarationsAndUsesBeforeSubstitution |> FastDict.toList)
-
-                                        _ =
-                                            Debug.log "allPartiallyInferredDeclarationsAndUsesAfterSubstitution"
-                                                (allPartiallyInferredDeclarationsAndUsesAfterSubstitution |> FastDict.toList)
+                                        moduleLevelPartiallyInferredSubstitutedDeclarations :
+                                            FastDict.Dict
+                                                String
+                                                { nameRange : Elm.Syntax.Range.Range
+                                                , type_ : Type TypeVariableFromContext
+                                                }
+                                        moduleLevelPartiallyInferredSubstitutedDeclarations =
+                                            valueAndFunctionDeclarationsSubstituted.declarations
+                                                |> valueAndFunctionDeclarationsGetPartiallyInferred
 
                                         allPartiallyInferredDeclarationsAndUsesAfterSubstitution :
                                             FastDict.Dict
@@ -8986,7 +9054,9 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                             usesOfTypeVariablesFromPartiallyInferredDeclarationsSoFar
                                                             (declarationValueOrFunction.result
                                                                 |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
-                                                                    { partiallyInferredDeclarations = moduleLevelPartiallyInferredDeclarations }
+                                                                    { partiallyInferredDeclarations =
+                                                                        moduleLevelPartiallyInferredSubstitutedDeclarations
+                                                                    }
                                                             )
                                                     )
                                                     FastDict.empty
@@ -9006,7 +9076,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                 |> fastDictMapAndSmallestJust
                                                     (\partiallyInferredDeclarationId info ->
                                                         if
-                                                            -- TODO optimize?
+                                                            -- TODO optimize
                                                             Just info.partiallyInferredDeclarationType
                                                                 /= (allPartiallyInferredDeclarationsAndUsesBeforeSubstitution
                                                                         |> FastDict.get partiallyInferredDeclarationId
@@ -9036,7 +9106,7 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                     Err error
 
                                                 Ok substitutionsAfterSubstitution ->
-                                                    valueOrFunctionDeclarationsApplySubstitutions
+                                                    valueAndFunctionDeclarationsApplySubstitutions
                                                         { declarationTypes = state.declarationTypes
                                                         , substitutions = substitutionsAfterSubstitution
                                                         }
@@ -9044,9 +9114,6 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
 
                                         Just substitutionOfPartiallyInferredDeclaration ->
                                             let
-                                                _ =
-                                                    Debug.log "substituting partial" substitutionOfPartiallyInferredDeclaration
-
                                                 updatePartiallyInferredSubstitutionsOrError : Result String VariableSubstitutions
                                                 updatePartiallyInferredSubstitutionsOrError =
                                                     substitutionOfPartiallyInferredDeclaration.uses
@@ -9066,7 +9133,6 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                                                     , variableName
                                                                                     )
                                                                                 )
-                                                                            |> Debug.log "new instance for "
                                                                 in
                                                                 Result.andThen
                                                                     (\unified ->
@@ -9095,57 +9161,11 @@ valueOrFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarations
                                                             Err error
 
                                                         Ok substitutionsAfterSubstitution ->
-                                                            valueOrFunctionDeclarationsApplySubstitutions
+                                                            valueAndFunctionDeclarationsApplySubstitutions
                                                                 { declarationTypes = state.declarationTypes
                                                                 , substitutions = substitutionsAfterSubstitution
                                                                 }
                                                                 valueAndFunctionDeclarationsSubstituted.declarations
-
-
-variableSubstitutionsMinimizeUsesOfVariables :
-    ModuleLevelDeclarationTypesAvailableInModule
-    -> FastSet.Set TypeVariableFromContext
-    -> VariableSubstitutions
-    -> Result String VariableSubstitutions
-variableSubstitutionsMinimizeUsesOfVariables declarationTypes variablesToMinimizeUsesOf substitutions =
-    substitutions.equivalentVariables
-        |> listFoldlWhileOkFrom
-            { equivalentVariables = []
-            , variableToType = substitutions.variableToType
-            }
-            (\equivalentVariablesSet substitutionsSoFar ->
-                if
-                    fastSetShareElements variablesToMinimizeUsesOf
-                        equivalentVariablesSet
-                then
-                    Result.andThen
-                        (\variableToCondensedLookup ->
-                            Result.map
-                                (\variableToTypeCondensed ->
-                                    { equivalentVariables =
-                                        equivalentVariableSetMerge
-                                            substitutionsSoFar.equivalentVariables
-                                            variableToTypeCondensed.equivalentVariables
-                                    , variableToType = variableToTypeCondensed.variableToType
-                                    }
-                                )
-                                (substitutionsSoFar.variableToType
-                                    |> variableToTypeSubstitutionsCondenseVariables declarationTypes
-                                        variableToCondensedLookup
-                                )
-                        )
-                        (createEquivalentVariablesToCondensedVariableLookup
-                            [ equivalentVariablesSet ]
-                        )
-
-                else
-                    Ok
-                        { equivalentVariables =
-                            equivalentVariablesSet
-                                :: substitutionsSoFar.equivalentVariables
-                        , variableToType = substitutionsSoFar.variableToType
-                        }
-            )
 
 
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
@@ -10897,7 +10917,6 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
             { equivalentVariables = equivalentVariableSubstitutionsToApply
             , variableToType = substitutionsVariableToTypeToApply
             }
-                |> Debug.log "substitutionsToApply after type infer"
 
         substitutionsToAddNotSubstituted : VariableSubstitutions
         substitutionsToAddNotSubstituted =
@@ -10908,7 +10927,7 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
     Result.map3
         (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
             { substitutions = substitutionsWithAdded
-            , node = nodeSubstituted |> Debug.log "after typeInfer direct app"
+            , node = nodeSubstituted
             , introducedTypeVariables =
                 expressionTypeInferResult.introducedTypeVariables
                     |> FastSet.map
@@ -10920,7 +10939,6 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
             }
         )
         (expressionTypeInferResult.node
-            |> Debug.log "before typeInfer direct app"
             |> context.nodeApplyVariableSubstitutions context.declarationTypes
                 substitutionsToApply
         )
@@ -11884,6 +11902,16 @@ equivalentVariablesCreateCondensedVariable set =
                                 soFar
                         )
                 )
+
+
+maybeTypeVariableConstraintToString : Maybe TypeVariableConstraint -> String
+maybeTypeVariableConstraintToString maybeConstraint =
+    case maybeConstraint of
+        Nothing ->
+            ""
+
+        Just constraint ->
+            constraint |> typeVariableConstraintToString
 
 
 typeVariableConstraintToString : TypeVariableConstraint -> String
