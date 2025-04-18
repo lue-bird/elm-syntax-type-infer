@@ -3078,9 +3078,23 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
                         Just aOriginAliasDeclaration ->
                             Result.andThen
                                 (\constructedAliasedType ->
-                                    typeUnify declarationTypes
-                                        constructedAliasedType
-                                        (TypeNotVariable b)
+                                    Result.andThen
+                                        (\constructedAliasedTypeUnifiedWithB ->
+                                            Result.map
+                                                (\fullSubstitutions ->
+                                                    { type_ = constructedAliasedType.type_
+                                                    , substitutions = fullSubstitutions
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge declarationTypes
+                                                    constructedAliasedTypeUnifiedWithB.substitutions
+                                                    constructedAliasedType.substitutions
+                                                )
+                                        )
+                                        (typeUnify declarationTypes
+                                            constructedAliasedType.type_
+                                            (TypeNotVariable b)
+                                        )
                                 )
                                 (List.map2
                                     (\parameterName argument ->
@@ -3089,16 +3103,29 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
                                     aOriginAliasDeclaration.parameters
                                     aTypeConstructToExpand.arguments
                                     |> listFoldlWhileOkFrom
-                                        (aOriginAliasDeclaration.type_
-                                            |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
-                                        )
+                                        { type_ =
+                                            aOriginAliasDeclaration.type_
+                                                |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                        , substitutions = variableSubstitutionsNone
+                                        }
                                         (\substitution constructedAliasedTypeSoFar ->
-                                            constructedAliasedTypeSoFar
-                                                |> typeApplyVariableSubstitutions declarationTypes
-                                                    (variableSubstitutionsFromVariableToType
-                                                        substitution.variable
-                                                        substitution.type_
-                                                    )
+                                            Result.andThen
+                                                (\afterSubstitution ->
+                                                    Result.map
+                                                        (\substitutionsSoFarAndAfterSubstitution ->
+                                                            { type_ = afterSubstitution.type_
+                                                            , substitutions = substitutionsSoFarAndAfterSubstitution
+                                                            }
+                                                        )
+                                                        (variableSubstitutionsMerge declarationTypes
+                                                            constructedAliasedTypeSoFar.substitutions
+                                                            afterSubstitution.substitutions
+                                                        )
+                                                )
+                                                (constructedAliasedTypeSoFar.type_
+                                                    |> typeSubstituteVariable declarationTypes
+                                                        substitution
+                                                )
                                         )
                                 )
                                 |> Just
