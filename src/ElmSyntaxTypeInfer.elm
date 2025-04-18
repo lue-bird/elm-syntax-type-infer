@@ -1238,7 +1238,10 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                     Just constraint ->
                         case constraint of
                             TypeVariableConstraintNumber ->
-                                if replacement.type_ |> typeNotVariableIsNumber then
+                                if
+                                    replacement.type_
+                                        |> typeNotVariableIsNumber declarationTypes
+                                then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1251,7 +1254,10 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                         )
 
                             TypeVariableConstraintAppendable ->
-                                if replacement.type_ |> typeNotVariableIsAppendable then
+                                if
+                                    replacement.type_
+                                        |> typeNotVariableIsAppendable declarationTypes
+                                then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1261,7 +1267,10 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify appendable type variable with types other than String/List _"
 
                             TypeVariableConstraintComparable ->
-                                if replacement.type_ |> typeNotVariableIsComparable (\var -> var |> typeVariableIgnoringContext |> typeVariableConstraint) then
+                                if
+                                    replacement.type_
+                                        |> typeNotVariableIsComparable declarationTypes
+                                then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1271,7 +1280,10 @@ typeSubstituteVariableByNotVariable declarationTypes replacement type_ =
                                     Err "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
 
                             TypeVariableConstraintCompappend ->
-                                if replacement.type_ |> typeNotVariableIsCompappend (\var -> var |> typeVariableIgnoringContext |> typeVariableConstraint) then
+                                if
+                                    replacement.type_
+                                        |> typeNotVariableIsCompappend declarationTypes
+                                then
                                     Ok
                                         { type_ = TypeNotVariable replacement.type_
                                         , substitutions = variableSubstitutionsNone
@@ -1756,8 +1768,39 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
                 )
 
 
-typeNotVariableIsNumber : TypeNotVariable variable_ -> Bool
-typeNotVariableIsNumber type_ =
+typeIsNumber :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> Type TypeVariableFromContext
+    -> Bool
+typeIsNumber declarationTypes type_ =
+    case type_ of
+        TypeVariable typeVariable ->
+            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+                Nothing ->
+                    False
+
+                Just TypeVariableConstraintAppendable ->
+                    True
+
+                Just TypeVariableConstraintCompappend ->
+                    True
+
+                Just TypeVariableConstraintComparable ->
+                    False
+
+                Just TypeVariableConstraintNumber ->
+                    False
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariableIsNumber declarationTypes
+                typeNotVariable
+
+
+typeNotVariableIsNumber :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> TypeNotVariable TypeVariableFromContext
+    -> Bool
+typeNotVariableIsNumber declarationTypes type_ =
     case type_ of
         TypeConstruct typeConstruct ->
             case typeConstruct.moduleOrigin of
@@ -1773,7 +1816,16 @@ typeNotVariableIsNumber type_ =
                             False
 
                 _ ->
-                    False
+                    case
+                        typeConstructFullyExpandIfAlias declarationTypes
+                            typeConstruct
+                    of
+                        Nothing ->
+                            False
+
+                        Just deAliasedTypeConstruct ->
+                            typeIsNumber declarationTypes
+                                deAliasedTypeConstruct
 
         TypeUnit ->
             False
@@ -1794,110 +1846,77 @@ typeNotVariableIsNumber type_ =
             False
 
 
-typeNotVariableIsAppendable : TypeNotVariable variable_ -> Bool
-typeNotVariableIsAppendable type_ =
-    case type_ of
-        TypeConstruct variableReplacementTypeChoiceConstruct ->
-            case variableReplacementTypeChoiceConstruct.moduleOrigin of
-                [ "String" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
-                        "String" ->
-                            True
-
-                        _ ->
-                            False
-
-                [ "List" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
-                        "List" ->
-                            True
-
-                        _ ->
-                            False
-
-                _ ->
-                    False
-
-        TypeUnit ->
-            False
-
-        TypeTuple _ ->
-            False
-
-        TypeTriple _ ->
-            False
-
-        TypeRecord _ ->
-            False
-
-        TypeRecordExtension _ ->
-            False
-
-        TypeFunction _ ->
-            False
-
-
-typeNotVariableIsComparable :
-    (variable -> Maybe TypeVariableConstraint)
-    -> TypeNotVariable variable
+typeIsAppendable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> Type TypeVariableFromContext
     -> Bool
-typeNotVariableIsComparable typeVariableToConstraint typeNotVariable =
-    -- IGNORE TCO
-    case typeNotVariable of
-        TypeConstruct variableReplacementTypeChoiceConstruct ->
-            case variableReplacementTypeChoiceConstruct.moduleOrigin of
+typeIsAppendable declarationTypes type_ =
+    case type_ of
+        TypeVariable typeVariable ->
+            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+                Nothing ->
+                    False
+
+                Just TypeVariableConstraintAppendable ->
+                    True
+
+                Just TypeVariableConstraintCompappend ->
+                    True
+
+                Just TypeVariableConstraintComparable ->
+                    False
+
+                Just TypeVariableConstraintNumber ->
+                    False
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariableIsAppendable declarationTypes
+                typeNotVariable
+
+
+typeNotVariableIsAppendable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> TypeNotVariable TypeVariableFromContext
+    -> Bool
+typeNotVariableIsAppendable declarationTypes type_ =
+    case type_ of
+        TypeConstruct variableReplacementTypeConstruct ->
+            case variableReplacementTypeConstruct.moduleOrigin of
                 [ "String" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
+                    case variableReplacementTypeConstruct.name of
                         "String" ->
                             True
 
                         _ ->
                             False
 
-                [ "Basics" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
-                        "Int" ->
-                            True
-
-                        "Float" ->
-                            True
-
-                        _ ->
-                            False
-
-                [ "Time" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
-                        "Posix" ->
-                            True
-
-                        _ ->
-                            False
-
                 [ "List" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
+                    case variableReplacementTypeConstruct.name of
                         "List" ->
-                            variableReplacementTypeChoiceConstruct.arguments
-                                |> List.all
-                                    (\argument ->
-                                        argument |> typeIsComparable typeVariableToConstraint
-                                    )
+                            True
 
                         _ ->
                             False
 
                 _ ->
-                    False
+                    case
+                        typeConstructFullyExpandIfAlias declarationTypes
+                            variableReplacementTypeConstruct
+                    of
+                        Nothing ->
+                            False
 
-        TypeTuple typeTuple ->
-            (typeTuple.part0 |> typeIsComparable typeVariableToConstraint)
-                && (typeTuple.part1 |> typeIsComparable typeVariableToConstraint)
-
-        TypeTriple typeTriple ->
-            (typeTriple.part0 |> typeIsComparable typeVariableToConstraint)
-                && (typeTriple.part1 |> typeIsComparable typeVariableToConstraint)
-                && (typeTriple.part2 |> typeIsComparable typeVariableToConstraint)
+                        Just deAliasedTypeConstruct ->
+                            typeIsAppendable declarationTypes
+                                deAliasedTypeConstruct
 
         TypeUnit ->
+            False
+
+        TypeTuple _ ->
+            False
+
+        TypeTriple _ ->
             False
 
         TypeRecord _ ->
@@ -1911,18 +1930,18 @@ typeNotVariableIsComparable typeVariableToConstraint typeNotVariable =
 
 
 typeIsComparable :
-    (variable -> Maybe TypeVariableConstraint)
-    -> Type variable
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> Type TypeVariableFromContext
     -> Bool
-typeIsComparable typeVariableToConstraint type_ =
+typeIsComparable declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> typeVariableToConstraint of
+            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
                 Nothing ->
                     False
 
                 Just TypeVariableConstraintAppendable ->
-                    True
+                    False
 
                 Just TypeVariableConstraintCompappend ->
                     True
@@ -1934,20 +1953,132 @@ typeIsComparable typeVariableToConstraint type_ =
                     True
 
         TypeNotVariable typeNotVariable ->
-            typeNotVariable |> typeNotVariableIsComparable typeVariableToConstraint
+            typeNotVariableIsComparable declarationTypes
+                typeNotVariable
+
+
+typeNotVariableIsComparable :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> TypeNotVariable TypeVariableFromContext
+    -> Bool
+typeNotVariableIsComparable declarationTypes typeNotVariable =
+    -- IGNORE TCO
+    case typeNotVariable of
+        TypeConstruct variableReplacementTypeConstruct ->
+            case variableReplacementTypeConstruct.moduleOrigin of
+                [ "String" ] ->
+                    case variableReplacementTypeConstruct.name of
+                        "String" ->
+                            True
+
+                        _ ->
+                            False
+
+                [ "Basics" ] ->
+                    case variableReplacementTypeConstruct.name of
+                        "Int" ->
+                            True
+
+                        "Float" ->
+                            True
+
+                        _ ->
+                            False
+
+                [ "Time" ] ->
+                    case variableReplacementTypeConstruct.name of
+                        "Posix" ->
+                            True
+
+                        _ ->
+                            False
+
+                [ "List" ] ->
+                    case variableReplacementTypeConstruct.name of
+                        "List" ->
+                            variableReplacementTypeConstruct.arguments
+                                |> List.all
+                                    (\argument ->
+                                        argument
+                                            |> typeIsComparable declarationTypes
+                                    )
+
+                        _ ->
+                            False
+
+                _ ->
+                    case
+                        typeConstructFullyExpandIfAlias declarationTypes
+                            variableReplacementTypeConstruct
+                    of
+                        Nothing ->
+                            False
+
+                        Just deAliasedTypeConstruct ->
+                            typeIsComparable declarationTypes
+                                deAliasedTypeConstruct
+
+        TypeTuple typeTuple ->
+            (typeTuple.part0 |> typeIsComparable declarationTypes)
+                && (typeTuple.part1 |> typeIsComparable declarationTypes)
+
+        TypeTriple typeTriple ->
+            (typeTriple.part0 |> typeIsComparable declarationTypes)
+                && (typeTriple.part1 |> typeIsComparable declarationTypes)
+                && (typeTriple.part2 |> typeIsComparable declarationTypes)
+
+        TypeUnit ->
+            False
+
+        TypeRecord _ ->
+            False
+
+        TypeRecordExtension _ ->
+            False
+
+        TypeFunction _ ->
+            False
+
+
+typeIsCompappend :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> Type TypeVariableFromContext
+    -> Bool
+typeIsCompappend declarationTypes type_ =
+    case type_ of
+        TypeVariable typeVariable ->
+            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+                Nothing ->
+                    False
+
+                Just TypeVariableConstraintAppendable ->
+                    False
+
+                Just TypeVariableConstraintCompappend ->
+                    True
+
+                Just TypeVariableConstraintComparable ->
+                    False
+
+                Just TypeVariableConstraintNumber ->
+                    False
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariableIsCompappend declarationTypes
+                typeNotVariable
 
 
 typeNotVariableIsCompappend :
-    (variable -> Maybe TypeVariableConstraint)
-    -> TypeNotVariable variable
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> TypeNotVariable TypeVariableFromContext
     -> Bool
-typeNotVariableIsCompappend typeVariableToConstraint type_ =
+typeNotVariableIsCompappend declarationTypes type_ =
     -- IGNORE TCO
     case type_ of
-        TypeConstruct variableReplacementTypeChoiceConstruct ->
-            case variableReplacementTypeChoiceConstruct.moduleOrigin of
+        TypeConstruct variableReplacementTypeConstruct ->
+            case variableReplacementTypeConstruct.moduleOrigin of
                 [ "Basics" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
+                    case variableReplacementTypeConstruct.name of
                         "String" ->
                             True
 
@@ -1955,19 +2086,29 @@ typeNotVariableIsCompappend typeVariableToConstraint type_ =
                             False
 
                 [ "List" ] ->
-                    case variableReplacementTypeChoiceConstruct.name of
+                    case variableReplacementTypeConstruct.name of
                         "List" ->
-                            variableReplacementTypeChoiceConstruct.arguments
+                            variableReplacementTypeConstruct.arguments
                                 |> List.all
                                     (\argument ->
-                                        argument |> typeIsComparable typeVariableToConstraint
+                                        argument
+                                            |> typeIsComparable declarationTypes
                                     )
 
                         _ ->
                             False
 
                 _ ->
-                    False
+                    case
+                        typeConstructFullyExpandIfAlias declarationTypes
+                            variableReplacementTypeConstruct
+                    of
+                        Nothing ->
+                            False
+
+                        Just deAliasedTypeConstruct ->
+                            typeIsCompappend declarationTypes
+                                deAliasedTypeConstruct
 
         TypeUnit ->
             False
@@ -1986,6 +2127,46 @@ typeNotVariableIsCompappend typeVariableToConstraint type_ =
 
         TypeFunction _ ->
             False
+
+
+typeConstructFullyExpandIfAlias :
+    ModuleLevelDeclarationTypesAvailableInModule
+    ->
+        { name : String
+        , arguments : List (Type TypeVariableFromContext)
+        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        }
+    -> Maybe (Type TypeVariableFromContext)
+typeConstructFullyExpandIfAlias declarationTypes typeConstructToExpand =
+    case declarationTypes |> FastDict.get typeConstructToExpand.moduleOrigin of
+        Nothing ->
+            Nothing
+
+        Just aOriginModuleTypes ->
+            case aOriginModuleTypes.typeAliases |> FastDict.get typeConstructToExpand.name of
+                Nothing ->
+                    Nothing
+
+                Just originAliasDeclaration ->
+                    List.map2
+                        (\parameterName argument ->
+                            { variable = ( [], parameterName ), type_ = argument }
+                        )
+                        originAliasDeclaration.parameters
+                        typeConstructToExpand.arguments
+                        |> listFoldlWhileOkFrom
+                            (originAliasDeclaration.type_
+                                |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                            )
+                            (\substitution typeSoFar ->
+                                typeSoFar
+                                    |> typeApplyVariableSubstitutions declarationTypes
+                                        (variableSubstitutionsFromVariableToType
+                                            substitution.variable
+                                            substitution.type_
+                                        )
+                            )
+                        |> Result.toMaybe
 
 
 {-| All you need to turn a generic type with variables
@@ -4300,7 +4481,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         }
                     , substitutions = variableSubstitutionsNone
                     , introducedTypeVariables =
-                        operatorInferred.type_ |> typeContainedVariables
+                        operatorInferred.introducedTypeVariables
                     }
                 )
                 (operatorFunctionType
@@ -4513,7 +4694,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         , type_ = onTrueInferred.node.type_
                                         }
                                     , introducedTypeVariables =
-                                        FastSet.empty
+                                        conditionInferred.introducedTypeVariables
+                                            |> FastSet.union onTrueInferred.introducedTypeVariables
+                                            |> FastSet.union onFalseInferred.introducedTypeVariables
                                     }
                                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                             { declarationTypes = context.declarationTypes
@@ -4812,7 +4995,12 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , type_ = TypeVariable introducedResultTypeVariable
                                                 }
                                             , introducedTypeVariables =
-                                                FastSet.singleton introducedResultTypeVariable
+                                                calledInferred.introducedTypeVariables
+                                                    |> FastSet.union
+                                                        argument0Inferred.introducedTypeVariables
+                                                    |> FastSet.union
+                                                        argument1UpInferred.introducedTypeVariables
+                                                    |> FastSet.insert introducedResultTypeVariable
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     { declarationTypes = context.declarationTypes
@@ -4858,6 +5046,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         (argument1Up
                             |> listFoldlWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
+                                , introducedTypeVariables = FastSet.empty
                                 , nodesReverse = []
                                 , index = 1
                                 }
@@ -4868,6 +5057,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (\substitutionsWithArgument ->
                                                     { index = soFar.index + 1
                                                     , substitutions = substitutionsWithArgument
+                                                    , introducedTypeVariables =
+                                                        FastSet.union
+                                                            soFar.introducedTypeVariables
+                                                            argumentInferred.introducedTypeVariables
                                                     , nodesReverse =
                                                         argumentInferred.node
                                                             :: soFar.nodesReverse
@@ -4992,7 +5185,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , type_ = recordVariableInferred.node.type_
                                                 }
                                             , introducedTypeVariables =
-                                                FastSet.singleton introducedRecordTypeVariable
+                                                field0Inferred.introducedTypeVariables
+                                                    |> FastSet.union field1UpInferred.introducedTypeVariables
+                                                    |> FastSet.insert introducedRecordTypeVariable
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     { declarationTypes = context.declarationTypes
@@ -5036,6 +5231,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         (Result.map
                             (\valueInferred ->
                                 { substitutions = valueInferred.substitutions
+                                , introducedTypeVariables = valueInferred.introducedTypeVariables
                                 , node =
                                     { range = field0Range
                                     , name = field0Name
@@ -5055,6 +5251,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         (field1Up
                             |> listFoldlWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
+                                , introducedTypeVariables = FastSet.empty
                                 , nodesReverse = []
                                 }
                                 (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node nameRange name, valueNode )) soFar ->
@@ -5063,6 +5260,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             Result.map
                                                 (\substitutionsWithField ->
                                                     { substitutions = substitutionsWithField
+                                                    , introducedTypeVariables =
+                                                        FastSet.union
+                                                            soFar.introducedTypeVariables
+                                                            fieldValueInferred.introducedTypeVariables
                                                     , nodesReverse =
                                                         { range = fieldRange
                                                         , name = name
@@ -6713,7 +6914,10 @@ expressionInfixOperationTypeInfer context infixOperation =
                                 , type_ = TypeVariable introducedResultTypeVariable
                                 }
                             , introducedTypeVariables =
-                                FastSet.singleton introducedResultTypeVariable
+                                operatorAsFunctionType.introducedTypeVariables
+                                    |> FastSet.union leftInferred.introducedTypeVariables
+                                    |> FastSet.union rightInferred.introducedTypeVariables
+                                    |> FastSet.insert introducedResultTypeVariable
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                     { declarationTypes = context.declarationTypes
@@ -6770,21 +6974,33 @@ operatorFunctionType :
             String
             { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
             , type_ : Type TypeVariableFromContext
+            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
             }
 operatorFunctionType context operator =
     case operator of
         "|>" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6808,16 +7024,27 @@ operatorFunctionType context operator =
 
         "<|" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6841,20 +7068,36 @@ operatorFunctionType context operator =
 
         ">>" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
+                cVariable : TypeVariableFromContext
+                cVariable =
+                    ( context.path, "c" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.path, "c" )
+                    TypeVariable cVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                        |> FastSet.insert cVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6890,20 +7133,36 @@ operatorFunctionType context operator =
 
         "<<" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
+                cVariable : TypeVariableFromContext
+                cVariable =
+                    ( context.path, "c" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.path, "c" )
+                    TypeVariable cVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                        |> FastSet.insert cVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6939,12 +7198,17 @@ operatorFunctionType context operator =
 
         "++" ->
             let
+                appendableVariable : TypeVariableFromContext
+                appendableVariable =
+                    ( context.path, "appendable" )
+
                 appendable : Type TypeVariableFromContext
                 appendable =
-                    TypeVariable ( context.path, "appendable" )
+                    TypeVariable appendableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton appendableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6962,12 +7226,17 @@ operatorFunctionType context operator =
 
         "==" ->
             let
+                equatableVariable : TypeVariableFromContext
+                equatableVariable =
+                    ( context.path, "equatable" )
+
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.path, "equatable" )
+                    TypeVariable equatableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton equatableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -6985,12 +7254,17 @@ operatorFunctionType context operator =
 
         "/=" ->
             let
+                equatableVariable : TypeVariableFromContext
+                equatableVariable =
+                    ( context.path, "equatable" )
+
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.path, "equatable" )
+                    TypeVariable equatableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton equatableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7008,12 +7282,17 @@ operatorFunctionType context operator =
 
         "::" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "element" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "element" )
+                    TypeVariable aVariable
             in
             Ok
-                { moduleOrigin = moduleNameList
+                { introducedTypeVariables = FastSet.singleton aVariable
+                , moduleOrigin = moduleNameList
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7031,12 +7310,17 @@ operatorFunctionType context operator =
 
         "*" ->
             let
+                numberVariable : TypeVariableFromContext
+                numberVariable =
+                    ( context.path, "number" )
+
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.path, "number" )
+                    TypeVariable numberVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton numberVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7054,12 +7338,17 @@ operatorFunctionType context operator =
 
         "+" ->
             let
+                numberVariable : TypeVariableFromContext
+                numberVariable =
+                    ( context.path, "number" )
+
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.path, "number" )
+                    TypeVariable numberVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton numberVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7077,12 +7366,17 @@ operatorFunctionType context operator =
 
         "-" ->
             let
+                numberVariable : TypeVariableFromContext
+                numberVariable =
+                    ( context.path, "number" )
+
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.path, "number" )
+                    TypeVariable numberVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton numberVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7100,7 +7394,8 @@ operatorFunctionType context operator =
 
         "/" ->
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.empty
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7118,12 +7413,17 @@ operatorFunctionType context operator =
 
         "^" ->
             let
+                numberVariable : TypeVariableFromContext
+                numberVariable =
+                    ( context.path, "number" )
+
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.path, "number" )
+                    TypeVariable numberVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton numberVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7141,12 +7441,17 @@ operatorFunctionType context operator =
 
         "<=" ->
             let
+                comparableVariable : TypeVariableFromContext
+                comparableVariable =
+                    ( context.path, "comparable" )
+
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.path, "comparable" )
+                    TypeVariable comparableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton comparableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7164,12 +7469,17 @@ operatorFunctionType context operator =
 
         ">=" ->
             let
+                comparableVariable : TypeVariableFromContext
+                comparableVariable =
+                    ( context.path, "comparable" )
+
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.path, "comparable" )
+                    TypeVariable comparableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton comparableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7187,12 +7497,17 @@ operatorFunctionType context operator =
 
         ">" ->
             let
+                comparableVariable : TypeVariableFromContext
+                comparableVariable =
+                    ( context.path, "comparable" )
+
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.path, "comparable" )
+                    TypeVariable comparableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton comparableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7210,12 +7525,17 @@ operatorFunctionType context operator =
 
         "<" ->
             let
+                comparableVariable : TypeVariableFromContext
+                comparableVariable =
+                    ( context.path, "comparable" )
+
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.path, "comparable" )
+                    TypeVariable comparableVariable
             in
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.singleton comparableVariable
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7233,7 +7553,8 @@ operatorFunctionType context operator =
 
         "//" ->
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.empty
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7251,7 +7572,8 @@ operatorFunctionType context operator =
 
         "&&" ->
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.empty
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7269,7 +7591,8 @@ operatorFunctionType context operator =
 
         "||" ->
             Ok
-                { moduleOrigin = moduleNameBasics
+                { introducedTypeVariables = FastSet.empty
+                , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7289,23 +7612,44 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced then
                     let
+                        varContextVariable : TypeVariableFromContext
+                        varContextVariable =
+                            ( context.path, "context" )
+
+                        problemVariable : TypeVariableFromContext
+                        problemVariable =
+                            ( context.path, "problem" )
+
+                        keepVariable : TypeVariableFromContext
+                        keepVariable =
+                            ( context.path, "keep" )
+
+                        ignoreVariable : TypeVariableFromContext
+                        ignoreVariable =
+                            ( context.path, "ignore" )
+
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( context.path, "context" )
+                            TypeVariable varContextVariable
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( context.path, "problem" )
+                            TypeVariable problemVariable
 
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( context.path, "keep" )
+                            TypeVariable keepVariable
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( context.path, "ignore" )
+                            TypeVariable ignoreVariable
                     in
-                    { moduleOrigin = moduleNameParserAdvanced
+                    { introducedTypeVariables =
+                        FastSet.singleton varContextVariable
+                            |> FastSet.insert problemVariable
+                            |> FastSet.insert keepVariable
+                            |> FastSet.insert ignoreVariable
+                    , moduleOrigin = moduleNameParserAdvanced
                     , type_ =
                         TypeNotVariable
                             (TypeFunction
@@ -7323,15 +7667,26 @@ operatorFunctionType context operator =
 
                  else
                     let
+                        keepVariable : TypeVariableFromContext
+                        keepVariable =
+                            ( context.path, "keep" )
+
+                        ignoreVariable : TypeVariableFromContext
+                        ignoreVariable =
+                            ( context.path, "ignore" )
+
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( context.path, "keep" )
+                            TypeVariable keepVariable
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( context.path, "ignore" )
+                            TypeVariable ignoreVariable
                     in
-                    { moduleOrigin = moduleNameParser
+                    { introducedTypeVariables =
+                        FastSet.singleton keepVariable
+                            |> FastSet.insert ignoreVariable
+                    , moduleOrigin = moduleNameParser
                     , type_ =
                         TypeNotVariable
                             (TypeFunction
@@ -7352,23 +7707,44 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced then
                     let
+                        varContextVariable : TypeVariableFromContext
+                        varContextVariable =
+                            ( context.path, "context" )
+
+                        problemVariable : TypeVariableFromContext
+                        problemVariable =
+                            ( context.path, "problem" )
+
+                        aVariable : TypeVariableFromContext
+                        aVariable =
+                            ( context.path, "a" )
+
+                        bVariable : TypeVariableFromContext
+                        bVariable =
+                            ( context.path, "b" )
+
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( context.path, "context" )
+                            TypeVariable varContextVariable
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( context.path, "problem" )
+                            TypeVariable problemVariable
 
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( context.path, "keep" )
+                            TypeVariable aVariable
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( context.path, "ignore" )
+                            TypeVariable bVariable
                     in
-                    { moduleOrigin = moduleNameParserAdvanced
+                    { introducedTypeVariables =
+                        FastSet.singleton varContextVariable
+                            |> FastSet.insert problemVariable
+                            |> FastSet.insert aVariable
+                            |> FastSet.insert bVariable
+                    , moduleOrigin = moduleNameParserAdvanced
                     , type_ =
                         TypeNotVariable
                             (TypeFunction
@@ -7396,15 +7772,26 @@ operatorFunctionType context operator =
 
                  else
                     let
+                        aVariable : TypeVariableFromContext
+                        aVariable =
+                            ( context.path, "a" )
+
+                        bVariable : TypeVariableFromContext
+                        bVariable =
+                            ( context.path, "b" )
+
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( context.path, "keep" )
+                            TypeVariable aVariable
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( context.path, "ignore" )
+                            TypeVariable bVariable
                     in
-                    { moduleOrigin = moduleNameParser
+                    { introducedTypeVariables =
+                        FastSet.singleton aVariable
+                            |> FastSet.insert bVariable
+                    , moduleOrigin = moduleNameParser
                     , type_ =
                         TypeNotVariable
                             (TypeFunction
@@ -7431,20 +7818,36 @@ operatorFunctionType context operator =
 
         "</>" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
+                cVariable : TypeVariableFromContext
+                cVariable =
+                    ( context.path, "c" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.path, "c" )
+                    TypeVariable cVariable
             in
             Ok
-                { moduleOrigin = moduleNameUrlParser
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                        |> FastSet.insert cVariable
+                , moduleOrigin = moduleNameUrlParser
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
@@ -7462,20 +7865,36 @@ operatorFunctionType context operator =
 
         "<?>" ->
             let
+                aVariable : TypeVariableFromContext
+                aVariable =
+                    ( context.path, "a" )
+
+                bVariable : TypeVariableFromContext
+                bVariable =
+                    ( context.path, "b" )
+
+                queryVariable : TypeVariableFromContext
+                queryVariable =
+                    ( context.path, "query" )
+
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.path, "a" )
+                    TypeVariable aVariable
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.path, "b" )
+                    TypeVariable bVariable
 
                 query : Type TypeVariableFromContext
                 query =
-                    TypeVariable ( context.path, "query" )
+                    TypeVariable queryVariable
             in
             Ok
-                { moduleOrigin = moduleNameUrlParser
+                { introducedTypeVariables =
+                    FastSet.singleton aVariable
+                        |> FastSet.insert bVariable
+                        |> FastSet.insert queryVariable
+                , moduleOrigin = moduleNameUrlParser
                 , type_ =
                     TypeNotVariable
                         (TypeFunction
