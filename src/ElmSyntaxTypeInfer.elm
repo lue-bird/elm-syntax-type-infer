@@ -4147,7 +4147,7 @@ expressionTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
     , path : List String
@@ -4183,7 +4183,7 @@ expressionTypeInferInner :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
     , path : List String
@@ -5140,8 +5140,8 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         , path = "lambdaResult" :: context.path
                                         , declarationTypes = context.declarationTypes
                                         , moduleOriginLookup = context.moduleOriginLookup
-                                        , partiallyInferredDeclarationTypes =
-                                            context.partiallyInferredDeclarationTypes
+                                        , locallyIntroducedDeclarationTypes =
+                                            context.locallyIntroducedDeclarationTypes
                                         , locallyIntroducedExpressionVariables =
                                             FastDict.union
                                                 context.locallyIntroducedExpressionVariables
@@ -5280,7 +5280,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 { declarationTypes = context.declarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
                                 , partiallyInferredDeclarationTypes =
-                                    context.partiallyInferredDeclarationTypes
+                                    context.locallyIntroducedDeclarationTypes
                                 , containingDeclarationName = context.containingDeclarationName
                                 , path = "case0" :: context.path
                                 , locallyIntroducedExpressionVariables =
@@ -5323,7 +5323,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             |> expressionCaseTypeInfer
                                                 { declarationTypes = context.declarationTypes
                                                 , partiallyInferredDeclarationTypes =
-                                                    context.partiallyInferredDeclarationTypes
+                                                    context.locallyIntroducedDeclarationTypes
                                                 , moduleOriginLookup = context.moduleOriginLookup
                                                 , containingDeclarationName = context.containingDeclarationName
                                                 , path = "result" :: casePath
@@ -5343,9 +5343,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         acrossLetIn :
                             { introducedExpressionVariables :
                                 FastDict.Dict String (Type TypeVariableFromContext)
-                            , annotatedDeclarationTypes :
-                                FastDict.Dict String (Type String)
-                            , partiallyInferredDeclarationTypes :
+                            , introducedDeclarationTypes :
                                 FastDict.Dict String (Type TypeVariableFromContext)
                             }
                         acrossLetIn =
@@ -5372,20 +5370,16 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 of
                                                     Err _ ->
                                                         { index = soFar.index + 1
-                                                        , annotatedDeclarationTypes =
-                                                            soFar.annotatedDeclarationTypes
-                                                        , partiallyInferredDeclarationTypes =
-                                                            soFar.partiallyInferredDeclarationTypes
+                                                        , introducedDeclarationTypes =
+                                                            soFar.introducedDeclarationTypes
                                                         , introducedExpressionVariables =
                                                             soFar.introducedExpressionVariables
                                                         }
 
                                                     Ok patternInferred ->
                                                         { index = soFar.index + 1
-                                                        , annotatedDeclarationTypes =
-                                                            soFar.annotatedDeclarationTypes
-                                                        , partiallyInferredDeclarationTypes =
-                                                            soFar.partiallyInferredDeclarationTypes
+                                                        , introducedDeclarationTypes =
+                                                            soFar.introducedDeclarationTypes
                                                         , introducedExpressionVariables =
                                                             FastDict.union soFar.introducedExpressionVariables
                                                                 (patternInferred |> patternTypedNodeIntroducedVariables)
@@ -5412,23 +5406,22 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 of
                                                     Just type_ ->
                                                         { index = soFar.index + 1
-                                                        , partiallyInferredDeclarationTypes =
-                                                            soFar.partiallyInferredDeclarationTypes
                                                         , introducedExpressionVariables =
                                                             soFar.introducedExpressionVariables
-                                                        , annotatedDeclarationTypes =
-                                                            soFar.annotatedDeclarationTypes
-                                                                |> FastDict.insert name type_
+                                                        , introducedDeclarationTypes =
+                                                            soFar.introducedDeclarationTypes
+                                                                |> FastDict.insert name
+                                                                    (type_
+                                                                        |> typeMapVariables (\variable -> ( [], variable ))
+                                                                    )
                                                         }
 
                                                     Nothing ->
                                                         { index = soFar.index + 1
                                                         , introducedExpressionVariables =
                                                             soFar.introducedExpressionVariables
-                                                        , annotatedDeclarationTypes =
-                                                            soFar.annotatedDeclarationTypes
-                                                        , partiallyInferredDeclarationTypes =
-                                                            soFar.partiallyInferredDeclarationTypes
+                                                        , introducedDeclarationTypes =
+                                                            soFar.introducedDeclarationTypes
                                                                 |> FastDict.insert name
                                                                     (TypeVariable
                                                                         ( contextPath, name )
@@ -5436,56 +5429,33 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         }
                                     )
                                     { index = 0
-                                    , annotatedDeclarationTypes = FastDict.empty
-                                    , partiallyInferredDeclarationTypes = FastDict.empty
+                                    , introducedDeclarationTypes = FastDict.empty
                                     , introducedExpressionVariables = FastDict.empty
                                     }
                                 |> (\result ->
                                         { introducedExpressionVariables = result.introducedExpressionVariables
-                                        , partiallyInferredDeclarationTypes = result.partiallyInferredDeclarationTypes
-                                        , annotatedDeclarationTypes = result.annotatedDeclarationTypes
+                                        , introducedDeclarationTypes = result.introducedDeclarationTypes
                                         }
                                    )
 
                         acrossLetInIncludingContextSoFar :
                             { locallyIntroducedExpressionVariables :
                                 FastDict.Dict String (Type TypeVariableFromContext)
-                            , declarationTypes :
-                                ModuleLevelDeclarationTypesAvailableInModule
-                            , partiallyInferredDeclarationTypes :
+                            , introducedDeclarationTypes :
                                 FastDict.Dict String (Type TypeVariableFromContext)
                             }
                         acrossLetInIncludingContextSoFar =
                             { locallyIntroducedExpressionVariables =
                                 FastDict.union
-                                    context.locallyIntroducedExpressionVariables
                                     acrossLetIn.introducedExpressionVariables
-                            , partiallyInferredDeclarationTypes =
+                                    context.locallyIntroducedExpressionVariables
+                            , introducedDeclarationTypes =
                                 FastDict.union
-                                    context.partiallyInferredDeclarationTypes
-                                    acrossLetIn.partiallyInferredDeclarationTypes
-                            , declarationTypes =
-                                context.declarationTypes
-                                    |> FastDict.update []
-                                        (\localDeclarationTypesOrNothing ->
-                                            Just
-                                                (case localDeclarationTypesOrNothing of
-                                                    Nothing ->
-                                                        { signatures = acrossLetIn.annotatedDeclarationTypes
-                                                        , typeAliases = FastDict.empty
-                                                        , choiceTypes = FastDict.empty
-                                                        }
-
-                                                    Just localDeclarationTypes ->
-                                                        { signatures =
-                                                            FastDict.union
-                                                                localDeclarationTypes.signatures
-                                                                acrossLetIn.annotatedDeclarationTypes
-                                                        , typeAliases = localDeclarationTypes.typeAliases
-                                                        , choiceTypes = localDeclarationTypes.choiceTypes
-                                                        }
-                                                )
-                                        )
+                                    acrossLetIn.introducedDeclarationTypes
+                                    (FastDict.union
+                                        acrossLetIn.introducedDeclarationTypes
+                                        context.locallyIntroducedDeclarationTypes
+                                    )
                             }
                     in
                     resultAndThen3
@@ -5514,7 +5484,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             { declarationTypes = context.declarationTypes }
                                             fullSubstitutions
                                 )
-                                (variableSubstitutionsMerge3 acrossLetInIncludingContextSoFar.declarationTypes
+                                (variableSubstitutionsMerge3 context.declarationTypes
                                     declaration0Inferred.substitutions
                                     declaration1UpInferred.substitutions
                                     resultInferred.substitutions
@@ -5526,10 +5496,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 , path = "letDeclaration0" :: context.path
                                 , locallyIntroducedExpressionVariables =
                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
-                                , partiallyInferredDeclarationTypes =
-                                    acrossLetInIncludingContextSoFar.partiallyInferredDeclarationTypes
+                                , locallyIntroducedDeclarationTypes =
+                                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
-                                , declarationTypes = acrossLetInIncludingContextSoFar.declarationTypes
+                                , declarationTypes = context.declarationTypes
                                 }
                         )
                         (letDeclaration1Up
@@ -5554,7 +5524,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                             letDeclarationInferred.introducedTypeVariables
                                                     }
                                                 )
-                                                (variableSubstitutionsMerge acrossLetInIncludingContextSoFar.declarationTypes
+                                                (variableSubstitutionsMerge context.declarationTypes
                                                     letDeclarationInferred.substitutions
                                                     soFar.substitutions
                                                 )
@@ -5569,10 +5539,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         :: context.path
                                                 , locallyIntroducedExpressionVariables =
                                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
-                                                , partiallyInferredDeclarationTypes =
-                                                    acrossLetInIncludingContextSoFar.partiallyInferredDeclarationTypes
+                                                , locallyIntroducedDeclarationTypes =
+                                                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
                                                 , moduleOriginLookup = context.moduleOriginLookup
-                                                , declarationTypes = acrossLetInIncludingContextSoFar.declarationTypes
+                                                , declarationTypes = context.declarationTypes
                                                 }
                                         )
                                 )
@@ -5584,9 +5554,9 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 , locallyIntroducedExpressionVariables =
                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
                                 , moduleOriginLookup = context.moduleOriginLookup
-                                , declarationTypes = acrossLetInIncludingContextSoFar.declarationTypes
-                                , partiallyInferredDeclarationTypes =
-                                    acrossLetInIncludingContextSoFar.partiallyInferredDeclarationTypes
+                                , declarationTypes = context.declarationTypes
+                                , locallyIntroducedDeclarationTypes =
+                                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
                                 }
                         )
 
@@ -5661,7 +5631,7 @@ expressionCaseTypeInfer context syntaxCase =
                     |> expressionTypeInfer
                         { declarationTypes = context.declarationTypes
                         , moduleOriginLookup = context.moduleOriginLookup
-                        , partiallyInferredDeclarationTypes =
+                        , locallyIntroducedDeclarationTypes =
                             context.partiallyInferredDeclarationTypes
                         , containingDeclarationName = context.containingDeclarationName
                         , path = "result" :: context.path
@@ -5684,7 +5654,7 @@ expressionReferenceTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
     , path : List String
@@ -5742,23 +5712,22 @@ expressionReferenceTypeInfer context expressionReference =
                                 }
 
                         Nothing ->
-                            case context.partiallyInferredDeclarationTypes |> FastDict.get expressionReference.name of
+                            case context.locallyIntroducedDeclarationTypes |> FastDict.get expressionReference.name of
                                 Nothing ->
                                     Nothing
 
                                 Just partiallyInferredType ->
                                     let
-                                        partiallyInferredTypeVariableNameToInContext : TypeVariableFromContext -> TypeVariableFromContext
-                                        partiallyInferredTypeVariableNameToInContext ( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) =
-                                            ( partiallyInferredTypeVariableContext
-                                                ++ context.path
-                                            , partiallyInferredTypeVariableName
-                                            )
-
                                         type_ : Type TypeVariableFromContext
                                         type_ =
                                             partiallyInferredType
-                                                |> typeMapVariables partiallyInferredTypeVariableNameToInContext
+                                                |> typeMapVariables
+                                                    (\( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) ->
+                                                        ( partiallyInferredTypeVariableContext
+                                                            ++ context.path
+                                                        , partiallyInferredTypeVariableName
+                                                        )
+                                                    )
                                     in
                                     Just
                                         { node =
@@ -6325,7 +6294,7 @@ letDeclarationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
@@ -6398,7 +6367,7 @@ letFunctionOrValueDeclarationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
@@ -6487,8 +6456,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 , path = "letDeclarationResult" :: context.path
                                 , declarationTypes = context.declarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
-                                , partiallyInferredDeclarationTypes =
-                                    context.partiallyInferredDeclarationTypes
+                                , locallyIntroducedDeclarationTypes =
+                                    context.locallyIntroducedDeclarationTypes
                                         |> -- elm declarations do not allow "polymorphic recursion"
                                            -- https://github.com/elm/compiler/issues/2275
                                            -- so instead of putting it in partiallyInferredDeclarationTypes
@@ -6623,8 +6592,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                         , path = "letDeclarationResult" :: context.path
                                         , declarationTypes = context.declarationTypes
                                         , moduleOriginLookup = context.moduleOriginLookup
-                                        , partiallyInferredDeclarationTypes =
-                                            context.partiallyInferredDeclarationTypes
+                                        , locallyIntroducedDeclarationTypes =
+                                            context.locallyIntroducedDeclarationTypes
                                                 |> -- elm declarations do not allow "polymorphic recursion"
                                                    -- https://github.com/elm/compiler/issues/2275
                                                    -- so instead of putting it in partiallyInferredDeclarationTypes
@@ -6682,7 +6651,7 @@ expressionInfixOperationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
-    , partiallyInferredDeclarationTypes :
+    , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
@@ -7464,7 +7433,7 @@ expressionContextToInPath :
         { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         , locallyIntroducedExpressionVariables :
             FastDict.Dict String (Type TypeVariableFromContext)
-        , partiallyInferredDeclarationTypes :
+        , locallyIntroducedDeclarationTypes :
             FastDict.Dict String (Type TypeVariableFromContext)
         , containingDeclarationName : String
         , path : List String
@@ -7474,7 +7443,7 @@ expressionContextToInPath :
         { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         , locallyIntroducedExpressionVariables :
             FastDict.Dict String (Type TypeVariableFromContext)
-        , partiallyInferredDeclarationTypes :
+        , locallyIntroducedDeclarationTypes :
             FastDict.Dict String (Type TypeVariableFromContext)
         , containingDeclarationName : String
         , path : List String
@@ -7486,8 +7455,8 @@ expressionContextToInPath innermostPathDescription context =
     , declarationTypes = context.declarationTypes
     , locallyIntroducedExpressionVariables =
         context.locallyIntroducedExpressionVariables
-    , partiallyInferredDeclarationTypes =
-        context.partiallyInferredDeclarationTypes
+    , locallyIntroducedDeclarationTypes =
+        context.locallyIntroducedDeclarationTypes
     , moduleOriginLookup = context.moduleOriginLookup
     }
 
@@ -7812,7 +7781,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                         -- we treat it as an introduced variable (sharing the same type variables)
                                                         parametersInferred.introducedExpressionVariables
                                                             |> FastDict.insert name (TypeVariable fullTypeVariable)
-                                            , partiallyInferredDeclarationTypes =
+                                            , locallyIntroducedDeclarationTypes =
                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
                                                     |> FastDict.remove name
                                             , containingDeclarationName = name
@@ -7884,7 +7853,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             , locallyIntroducedExpressionVariables =
                                                                 parametersInferredSubstituted
                                                                     |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
-                                                            , partiallyInferredDeclarationTypes =
+                                                            , locallyIntroducedDeclarationTypes =
                                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
                                                             , containingDeclarationName = name
                                                             , path = [ "declarationResult", name ]
