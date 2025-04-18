@@ -2677,6 +2677,104 @@ suite =
                             )
                         )
             )
+        , Test.test "local type alias used as comparable: type alias L = List String ; lt : L -> Bool ; lt l = l < l"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "lt"
+                            , arguments =
+                                [ Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.VarPattern "l")
+                                ]
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.OperatorApplication
+                                        "<"
+                                        Elm.Syntax.Infix.Non
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "l")
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "l")
+                                        )
+                                    )
+                            }
+                  , signature =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                { name = Elm.Syntax.Node.empty "lt"
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "L" ))
+                                                    []
+                                                )
+                                            )
+                                            (Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "Bool" ))
+                                                    []
+                                                )
+                                            )
+                                        )
+                                }
+                            )
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "L"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "List" ))
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            ]
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = []
+                                                , name = "L"
+                                                , arguments = []
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Bool"
+                                                , arguments = []
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "recursive, too strictly annotated function: addAbs : Int -> Int -> Int ; addAbs toAdd base = if toAdd <= 0 then base else 1 + addAbs (toAdd - 1) base"
             (\() ->
                 [ { declaration =
