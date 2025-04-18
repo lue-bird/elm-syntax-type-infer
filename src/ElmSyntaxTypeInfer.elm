@@ -2864,19 +2864,44 @@ typeNotVariableUnify declarationTypes a b =
                                 )
 
                         TypeUnit ->
-                            Err "record cannot be unified with types other than record or record extension"
+                            Err
+                                ("record "
+                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeUnit |> typeNotVariableToInfoString)
+                                )
 
-                        TypeConstruct _ ->
-                            Err "record cannot be unified with types other than record or record extension"
+                        TypeConstruct bTypeConstruct ->
+                            Err
+                                ("record "
+                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTuple _ ->
-                            Err "record cannot be unified with types other than record or record extension"
+                        TypeTuple bParts ->
+                            Err
+                                ("record "
+                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeTuple bParts |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTriple _ ->
-                            Err "record cannot be unified with types other than record or record extension"
+                        TypeTriple bParts ->
+                            Err
+                                ("record "
+                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeTriple bParts |> typeNotVariableToInfoString)
+                                )
 
-                        TypeFunction _ ->
-                            Err "record cannot be unified with types other than record or record extension"
+                        TypeFunction bTypeFunction ->
+                            Err
+                                ("record "
+                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
+                                )
 
                 TypeRecordExtension aRecordExtension ->
                     case b of
@@ -2905,19 +2930,44 @@ typeNotVariableUnify declarationTypes a b =
                                 )
 
                         TypeUnit ->
-                            Err "record extension cannot be unified with types other than record or record extension"
+                            Err
+                                ("record extension "
+                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeUnit |> typeNotVariableToInfoString)
+                                )
 
-                        TypeConstruct _ ->
-                            Err "record extension cannot be unified with types other than record or record extension"
+                        TypeConstruct bTypeConstruct ->
+                            Err
+                                ("record extension "
+                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTuple _ ->
-                            Err "record extension cannot be unified with types other than record or record extension"
+                        TypeTuple bParts ->
+                            Err
+                                ("record extension "
+                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeTuple bParts |> typeNotVariableToInfoString)
+                                )
 
-                        TypeTriple _ ->
-                            Err "record extension cannot be unified with types other than record or record extension"
+                        TypeTriple bParts ->
+                            Err
+                                ("record extension "
+                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeTriple bParts |> typeNotVariableToInfoString)
+                                )
 
-                        TypeFunction _ ->
-                            Err "record extension cannot be unified with types other than record or record extension"
+                        TypeFunction bTypeFunction ->
+                            Err
+                                ("record extension "
+                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than record or record extension, found: "
+                                    ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
+                                )
 
                 TypeFunction aFunction ->
                     case b of
@@ -3005,79 +3055,50 @@ typeUnifyWithTryToExpandTypeConstruct :
                 , type_ : Type TypeVariableFromContext
                 }
             )
-typeUnifyWithTryToExpandTypeConstruct declarationTypes toExpand b =
-    case toExpand of
-        TypeConstruct typeConstructToExpand ->
-            case declarationTypes |> FastDict.get typeConstructToExpand.moduleOrigin of
+typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
+    case aToExpand of
+        TypeConstruct aTypeConstructToExpand ->
+            case declarationTypes |> FastDict.get aTypeConstructToExpand.moduleOrigin of
                 Nothing ->
                     Just
                         (Err
                             ("could not find declaration types in the origin module of the type construct "
                                 ++ qualifiedToString
-                                    { qualification = typeConstructToExpand.moduleOrigin
-                                    , name = typeConstructToExpand.name
+                                    { qualification = aTypeConstructToExpand.moduleOrigin
+                                    , name = aTypeConstructToExpand.name
                                     }
                             )
                         )
 
                 Just aOriginModuleTypes ->
-                    case aOriginModuleTypes.typeAliases |> FastDict.get typeConstructToExpand.name of
+                    case aOriginModuleTypes.typeAliases |> FastDict.get aTypeConstructToExpand.name of
                         Nothing ->
                             Nothing
 
-                        Just originAliasDeclaration ->
+                        Just aOriginAliasDeclaration ->
                             Result.andThen
-                                (\typeConstructExpandedWithArguments ->
-                                    Result.andThen
-                                        (\typeUnified ->
-                                            Result.map
-                                                (\fullSubstitutions ->
-                                                    { substitutions = fullSubstitutions
-                                                    , type_ = typeUnified.type_
-                                                    }
-                                                )
-                                                (variableSubstitutionsMerge declarationTypes
-                                                    typeConstructExpandedWithArguments.substitutions
-                                                    typeUnified.substitutions
-                                                )
-                                        )
-                                        (typeUnify declarationTypes
-                                            typeConstructExpandedWithArguments.type_
-                                            (TypeNotVariable b)
-                                        )
+                                (\constructedAliasedType ->
+                                    typeUnify declarationTypes
+                                        constructedAliasedType
+                                        (TypeNotVariable b)
                                 )
                                 (List.map2
                                     (\parameterName argument ->
                                         { variable = ( [], parameterName ), type_ = argument }
                                     )
-                                    originAliasDeclaration.parameters
-                                    typeConstructToExpand.arguments
+                                    aOriginAliasDeclaration.parameters
+                                    aTypeConstructToExpand.arguments
                                     |> listFoldlWhileOkFrom
-                                        { type_ =
-                                            originAliasDeclaration.type_
-                                                |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
-                                        , substitutions = variableSubstitutionsNone
-                                        }
-                                        (\substitution soFar ->
-                                            Result.andThen
-                                                (\typeSubstituted ->
-                                                    Result.map
-                                                        (\substitutionsAfterSubstitution ->
-                                                            { type_ = typeSubstituted.type_
-                                                            , substitutions = substitutionsAfterSubstitution
-                                                            }
-                                                        )
-                                                        (variableSubstitutionsMerge declarationTypes
-                                                            typeSubstituted.substitutions
-                                                            soFar.substitutions
-                                                        )
-                                                )
-                                                (soFar.type_
-                                                    |> typeSubstituteVariable declarationTypes
-                                                        { variable = substitution.variable
-                                                        , type_ = substitution.type_
-                                                        }
-                                                )
+                                        (aOriginAliasDeclaration.type_
+                                            |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                        )
+                                        (\substitution constructedAliasedTypeSoFar ->
+                                            constructedAliasedTypeSoFar
+                                                |> typeApplyVariableSubstitutions declarationTypes
+                                                    (variableSubstitutionsFromVariableToType
+                                                        substitution.variable
+                                                        substitution.type_
+                                                    )
                                         )
                                 )
                                 |> Just
