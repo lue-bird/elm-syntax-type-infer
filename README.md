@@ -58,7 +58,6 @@ exampleModuleOriginLookup =
 
 ## TODO
 
--   add type and origin module and type to expression.infix operation
 -   add typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable _literally everywhere_
 -   add more tests
 -   apply let function declaration parameter unification with annotated type much, much earlier

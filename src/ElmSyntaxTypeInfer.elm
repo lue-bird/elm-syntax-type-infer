@@ -3236,7 +3236,10 @@ type Expression type_
             Elm.Syntax.ModuleName.ModuleName
         , name : String
         }
-    | ExpressionOperatorFunction String
+    | ExpressionOperatorFunction
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        , symbol : String
+        }
     | ExpressionRecordAccessFunction String
     | ExpressionNegation (TypedNode (Expression type_) type_)
     | ExpressionParenthesized (TypedNode (Expression type_) type_)
@@ -3255,7 +3258,11 @@ type Expression type_
         , fieldName : String
         }
     | ExpressionInfixOperation
-        { symbol : String
+        { operator :
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , symbol : String
+            , type_ : type_
+            }
         , left : TypedNode (Expression type_) type_
         , right : TypedNode (Expression type_) type_
         }
@@ -4281,14 +4288,19 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
 
         Elm.Syntax.Expression.PrefixOperator operator ->
             Result.map
-                (\type_ ->
+                (\operatorInferred ->
                     { node =
                         { range = fullRange
-                        , value = ExpressionOperatorFunction operator
-                        , type_ = type_
+                        , value =
+                            ExpressionOperatorFunction
+                                { symbol = operator
+                                , moduleOrigin = operatorInferred.moduleOrigin
+                                }
+                        , type_ = operatorInferred.type_
                         }
                     , substitutions = variableSubstitutionsNone
-                    , introducedTypeVariables = type_ |> typeContainedVariables
+                    , introducedTypeVariables =
+                        operatorInferred.type_ |> typeContainedVariables
                     }
                 )
                 (operatorFunctionType
@@ -6690,7 +6702,11 @@ expressionInfixOperationTypeInfer context infixOperation =
                                 { range = infixOperation.fullRange
                                 , value =
                                     ExpressionInfixOperation
-                                        { symbol = infixOperation.operator
+                                        { operator =
+                                            { type_ = operatorAsFunctionType.type_
+                                            , moduleOrigin = operatorAsFunctionType.moduleOrigin
+                                            , symbol = infixOperation.operator
+                                            }
                                         , left = leftInferred.node
                                         , right = rightInferred.node
                                         }
@@ -6710,7 +6726,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                         )
                 )
                 (typeUnify context.declarationTypes
-                    operatorAsFunctionType
+                    operatorAsFunctionType.type_
                     (TypeNotVariable
                         (TypeFunction
                             { input = leftInferred.node.type_
@@ -6727,7 +6743,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                 )
         )
         (operatorFunctionType
-            { path = "operation" :: context.path
+            { path = "operator" :: context.path
             , moduleOriginLookup = context.moduleOriginLookup
             }
             infixOperation.operator
@@ -6749,7 +6765,12 @@ expressionInfixOperationTypeInfer context infixOperation =
 operatorFunctionType :
     { path : List String, moduleOriginLookup : ModuleOriginLookup }
     -> String
-    -> Result String (Type TypeVariableFromContext)
+    ->
+        Result
+            String
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , type_ : Type TypeVariableFromContext
+            }
 operatorFunctionType context operator =
     case operator of
         "|>" ->
@@ -6763,25 +6784,27 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "b" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = a
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input =
-                                        TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = b
-                                                }
-                                            )
-                                    , output = b
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = a
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input =
+                                            TypeNotVariable
+                                                (TypeFunction
+                                                    { input = a
+                                                    , output = b
+                                                    }
+                                                )
+                                        , output = b
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "<|" ->
             let
@@ -6794,25 +6817,27 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "b" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = a
-                                    , output = b
-                                    }
-                                )
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = a
-                                    , output = b
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = a
+                                        , output = b
+                                        }
+                                    )
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = a
+                                        , output = b
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         ">>" ->
             let
@@ -6829,37 +6854,39 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "c" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = a
-                                    , output = b
-                                    }
-                                )
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input =
-                                        TypeNotVariable
-                                            (TypeFunction
-                                                { input = b
-                                                , output = c
-                                                }
-                                            )
-                                    , output =
-                                        TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = c
-                                                }
-                                            )
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = a
+                                        , output = b
+                                        }
+                                    )
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input =
+                                            TypeNotVariable
+                                                (TypeFunction
+                                                    { input = b
+                                                    , output = c
+                                                    }
+                                                )
+                                        , output =
+                                            TypeNotVariable
+                                                (TypeFunction
+                                                    { input = a
+                                                    , output = c
+                                                    }
+                                                )
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "<<" ->
             let
@@ -6876,37 +6903,39 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "c" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = b
-                                    , output = c
-                                    }
-                                )
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input =
-                                        TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = b
-                                                }
-                                            )
-                                    , output =
-                                        TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = c
-                                                }
-                                            )
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = b
+                                        , output = c
+                                        }
+                                    )
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input =
+                                            TypeNotVariable
+                                                (TypeFunction
+                                                    { input = a
+                                                    , output = b
+                                                    }
+                                                )
+                                        , output =
+                                            TypeNotVariable
+                                                (TypeFunction
+                                                    { input = a
+                                                    , output = c
+                                                    }
+                                                )
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "++" ->
             let
@@ -6915,19 +6944,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "appendable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = appendable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = appendable
-                                    , output = appendable
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = appendable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = appendable
+                                        , output = appendable
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "==" ->
             let
@@ -6936,19 +6967,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "equatable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = equatable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = equatable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = equatable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = equatable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "/=" ->
             let
@@ -6957,19 +6990,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "equatable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = equatable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = equatable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = equatable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = equatable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "::" ->
             let
@@ -6978,19 +7013,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "element" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = a
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeListList a
-                                    , output = typeListList a
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameList
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = a
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeListList a
+                                        , output = typeListList a
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "*" ->
             let
@@ -6999,19 +7036,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "number" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = number
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = number
-                                    , output = number
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = number
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = number
+                                        , output = number
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "+" ->
             let
@@ -7020,19 +7059,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "number" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = number
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = number
-                                    , output = number
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = number
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = number
+                                        , output = number
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "-" ->
             let
@@ -7041,35 +7082,39 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "number" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = number
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = number
-                                    , output = number
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = number
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = number
+                                        , output = number
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "/" ->
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = typeBasicsFloat
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeBasicsFloat
-                                    , output = typeBasicsFloat
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = typeBasicsFloat
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeBasicsFloat
+                                        , output = typeBasicsFloat
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "^" ->
             let
@@ -7078,19 +7123,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "number" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = number
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = number
-                                    , output = number
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = number
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = number
+                                        , output = number
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "<=" ->
             let
@@ -7099,19 +7146,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "comparable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = comparable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = comparable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = comparable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = comparable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         ">=" ->
             let
@@ -7120,19 +7169,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "comparable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = comparable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = comparable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = comparable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = comparable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         ">" ->
             let
@@ -7141,19 +7192,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "comparable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = comparable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = comparable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = comparable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = comparable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "<" ->
             let
@@ -7162,67 +7215,75 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "comparable" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = comparable
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = comparable
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = comparable
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = comparable
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "//" ->
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = typeBasicsInt
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeBasicsInt
-                                    , output = typeBasicsInt
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = typeBasicsInt
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeBasicsInt
+                                        , output = typeBasicsInt
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "&&" ->
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = typeBasicsBool
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeBasicsBool
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = typeBasicsBool
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeBasicsBool
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "||" ->
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = typeBasicsBool
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeBasicsBool
-                                    , output = typeBasicsBool
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameBasics
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = typeBasicsBool
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeBasicsBool
+                                        , output = typeBasicsBool
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "|." ->
             Ok
@@ -7244,18 +7305,21 @@ operatorFunctionType context operator =
                         ignore =
                             TypeVariable ( context.path, "ignore" )
                     in
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = typeParserAdvancedParser varContext problem keep
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeParserAdvancedParser varContext problem ignore
-                                        , output = typeParserAdvancedParser varContext problem keep
-                                        }
-                                    )
-                            }
-                        )
+                    { moduleOrigin = moduleNameParserAdvanced
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input = typeParserAdvancedParser varContext problem keep
+                                , output =
+                                    TypeNotVariable
+                                        (TypeFunction
+                                            { input = typeParserAdvancedParser varContext problem ignore
+                                            , output = typeParserAdvancedParser varContext problem keep
+                                            }
+                                        )
+                                }
+                            )
+                    }
 
                  else
                     let
@@ -7267,18 +7331,21 @@ operatorFunctionType context operator =
                         ignore =
                             TypeVariable ( context.path, "ignore" )
                     in
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = typeParserParser keep
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeParserParser ignore
-                                        , output = typeParserParser keep
-                                        }
-                                    )
-                            }
-                        )
+                    { moduleOrigin = moduleNameParser
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input = typeParserParser keep
+                                , output =
+                                    TypeNotVariable
+                                        (TypeFunction
+                                            { input = typeParserParser ignore
+                                            , output = typeParserParser keep
+                                            }
+                                        )
+                                }
+                            )
+                    }
                 )
 
         "|=" ->
@@ -7301,28 +7368,31 @@ operatorFunctionType context operator =
                         b =
                             TypeVariable ( context.path, "ignore" )
                     in
-                    TypeNotVariable
-                        (TypeFunction
-                            { input =
-                                typeParserAdvancedParser
-                                    varContext
-                                    problem
-                                    (TypeNotVariable
+                    { moduleOrigin = moduleNameParserAdvanced
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input =
+                                    typeParserAdvancedParser
+                                        varContext
+                                        problem
+                                        (TypeNotVariable
+                                            (TypeFunction
+                                                { input = a
+                                                , output = b
+                                                }
+                                            )
+                                        )
+                                , output =
+                                    TypeNotVariable
                                         (TypeFunction
-                                            { input = a
-                                            , output = b
+                                            { input = typeParserAdvancedParser varContext problem a
+                                            , output = typeParserAdvancedParser varContext problem b
                                             }
                                         )
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeParserAdvancedParser varContext problem a
-                                        , output = typeParserAdvancedParser varContext problem b
-                                        }
-                                    )
-                            }
-                        )
+                                }
+                            )
+                    }
 
                  else
                     let
@@ -7334,26 +7404,29 @@ operatorFunctionType context operator =
                         b =
                             TypeVariable ( context.path, "ignore" )
                     in
-                    TypeNotVariable
-                        (TypeFunction
-                            { input =
-                                typeParserParser
-                                    (TypeNotVariable
+                    { moduleOrigin = moduleNameParser
+                    , type_ =
+                        TypeNotVariable
+                            (TypeFunction
+                                { input =
+                                    typeParserParser
+                                        (TypeNotVariable
+                                            (TypeFunction
+                                                { input = a
+                                                , output = b
+                                                }
+                                            )
+                                        )
+                                , output =
+                                    TypeNotVariable
                                         (TypeFunction
-                                            { input = a
-                                            , output = b
+                                            { input = typeParserParser a
+                                            , output = typeParserParser b
                                             }
                                         )
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeParserParser a
-                                        , output = typeParserParser b
-                                        }
-                                    )
-                            }
-                        )
+                                }
+                            )
+                    }
                 )
 
         "</>" ->
@@ -7371,19 +7444,21 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "c" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input = typeUrlParserParser a b
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeUrlParserParser b c
-                                    , output = typeUrlParserParser a c
-                                    }
-                                )
-                        }
-                    )
-                )
+                { moduleOrigin = moduleNameUrlParser
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = typeUrlParserParser a b
+                            , output =
+                                TypeNotVariable
+                                    (TypeFunction
+                                        { input = typeUrlParserParser b c
+                                        , output = typeUrlParserParser a c
+                                        }
+                                    )
+                            }
+                        )
+                }
 
         "<?>" ->
             let
@@ -7400,31 +7475,58 @@ operatorFunctionType context operator =
                     TypeVariable ( context.path, "query" )
             in
             Ok
-                (TypeNotVariable
-                    (TypeFunction
-                        { input =
-                            typeUrlParserParser
-                                a
-                                (TypeNotVariable
+                { moduleOrigin = moduleNameUrlParser
+                , type_ =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input =
+                                typeUrlParserParser
+                                    a
+                                    (TypeNotVariable
+                                        (TypeFunction
+                                            { input = query
+                                            , output = b
+                                            }
+                                        )
+                                    )
+                            , output =
+                                TypeNotVariable
                                     (TypeFunction
-                                        { input = query
-                                        , output = b
+                                        { input = typeUrlParserQueryParser query
+                                        , output = typeUrlParserParser a b
                                         }
                                     )
-                                )
-                        , output =
-                            TypeNotVariable
-                                (TypeFunction
-                                    { input = typeUrlParserQueryParser query
-                                    , output = typeUrlParserParser a b
-                                    }
-                                )
-                        }
-                    )
-                )
+                            }
+                        )
+                }
 
         unknownOperator ->
             Err ("unknown operator (" ++ unknownOperator ++ ")")
+
+
+moduleNameBasics : Elm.Syntax.ModuleName.ModuleName
+moduleNameBasics =
+    [ "Basics" ]
+
+
+moduleNameList : Elm.Syntax.ModuleName.ModuleName
+moduleNameList =
+    [ "List" ]
+
+
+moduleNameParserAdvanced : Elm.Syntax.ModuleName.ModuleName
+moduleNameParserAdvanced =
+    [ "Parser", "Advanced" ]
+
+
+moduleNameParser : Elm.Syntax.ModuleName.ModuleName
+moduleNameParser =
+    [ "Parser" ]
+
+
+moduleNameUrlParser : Elm.Syntax.ModuleName.ModuleName
+moduleNameUrlParser =
+    [ "Url", "Parser" ]
 
 
 expressionContextToInPath :
@@ -9733,8 +9835,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionInfixOperation expressionInfixOperation ->
-            resultAndThen3
-                (\typeSubstituted leftSubstituted rightSubstituted ->
+            resultAndThen4
+                (\typeSubstituted operatorTypeSubstituted leftSubstituted rightSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -9742,7 +9844,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 { range = expressionTypedNode.range
                                 , value =
                                     ExpressionInfixOperation
-                                        { symbol = expressionInfixOperation.symbol
+                                        { operator =
+                                            { symbol = expressionInfixOperation.operator.symbol
+                                            , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
+                                            , type_ = operatorTypeSubstituted.type_
+                                            }
                                         , left = leftSubstituted.node
                                         , right = rightSubstituted.node
                                         }
@@ -9750,11 +9856,16 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge3 declarationTypes
+                        (variableSubstitutionsMerge4 declarationTypes
+                            operatorTypeSubstituted.substitutions
                             leftSubstituted.substitutions
                             rightSubstituted.substitutions
                             typeSubstituted.substitutions
                         )
+                )
+                (expressionTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
@@ -10576,7 +10687,13 @@ expressionMapTypes typeChange expression =
 
         ExpressionInfixOperation expressionInfixOperation ->
             ExpressionInfixOperation
-                { symbol = expressionInfixOperation.symbol
+                { operator =
+                    { symbol = expressionInfixOperation.operator.symbol
+                    , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
+                    , type_ =
+                        expressionInfixOperation.operator.type_
+                            |> typeChange
+                    }
                 , left =
                     expressionInfixOperation.left
                         |> expressionTypedNodeMapTypes typeChange
