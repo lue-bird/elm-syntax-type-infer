@@ -1967,6 +1967,111 @@ suite =
                             )
                         )
             )
+        , Test.test "exposed member and annotated let declaration with the same name: let e : String ; e = \"\" ; in e"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { documentation = Nothing
+                                , signature =
+                                    Just
+                                        (Elm.Syntax.Node.empty
+                                            { name = Elm.Syntax.Node.empty "e"
+                                            , typeAnnotation =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "String" ))
+                                                        []
+                                                    )
+                                            }
+                                        )
+                                , declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "e"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Literal "")
+                                        }
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "e")
+                    }
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "String" ]
+                                    , name = "String"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "exposed member and un-annotated let declaration with the same name: let e = \"\" ; in e"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetFunction
+                                { documentation = Nothing
+                                , signature = Nothing
+                                , declaration =
+                                    Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "e"
+                                        , arguments = []
+                                        , expression =
+                                            Elm.Syntax.Node.empty
+                                                (Elm.Syntax.Expression.Literal "")
+                                        }
+                                }
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "e")
+                    }
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingProcess
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "String" ]
+                                    , name = "String"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , let
             moduleOriginLookupImportingId : ElmSyntaxTypeInfer.ModuleOriginLookup
             moduleOriginLookupImportingId =
