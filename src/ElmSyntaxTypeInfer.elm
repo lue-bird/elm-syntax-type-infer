@@ -10928,7 +10928,7 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
 
 
 {-| @deprecated adopt safer alternatives like in
-expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedVariableContainedTypeVariables
+typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
 -}
 variableSubstitutionsSplitOffThoseFromIntroducedVariableContainedTypeVariables :
     ModuleLevelDeclarationTypesAvailableInModule
