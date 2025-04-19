@@ -3579,7 +3579,10 @@ type LetDeclaration type_
             Maybe
                 { range : Elm.Syntax.Range.Range
                 , nameRange : Elm.Syntax.Range.Range
-                , annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
+                , annotationType :
+                    -- variables names in here might not correspond
+                    -- with those in .type_
+                    Elm.Syntax.TypeAnnotation.TypeAnnotation
                 , annotationTypeRange : Elm.Syntax.Range.Range
                 }
         , nameRange : Elm.Syntax.Range.Range
@@ -8104,7 +8107,11 @@ valueAndFunctionDeclarations :
             String
             (FastDict.Dict
                 String
-                { nameRange : Elm.Syntax.Range.Range
+                { parameters :
+                    List (TypedNode (Pattern (Type String)) (Type String))
+                , result : TypedNode (Expression (Type String)) (Type String)
+                , type_ : Type String
+                , nameRange : Elm.Syntax.Range.Range
                 , documentation :
                     Maybe
                         { content : String
@@ -8115,11 +8122,10 @@ valueAndFunctionDeclarations :
                         { range : Elm.Syntax.Range.Range
                         , nameRange : Elm.Syntax.Range.Range
                         , annotationTypeRange : Elm.Syntax.Range.Range
+                        , -- variables names in here might not correspond
+                          -- with those in .type_
+                          annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
                         }
-                , parameters :
-                    List (TypedNode (Pattern (Type String)) (Type String))
-                , result : TypedNode (Expression (Type String)) (Type String)
-                , type_ : Type String
                 }
             )
 valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarations =
@@ -8452,6 +8458,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                                     Just
                                                                                         { range = signatureRange
                                                                                         , nameRange = signature.name |> Elm.Syntax.Node.range
+                                                                                        , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
                                                                                         , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
                                                                                         }
                                                                                 , result = substituted.node.result
@@ -8696,6 +8703,9 @@ type alias ValueOrFunctionDeclarationInfo type_ =
         Maybe
             { range : Elm.Syntax.Range.Range
             , nameRange : Elm.Syntax.Range.Range
+            , -- variables names in here might not correspond
+              -- with those in .type_
+              annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
             , annotationTypeRange : Elm.Syntax.Range.Range
             }
     , parameters :
@@ -10064,15 +10074,7 @@ declarationValueOrFunctionInfoMapTypeVariables :
 declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOrFunctionSoFar =
     { nameRange = declarationValueOrFunctionSoFar.nameRange
     , documentation = declarationValueOrFunctionSoFar.documentation
-    , signature =
-        declarationValueOrFunctionSoFar.signature
-            |> Maybe.map
-                (\signature ->
-                    { range = signature.range
-                    , annotationTypeRange = signature.annotationTypeRange
-                    , nameRange = signature.nameRange
-                    }
-                )
+    , signature = declarationValueOrFunctionSoFar.signature
     , parameters =
         declarationValueOrFunctionSoFar.parameters
             |> List.map
@@ -10083,7 +10085,7 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
         declarationValueOrFunctionSoFar.result
             |> expressionTypedNodeMapTypeVariables variableChange
     , type_ =
-        -- reconstructing the function is probably faster
+        -- TODO instead reconstruct the function
         declarationValueOrFunctionSoFar.type_
             |> typeMapVariables variableChange
     }
