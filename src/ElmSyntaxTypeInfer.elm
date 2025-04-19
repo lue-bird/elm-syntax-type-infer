@@ -5454,14 +5454,14 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                 [] ->
                     Err "case-of without case branches is invalid syntax"
 
-                ( case0Pattern, case0Result ) :: case1Up ->
+                case0 :: case1Up ->
                     resultAndThen3
                         (\matchedInferred case0Inferred case1UpInferred ->
                             Result.andThen
                                 (\unifiedTypes ->
                                     Result.andThen
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
+                                        (\allIndividualSubstitutions ->
+                                            { substitutions = allIndividualSubstitutions
                                             , node =
                                                 { range = fullRange
                                                 , value =
@@ -5491,51 +5491,52 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             case1UpInferred.substitutions
                                         )
                                 )
-                                (Result.andThen
-                                    (\matchedExpressionCase0PatternUnifiedType ->
-                                        case1UpInferred.nodesReverse
-                                            |> listFoldlWhileOkFrom
+                                (case1UpInferred.nodesReverse
+                                    |> listFoldlWhileOkFromResult
+                                        (Result.map
+                                            (\matchedExpressionCase0PatternUnifiedType ->
                                                 { resultType = case0Inferred.node.result.type_
                                                 , matchedType = matchedExpressionCase0PatternUnifiedType.type_
                                                 , substitutions = matchedExpressionCase0PatternUnifiedType.substitutions
                                                 }
-                                                (\caseInferred soFar ->
-                                                    resultAndThen2
-                                                        (\matchedTypeUnifiedWithCasePattern resultTypeUnifiedWithCaseResult ->
-                                                            Result.map
-                                                                (\substitutionsWithCase ->
-                                                                    { substitutions = substitutionsWithCase
-                                                                    , matchedType = matchedTypeUnifiedWithCasePattern.type_
-                                                                    , resultType = resultTypeUnifiedWithCaseResult.type_
-                                                                    }
-                                                                )
-                                                                (variableSubstitutionsMerge3 context.declarationTypes
-                                                                    soFar.substitutions
-                                                                    matchedTypeUnifiedWithCasePattern.substitutions
-                                                                    resultTypeUnifiedWithCaseResult.substitutions
-                                                                )
+                                            )
+                                            (typeUnify context.declarationTypes
+                                                matchedInferred.node.type_
+                                                case0Inferred.node.pattern.type_
+                                            )
+                                        )
+                                        (\caseInferred soFar ->
+                                            resultAndThen2
+                                                (\matchedTypeUnifiedWithCasePattern resultTypeUnifiedWithCaseResult ->
+                                                    Result.map
+                                                        (\substitutionsWithCase ->
+                                                            { substitutions = substitutionsWithCase
+                                                            , matchedType = matchedTypeUnifiedWithCasePattern.type_
+                                                            , resultType = resultTypeUnifiedWithCaseResult.type_
+                                                            }
                                                         )
-                                                        (typeUnify context.declarationTypes
-                                                            soFar.matchedType
-                                                            caseInferred.pattern.type_
-                                                        )
-                                                        (typeUnify context.declarationTypes
-                                                            soFar.resultType
-                                                            caseInferred.result.type_
+                                                        (variableSubstitutionsMerge3 context.declarationTypes
+                                                            soFar.substitutions
+                                                            matchedTypeUnifiedWithCasePattern.substitutions
+                                                            resultTypeUnifiedWithCaseResult.substitutions
                                                         )
                                                 )
-                                    )
-                                    (typeUnify context.declarationTypes
-                                        matchedInferred.node.type_
-                                        case0Inferred.node.pattern.type_
-                                    )
+                                                (typeUnify context.declarationTypes
+                                                    soFar.matchedType
+                                                    caseInferred.pattern.type_
+                                                )
+                                                (typeUnify context.declarationTypes
+                                                    soFar.resultType
+                                                    caseInferred.result.type_
+                                                )
+                                        )
                                 )
                         )
                         (caseOf.expression
                             |> expressionTypeInfer
                                 (context |> expressionContextToInPath "matched")
                         )
-                        ({ pattern = case0Pattern, result = case0Result }
+                        (case0
                             |> expressionCaseTypeInfer
                                 { declarationTypes = context.declarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
@@ -5554,13 +5555,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 , introducedTypeVariables = FastSet.empty
                                 , nodesReverse = []
                                 }
-                                (\( casePattern, caseResult ) soFar ->
-                                    let
-                                        casePath : List String
-                                        casePath =
-                                            ("case" ++ (soFar.index |> String.fromInt))
-                                                :: context.path
-                                    in
+                                (\case_ soFar ->
                                     Result.andThen
                                         (\caseInferred ->
                                             Result.map
@@ -5579,14 +5574,16 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     caseInferred.substitutions
                                                 )
                                         )
-                                        ({ pattern = casePattern, result = caseResult }
+                                        (case_
                                             |> expressionCaseTypeInfer
                                                 { declarationTypes = context.declarationTypes
                                                 , partiallyInferredDeclarationTypes =
                                                     context.locallyIntroducedDeclarationTypes
                                                 , moduleOriginLookup = context.moduleOriginLookup
                                                 , containingDeclarationName = context.containingDeclarationName
-                                                , path = "result" :: casePath
+                                                , path =
+                                                    ("case" ++ (soFar.index |> String.fromInt))
+                                                        :: context.path
                                                 , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
                                                 }
                                         )
@@ -5838,9 +5835,9 @@ expressionCaseTypeInfer :
     , moduleOriginLookup : ModuleOriginLookup
     }
     ->
-        { pattern : Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern
-        , result : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
-        }
+        ( Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern
+        , Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
+        )
     ->
         Result
             String
@@ -5857,7 +5854,7 @@ expressionCaseTypeInfer :
             , substitutions : VariableSubstitutions
             , introducedTypeVariables : FastSet.Set TypeVariableFromContext
             }
-expressionCaseTypeInfer context syntaxCase =
+expressionCaseTypeInfer context ( casePattern, caseResult ) =
     Result.andThen
         (\patternInferred ->
             Result.andThen
@@ -5865,10 +5862,10 @@ expressionCaseTypeInfer context syntaxCase =
                     { substitutions = variableSubstitutionsNone
                     , introducedTypeVariables =
                         FastSet.union
-                            resultInferred.introducedTypeVariables
                             (patternInferred.type_
                                 |> typeContainedVariables
                             )
+                            resultInferred.introducedTypeVariables
                     }
                         |> typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
                             { declarationTypes = context.declarationTypes
@@ -5891,7 +5888,7 @@ expressionCaseTypeInfer context syntaxCase =
                             }
                             resultInferred.substitutions
                 )
-                (syntaxCase.result
+                (caseResult
                     |> expressionTypeInfer
                         { declarationTypes = context.declarationTypes
                         , moduleOriginLookup = context.moduleOriginLookup
@@ -5905,7 +5902,7 @@ expressionCaseTypeInfer context syntaxCase =
                         }
                 )
         )
-        (syntaxCase.pattern
+        (casePattern
             |> patternTypeInfer
                 { declarationTypes = context.declarationTypes
                 , moduleOriginLookup = context.moduleOriginLookup
@@ -8743,43 +8740,27 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
         globalTypeVariableDisambiguationLookup =
             typeVariablesFromContextToDisambiguationLookup
                 (declarationValueOrFunctionInfo
-                    |> declarationValueOrFunctionInfoContainedGlobalTypeVariables
-                    |> FastSet.map
-                        (\( context, name ) ->
-                            ( context |> List.reverse |> List.drop 1
-                            , name
-                            )
-                        )
+                    |> valueOrFunctionDeclarationInfoContainedTypeVariables
                 )
     in
     declarationValueOrFunctionInfo
         |> declarationValueOrFunctionInfoMapTypeVariables
-            (\( context, name ) ->
+            (\variable ->
                 globalTypeVariableDisambiguationLookup
-                    |> FastDict.get
-                        ( context |> List.reverse |> List.drop 1
-                        , name
-                        )
+                    |> FastDict.get variable
                     |> Maybe.withDefault
                         "thisIsABugInDisambiguationPleaseReportToElmSyntaxTypeInfer"
             )
 
 
-declarationValueOrFunctionInfoContainedGlobalTypeVariables :
+valueOrFunctionDeclarationInfoContainedTypeVariables :
     ValueOrFunctionDeclarationInfo (Type comparableTypeVariable)
     -> FastSet.Set comparableTypeVariable
-declarationValueOrFunctionInfoContainedGlobalTypeVariables declarationValueOrFunction =
+valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
     FastSet.union
         (declarationValueOrFunction.parameters
-            |> List.foldl
-                (\parameter soFar ->
-                    FastSet.union
-                        (parameter
-                            |> patternTypedNodeContainedTypeVariables
-                        )
-                        soFar
-                )
-                FastSet.empty
+            |> listMapToFastSetsAndUnify
+                patternTypedNodeContainedTypeVariables
         )
         (FastSet.union
             (declarationValueOrFunction.type_
@@ -8832,8 +8813,13 @@ patternContainedTypeVariables pattern =
                 inParens
 
         PatternAs patternAs ->
-            patternTypedNodeContainedTypeVariables
-                patternAs.pattern
+            FastSet.union
+                (patternAs.variable.type_
+                    |> typeContainedVariables
+                )
+                (patternAs.pattern
+                    |> patternTypedNodeContainedTypeVariables
+                )
 
         PatternTuple parts ->
             FastSet.union
@@ -10345,8 +10331,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionTuple expressionTuple ->
-            resultAndThen3
-                (\typeSubstituted part0Substituted part1Substituted ->
+            resultAndThen2
+                (\part0Substituted part1Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10357,19 +10343,20 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                         { part0 = part0Substituted.node
                                         , part1 = part1Substituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeTuple
+                                            { part0 = part0Substituted.node.type_
+                                            , part1 = part1Substituted.node.type_
+                                            }
+                                        )
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge3 declarationTypes
+                        (variableSubstitutionsMerge declarationTypes
                             part0Substituted.substitutions
                             part1Substituted.substitutions
-                            typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionTuple.part0
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10381,8 +10368,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionTriple expressionTriple ->
-            resultAndThen4
-                (\typeSubstituted part0Substituted part1Substituted part2Substituted ->
+            resultAndThen3
+                (\part0Substituted part1Substituted part2Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10394,20 +10381,22 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                         , part1 = part1Substituted.node
                                         , part2 = part2Substituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeTriple
+                                            { part0 = part0Substituted.node.type_
+                                            , part1 = part1Substituted.node.type_
+                                            , part2 = part2Substituted.node.type_
+                                            }
+                                        )
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
+                        (variableSubstitutionsMerge3 declarationTypes
                             part0Substituted.substitutions
                             part1Substituted.substitutions
                             part2Substituted.substitutions
-                            typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionTriple.part0
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10423,8 +10412,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionIfThenElse expressionIfThenElse ->
-            resultAndThen4
-                (\typeSubstituted conditionSubstituted onTrueSubstituted onFalseSubstituted ->
+            resultAndThen3
+                (\conditionSubstituted onTrueSubstituted onFalseSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10436,20 +10425,15 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                         , onTrue = onTrueSubstituted.node
                                         , onFalse = onFalseSubstituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ = onTrueSubstituted.node.type_
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
+                        (variableSubstitutionsMerge3 declarationTypes
                             conditionSubstituted.substitutions
                             onTrueSubstituted.substitutions
                             onFalseSubstituted.substitutions
-                            typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionIfThenElse.condition
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10587,30 +10571,31 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionRecord expressionRecordFields ->
-            resultAndThen2
-                (\typeSubstituted fieldsSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionRecord
-                                        (fieldsSubstituted.nodesReverse
-                                            |> List.reverse
-                                        )
-                                , type_ = typeSubstituted.type_
-                                }
-                            }
-                        )
-                        (variableSubstitutionsMerge declarationTypes
-                            fieldsSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
+            Result.map
+                (\fieldsSubstituted ->
+                    { substitutions = fieldsSubstituted.substitutions
+                    , node =
+                        { range = expressionTypedNode.range
+                        , value =
+                            ExpressionRecord
+                                (fieldsSubstituted.nodesReverse
+                                    |> List.reverse
+                                )
+                        , type_ =
+                            TypeNotVariable
+                                (TypeRecord
+                                    (fieldsSubstituted.nodesReverse
+                                        |> List.foldl
+                                            (\fieldSubstituted soFar ->
+                                                soFar
+                                                    |> FastDict.insert fieldSubstituted.name
+                                                        fieldSubstituted.value.type_
+                                            )
+                                            FastDict.empty
+                                    )
+                                )
+                        }
+                    }
                 )
                 (expressionRecordFields
                     |> listFoldlWhileOkFrom
@@ -10729,8 +10714,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionLambda expressionLambda ->
-            resultAndThen4
-                (\typeSubstituted parameter0Substituted parameter1UpSubstituted resultSubstituted ->
+            resultAndThen3
+                (\parameter0Substituted parameter1UpSubstituted resultSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10744,20 +10729,32 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                 |> List.reverse
                                         , result = resultSubstituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeFunction
+                                            { input = parameter0Substituted.node.type_
+                                            , output =
+                                                parameter1UpSubstituted.nodesReverse
+                                                    |> List.foldl
+                                                        (\argumentTypedNode output ->
+                                                            TypeNotVariable
+                                                                (TypeFunction
+                                                                    { input = argumentTypedNode.type_
+                                                                    , output = output
+                                                                    }
+                                                                )
+                                                        )
+                                                        resultSubstituted.node.type_
+                                            }
+                                        )
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
+                        (variableSubstitutionsMerge3 declarationTypes
                             parameter0Substituted.substitutions
                             parameter1UpSubstituted.substitutions
                             resultSubstituted.substitutions
-                            typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionLambda.parameter0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10797,8 +10794,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionCaseOf expressionCaseOf ->
-            resultAndThen4
-                (\typeSubstituted matchedSubstituted case0Substituted case1UpSubstituted ->
+            resultAndThen3
+                (\matchedSubstituted case0Substituted case1UpSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10812,20 +10809,15 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                 |> List.reverse
                                         , matchedExpression = matchedSubstituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ = case0Substituted.node.result.type_
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
+                        (variableSubstitutionsMerge3 declarationTypes
                             matchedSubstituted.substitutions
                             case0Substituted.substitutions
                             case1UpSubstituted.substitutions
-                            typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionCaseOf.matchedExpression
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11877,10 +11869,20 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 }
 
         PatternIgnored ->
-            Ok
-                { substitutions = variableSubstitutionsNone
-                , node = patternTypedNode
-                }
+            Result.map
+                (\substituted ->
+                    { substitutions = substituted.substitutions
+                    , node =
+                        { range = patternTypedNode.range
+                        , value = PatternIgnored
+                        , type_ = substituted.type_
+                        }
+                    }
+                )
+                (patternTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable declarationTypes
+                        replacement
+                )
 
         PatternVariable name ->
             Result.map
@@ -11939,8 +11941,8 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
 
         PatternListCons patternListCons ->
-            resultAndThen3
-                (\typeSubstituted headSubstituted tailSubstituted ->
+            resultAndThen2
+                (\headSubstituted tailSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -11951,19 +11953,14 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         { head = headSubstituted.node
                                         , tail = tailSubstituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ = typeListList headSubstituted.node.type_
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge3 declarationTypes
-                            typeSubstituted.substitutions
+                        (variableSubstitutionsMerge declarationTypes
                             headSubstituted.substitutions
                             tailSubstituted.substitutions
                         )
-                )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (patternListCons.head
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11975,8 +11972,8 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
 
         PatternTuple patternTuple ->
-            resultAndThen3
-                (\typeSubstituted part0Substituted part1Substituted ->
+            resultAndThen2
+                (\part0Substituted part1Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -11987,19 +11984,20 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         { part0 = part0Substituted.node
                                         , part1 = part1Substituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeTuple
+                                            { part0 = part0Substituted.node.type_
+                                            , part1 = part1Substituted.node.type_
+                                            }
+                                        )
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge3 declarationTypes
-                            typeSubstituted.substitutions
+                        (variableSubstitutionsMerge declarationTypes
                             part0Substituted.substitutions
                             part1Substituted.substitutions
                         )
-                )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (patternTuple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -12011,8 +12009,8 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
 
         PatternTriple patternTriple ->
-            resultAndThen4
-                (\typeSubstituted part0Substituted part1Substituted part2Substituted ->
+            resultAndThen3
+                (\part0Substituted part1Substituted part2Substituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -12024,20 +12022,22 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         , part1 = part1Substituted.node
                                         , part2 = part2Substituted.node
                                         }
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeTriple
+                                            { part0 = part0Substituted.node.type_
+                                            , part1 = part1Substituted.node.type_
+                                            , part2 = part2Substituted.node.type_
+                                            }
+                                        )
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
-                            typeSubstituted.substitutions
+                        (variableSubstitutionsMerge3 declarationTypes
                             part0Substituted.substitutions
                             part1Substituted.substitutions
                             part2Substituted.substitutions
                         )
-                )
-                (patternTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (patternTriple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -12065,7 +12065,19 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         (fieldsSubstituted.nodesReverse
                                             |> List.reverse
                                         )
-                                , type_ = typeSubstituted.type_
+                                , type_ =
+                                    TypeNotVariable
+                                        (TypeRecord
+                                            (fieldsSubstituted.nodesReverse
+                                                |> List.foldl
+                                                    (\fieldSubstituted soFar ->
+                                                        soFar
+                                                            |> FastDict.insert fieldSubstituted.value
+                                                                fieldSubstituted.type_
+                                                    )
+                                                    FastDict.empty
+                                            )
+                                        )
                                 }
                             }
                         )
@@ -12109,7 +12121,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         )
                 )
 
-        PatternListExact patternListElement ->
+        PatternListExact patternListElements ->
             resultAndThen2
                 (\typeSubstituted elementsSubstituted ->
                     Result.map
@@ -12135,7 +12147,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                     |> typeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (patternListElement
+                (patternListElements
                     |> listFoldlWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , nodesReverse = []
