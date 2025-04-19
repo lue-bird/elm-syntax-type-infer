@@ -59,7 +59,6 @@ exampleModuleOriginLookup =
 ## TODO
 
 -   add more tests
--   add local types in a fully separate (optional!) step
 
 Right now, this can't handle medium to large files at an acceptable speed.
 Last measurement: for 100k lines, expect 8-20s  (report if you have other numbers)
