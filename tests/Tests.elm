@@ -136,7 +136,7 @@ suite =
                             )
                         )
             )
-        , Test.test "[ .a, .b ]"
+        , Test.test "record accessor functions unified: [ .a, .b ]"
             (\() ->
                 Elm.Syntax.Expression.ListExpr
                     [ Elm.Syntax.Node.empty
@@ -156,17 +156,17 @@ suite =
                                                         { fields =
                                                             FastDict.fromList
                                                                 [ ( "b"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                                  , ElmSyntaxTypeInfer.TypeVariable "b"
                                                                   )
                                                                 , ( "a"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                                  , ElmSyntaxTypeInfer.TypeVariable "b"
                                                                   )
                                                                 ]
                                                         , recordVariable = "record"
                                                         }
                                                     )
                                             , output =
-                                                ElmSyntaxTypeInfer.TypeVariable "a"
+                                                ElmSyntaxTypeInfer.TypeVariable "b"
                                             }
                                         )
                                     ]

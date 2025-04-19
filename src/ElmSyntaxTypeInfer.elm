@@ -1432,26 +1432,24 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
                         TypeConstruct
                             { moduleOrigin = typeChoiceConstruct.moduleOrigin
                             , name = typeChoiceConstruct.name
-                            , arguments =
-                                argumentsSubstituted.argumentsReverse
-                                    |> List.reverse
+                            , arguments = argumentsSubstituted.arguments
                             }
                     , substitutions = argumentsSubstituted.substitutions
                     }
                 )
                 (typeChoiceConstruct.arguments
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , argumentsReverse = []
+                        , arguments = []
                         }
                         (\argument soFar ->
                             Result.andThen
                                 (\argumentSubstituted ->
                                     Result.map
                                         (\substitutionsWithArgument ->
-                                            { argumentsReverse =
+                                            { arguments =
                                                 argumentSubstituted.type_
-                                                    :: soFar.argumentsReverse
+                                                    :: soFar.arguments
                                             , substitutions = substitutionsWithArgument
                                             }
                                         )
@@ -2636,20 +2634,19 @@ typeNotVariableUnify declarationTypes a b =
                                     (TypeConstruct
                                         { moduleOrigin = matchingTypeConstructs.moduleOrigin
                                         , name = matchingTypeConstructs.name
-                                        , arguments =
-                                            argumentsABUnified.argumentsReverse
-                                                |> List.reverse
+                                        , arguments = argumentsABUnified.arguments
                                         }
                                     )
                             , substitutions = argumentsABUnified.substitutions
                             }
                         )
-                        (List.map2
+                        (-- TODO single operation
+                         List.map2
                             (\aArgument bArgument -> { a = aArgument, b = bArgument })
                             matchingTypeConstructs.aArguments
                             matchingTypeConstructs.bArguments
-                            |> listFoldlWhileOkFrom
-                                { argumentsReverse = []
+                            |> listFoldrWhileOkFrom
+                                { arguments = []
                                 , substitutions = variableSubstitutionsNone
                                 }
                                 (\ab soFar ->
@@ -2657,9 +2654,9 @@ typeNotVariableUnify declarationTypes a b =
                                         (\argumentTypeUnifiedAndSubstitutions ->
                                             Result.map
                                                 (\substitutionsWithArgument ->
-                                                    { argumentsReverse =
+                                                    { arguments =
                                                         argumentTypeUnifiedAndSubstitutions.type_
-                                                            :: soFar.argumentsReverse
+                                                            :: soFar.arguments
                                                     , substitutions =
                                                         substitutionsWithArgument
                                                     }
@@ -3096,7 +3093,8 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
                                             (TypeNotVariable b)
                                         )
                                 )
-                                (List.map2
+                                (-- TODO single operation
+                                 List.map2
                                     (\parameterName argument ->
                                         { variable = ( [], parameterName ), type_ = argument }
                                     )
@@ -4132,8 +4130,8 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                             |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
                                                 unifiedElementType.substitutions
                                         )
-                                        (tailInferred.elementNodesReverse
-                                            |> listFoldlWhileOkFrom []
+                                        (tailInferred.elementNodes
+                                            |> listFoldrWhileOkFrom []
                                                 (\tailElementInferred tailAfterUnificationSoFar ->
                                                     Result.map
                                                         (\tailElementAfterUnification ->
@@ -4147,7 +4145,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 )
                                         )
                                 )
-                                (( headInferred, tailInferred.elementNodesReverse )
+                                (( headInferred, tailInferred.elementNodes )
                                     |> listFilledMapAndTypesUnify context.declarationTypes
                                         .type_
                                 )
@@ -4159,23 +4157,23 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 )
                         )
                         (tail
-                            |> listFoldlWhileOkFrom
-                                { elementNodesReverse = []
-                                , index = 1
+                            |> listFoldrWhileOkFrom
+                                { elementNodes = []
+                                , indexFromEnd = 0
                                 }
                                 (\elementNode soFar ->
                                     Result.map
                                         (\elementInferred ->
-                                            { index = soFar.index + 1
-                                            , elementNodesReverse =
+                                            { indexFromEnd = soFar.indexFromEnd + 1
+                                            , elementNodes =
                                                 elementInferred
-                                                    :: soFar.elementNodesReverse
+                                                    :: soFar.elementNodes
                                             }
                                         )
                                         (patternTypeInfer
                                             (context
                                                 |> patternContextToInPath
-                                                    ("element" ++ (soFar.index |> String.fromInt))
+                                                    ("elementFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                             )
                                             elementNode
                                         )
@@ -4291,14 +4289,13 @@ patternVariantTypeInfer context patternVariant =
                     { moduleOrigin = patternVariant.moduleOrigin
                     , qualification = patternVariant.qualification
                     , name = patternVariant.name
-                    , values =
-                        valuesAndResultTypeUnified.nodesReverse
-                            |> List.reverse
+                    , values = valuesAndResultTypeUnified.values
                     }
             , type_ = valuesAndResultTypeUnified.resultType
             }
         )
-        (List.map2
+        (-- TODO single operation
+         List.map2
             (\typeInVariant argumentPattern ->
                 { typeInVariant =
                     typeInVariant
@@ -4309,9 +4306,9 @@ patternVariantTypeInfer context patternVariant =
             )
             patternVariant.variantValueTypes
             patternVariant.values
-            |> listFoldlWhileOkFrom
-                { index = 0
-                , nodesReverse = []
+            |> listFoldrWhileOkFrom
+                { indexFromEnd = 0
+                , values = []
                 , resultType =
                     TypeNotVariable
                         (TypeConstruct
@@ -4333,11 +4330,11 @@ patternVariantTypeInfer context patternVariant =
                                 (\valueTypeUnified ->
                                     Result.map2
                                         (\resultTypeAfterUnification valueInferredAfterUnification ->
-                                            { index = soFar.index + 1
+                                            { indexFromEnd = soFar.indexFromEnd + 1
                                             , resultType = resultTypeAfterUnification
-                                            , nodesReverse =
+                                            , values =
                                                 valueInferredAfterUnification
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.values
                                             }
                                         )
                                         (soFar.resultType
@@ -4358,7 +4355,7 @@ patternVariantTypeInfer context patternVariant =
                             |> patternTypeInfer
                                 (context
                                     |> patternContextToInPath
-                                        ("value" ++ (soFar.index |> String.fromInt))
+                                        ("valueFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                 )
                         )
                 )
@@ -4940,9 +4937,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , value =
                                                     ExpressionList
                                                         (headInferred.node
-                                                            :: (tailElementsInferred.nodesReverse
-                                                                    |> List.reverse
-                                                               )
+                                                            :: tailElementsInferred.nodes
                                                         )
                                                 , type_ = typeListList headInferred.node.type_
                                                 }
@@ -4963,29 +4958,29 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                                 (listFilledMapAndTypesUnify context.declarationTypes
                                     .type_
-                                    ( headInferred.node, tailElementsInferred.nodesReverse )
+                                    ( headInferred.node, tailElementsInferred.nodes )
                                 )
                         )
                         (expressionTypeInfer
-                            (context |> expressionContextToInPath "0")
+                            (context |> expressionContextToInPath "head")
                             head
                         )
                         (tail
-                            |> listFoldlWhileOkFrom
+                            |> listFoldrWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
                                 , introducedTypeVariables = FastSet.empty
-                                , nodesReverse = []
-                                , index = 1
+                                , nodes = []
+                                , indexFromEnd = 0
                                 }
                                 (\elementNode soFar ->
                                     Result.andThen
                                         (\elementInferred ->
                                             Result.map
                                                 (\substitutionsWithElement ->
-                                                    { index = soFar.index + 1
-                                                    , nodesReverse =
+                                                    { indexFromEnd = soFar.indexFromEnd + 1
+                                                    , nodes =
                                                         elementInferred.node
-                                                            :: soFar.nodesReverse
+                                                            :: soFar.nodes
                                                     , substitutions = substitutionsWithElement
                                                     , introducedTypeVariables =
                                                         FastSet.union
@@ -5001,7 +4996,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (expressionTypeInfer
                                             (context
                                                 |> expressionContextToInPath
-                                                    (soFar.index |> String.fromInt)
+                                                    ("fromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                             )
                                             elementNode
                                         )
@@ -5036,9 +5031,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     ExpressionCall
                                                         { called = calledInferred.node
                                                         , argument0 = argument0Inferred.node
-                                                        , argument1Up =
-                                                            argument1UpInferred.nodesReverse
-                                                                |> List.reverse
+                                                        , argument1Up = argument1UpInferred.nodes
                                                         }
                                                 , type_ = TypeVariable introducedResultTypeVariable
                                                 }
@@ -5066,8 +5059,8 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (TypeFunction
                                             { input = argument0Inferred.node.type_
                                             , output =
-                                                argument1UpInferred.nodesReverse
-                                                    |> List.foldl
+                                                argument1UpInferred.nodes
+                                                    |> List.foldr
                                                         (\argumentInferred output ->
                                                             TypeNotVariable
                                                                 (TypeFunction
@@ -5092,26 +5085,26 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 (context |> expressionContextToInPath "argument0")
                         )
                         (argument1Up
-                            |> listFoldlWhileOkFrom
+                            |> listFoldrWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
                                 , introducedTypeVariables = FastSet.empty
-                                , nodesReverse = []
-                                , index = 1
+                                , nodes = []
+                                , indexFromEnd = 0
                                 }
                                 (\argumentNode soFar ->
                                     Result.andThen
                                         (\argumentInferred ->
                                             Result.map
                                                 (\substitutionsWithArgument ->
-                                                    { index = soFar.index + 1
+                                                    { indexFromEnd = soFar.indexFromEnd + 1
                                                     , substitutions = substitutionsWithArgument
                                                     , introducedTypeVariables =
                                                         FastSet.union
                                                             soFar.introducedTypeVariables
                                                             argumentInferred.introducedTypeVariables
-                                                    , nodesReverse =
+                                                    , nodes =
                                                         argumentInferred.node
-                                                            :: soFar.nodesReverse
+                                                            :: soFar.nodes
                                                     }
                                                 )
                                                 (variableSubstitutionsMerge context.declarationTypes
@@ -5123,7 +5116,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             |> expressionTypeInfer
                                                 (context
                                                     |> expressionContextToInPath
-                                                        ("argument" ++ (soFar.index |> String.fromInt))
+                                                        ("argumentFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                                 )
                                         )
                                 )
@@ -5137,13 +5130,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                         { range = fullRange
                         , value =
                             ExpressionRecord
-                                (fieldsInferred.fieldTypedNodesReverse
-                                    |> List.reverse
-                                )
+                                fieldsInferred.nodes
                         , type_ =
                             TypeNotVariable
                                 (TypeRecord
-                                    (fieldsInferred.fieldTypedNodesReverse
+                                    (fieldsInferred.nodes
                                         |> List.foldl
                                             (\field soFar ->
                                                 soFar
@@ -5158,23 +5149,23 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                     }
                 )
                 (fields
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
                         , introducedTypeVariables = FastSet.empty
-                        , fieldTypedNodesReverse = []
+                        , nodes = []
                         }
                         (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node fieldNameRange fieldName, fieldValueNode )) soFar ->
                             Result.andThen
                                 (\fieldValueInferred ->
                                     Result.map
                                         (\substitutionsWithField ->
-                                            { fieldTypedNodesReverse =
+                                            { nodes =
                                                 { range = fieldRange
                                                 , name = fieldName
                                                 , nameRange = fieldNameRange
                                                 , value = fieldValueInferred.node
                                                 }
-                                                    :: soFar.fieldTypedNodesReverse
+                                                    :: soFar.nodes
                                             , substitutions = substitutionsWithField
                                             , introducedTypeVariables =
                                                 FastSet.union
@@ -5226,9 +5217,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                             , type_ = recordVariableInferred.node.type_
                                                             }
                                                         , field0 = field0Inferred.node
-                                                        , field1Up =
-                                                            field1UpInferred.nodesReverse
-                                                                |> List.reverse
+                                                        , field1Up = field1UpInferred.nodes
                                                         }
                                                 , type_ = recordVariableInferred.node.type_
                                                 }
@@ -5253,7 +5242,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (TypeRecordExtension
                                             { recordVariable = introducedRecordTypeVariable
                                             , fields =
-                                                field1UpInferred.nodesReverse
+                                                field1UpInferred.nodes
                                                     |> List.foldl
                                                         (\fieldInferred soFar ->
                                                             soFar
@@ -5297,10 +5286,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                             )
                         )
                         (field1Up
-                            |> listFoldlWhileOkFrom
+                            |> listFoldrWhileOkFrom
                                 { substitutions = variableSubstitutionsNone
                                 , introducedTypeVariables = FastSet.empty
-                                , nodesReverse = []
+                                , nodes = []
                                 }
                                 (\(Elm.Syntax.Node.Node fieldRange ( Elm.Syntax.Node.Node nameRange name, valueNode )) soFar ->
                                     Result.andThen
@@ -5312,13 +5301,13 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                         FastSet.union
                                                             soFar.introducedTypeVariables
                                                             fieldValueInferred.introducedTypeVariables
-                                                    , nodesReverse =
+                                                    , nodes =
                                                         { range = fieldRange
                                                         , name = name
                                                         , nameRange = nameRange
                                                         , value = fieldValueInferred.node
                                                         }
-                                                            :: soFar.nodesReverse
+                                                            :: soFar.nodes
                                                     }
                                                 )
                                                 (variableSubstitutionsMerge context.declarationTypes
@@ -5349,7 +5338,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     let
                                         parameterIntroducedTypeVariables : FastSet.Set TypeVariableFromContext
                                         parameterIntroducedTypeVariables =
-                                            (parameter0Inferred :: parameter1UpInferred.nodesReverse)
+                                            (parameter0Inferred :: parameter1UpInferred.nodes)
                                                 |> listMapToFastSetsAndUnify
                                                     (\parameterInferred ->
                                                         parameterInferred.type_ |> typeContainedVariables
@@ -5361,9 +5350,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         , value =
                                             ExpressionLambda
                                                 { parameter0 = parameter0Inferred
-                                                , parameter1Up =
-                                                    parameter1UpInferred.nodesReverse
-                                                        |> List.reverse
+                                                , parameter1Up = parameter1UpInferred.nodes
                                                 , result = resultInferred.node
                                                 }
                                         , type_ =
@@ -5371,8 +5358,8 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (TypeFunction
                                                     { input = parameter0Inferred.type_
                                                     , output =
-                                                        parameter1UpInferred.nodesReverse
-                                                            |> List.foldl
+                                                        parameter1UpInferred.nodes
+                                                            |> List.foldr
                                                                 (\argumentTypedNode output ->
                                                                     TypeNotVariable
                                                                         (TypeFunction
@@ -5411,7 +5398,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                             (parameter |> patternTypedNodeIntroducedVariables)
                                                     )
                                                     (parameter0Inferred |> patternTypedNodeIntroducedVariables)
-                                                    parameter1UpInferred.nodesReverse
+                                                    parameter1UpInferred.nodes
                                                 )
                                         }
                                 )
@@ -5424,23 +5411,23 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 }
                         )
                         (parameter1Up
-                            |> listFoldlWhileOkFrom
-                                { nodesReverse = []
-                                , index = 1
+                            |> listFoldrWhileOkFrom
+                                { nodes = []
+                                , indexFromEnd = 0
                                 }
                                 (\pattern soFar ->
                                     Result.map
                                         (\patternInferred ->
-                                            { index = soFar.index + 1
-                                            , nodesReverse =
+                                            { indexFromEnd = soFar.indexFromEnd + 1
+                                            , nodes =
                                                 patternInferred
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (pattern
                                             |> patternTypeInfer
                                                 { path =
-                                                    ("parameter" ++ (soFar.index |> String.fromInt))
+                                                    ("parameterFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                                         :: context.path
                                                 , declarationTypes = context.declarationTypes
                                                 , moduleOriginLookup = context.moduleOriginLookup
@@ -5468,17 +5455,14 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     ExpressionCaseOf
                                                         { matchedExpression = matchedInferred.node
                                                         , case0 = case0Inferred.node
-                                                        , case1Up =
-                                                            case1UpInferred.nodesReverse
-                                                                |> List.reverse
+                                                        , case1Up = case1UpInferred.nodes
                                                         }
                                                 , type_ = case0Inferred.node.result.type_
                                                 }
                                             , introducedTypeVariables =
                                                 matchedInferred.introducedTypeVariables
                                                     |> FastSet.union case0Inferred.introducedTypeVariables
-                                                    |> FastSet.union
-                                                        case1UpInferred.introducedTypeVariables
+                                                    |> FastSet.union case1UpInferred.introducedTypeVariables
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     { declarationTypes = context.declarationTypes
@@ -5491,7 +5475,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             case1UpInferred.substitutions
                                         )
                                 )
-                                (case1UpInferred.nodesReverse
+                                (case1UpInferred.nodes
                                     |> listFoldlWhileOkFromResult
                                         (Result.map
                                             (\matchedExpressionCase0PatternUnifiedType ->
@@ -5549,24 +5533,24 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 }
                         )
                         (case1Up
-                            |> listFoldlWhileOkFrom
-                                { index = 1
+                            |> listFoldrWhileOkFrom
+                                { indexFromEnd = 0
                                 , substitutions = variableSubstitutionsNone
                                 , introducedTypeVariables = FastSet.empty
-                                , nodesReverse = []
+                                , nodes = []
                                 }
                                 (\case_ soFar ->
                                     Result.andThen
                                         (\caseInferred ->
                                             Result.map
                                                 (\substitutionsSoFarAndCase ->
-                                                    { index = soFar.index + 1
+                                                    { indexFromEnd = soFar.indexFromEnd + 1
                                                     , introducedTypeVariables =
                                                         FastSet.union
                                                             soFar.introducedTypeVariables
                                                             caseInferred.introducedTypeVariables
                                                     , substitutions = substitutionsSoFarAndCase
-                                                    , nodesReverse = caseInferred.node :: soFar.nodesReverse
+                                                    , nodes = caseInferred.node :: soFar.nodes
                                                     }
                                                 )
                                                 (variableSubstitutionsMerge context.declarationTypes
@@ -5582,7 +5566,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , moduleOriginLookup = context.moduleOriginLookup
                                                 , containingDeclarationName = context.containingDeclarationName
                                                 , path =
-                                                    ("case" ++ (soFar.index |> String.fromInt))
+                                                    ("caseFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
                                                         :: context.path
                                                 , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
                                                 }
@@ -5729,9 +5713,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         , value =
                                             ExpressionLetIn
                                                 { declaration0 = declaration0Inferred.node
-                                                , declaration1Up =
-                                                    declaration1UpInferred.nodesReverse
-                                                        |> List.reverse
+                                                , declaration1Up = declaration1UpInferred.nodes
                                                 , result = resultInferred.node
                                                 }
                                         , type_ = resultInferred.node.type_
@@ -5760,10 +5742,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 }
                         )
                         (letDeclaration1Up
-                            |> listFoldlWhileOkFrom
-                                { index = 1
+                            |> listFoldrWhileOkFrom
+                                { indexFromEnd = 0
                                 , substitutions = variableSubstitutionsNone
-                                , nodesReverse = []
+                                , nodes = []
                                 , introducedTypeVariables = FastSet.empty
                                 }
                                 (\letDeclarationNode soFar ->
@@ -5771,11 +5753,11 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (\letDeclarationInferred ->
                                             Result.map
                                                 (\substitutionsWithLetDeclaration ->
-                                                    { index = soFar.index + 1
+                                                    { indexFromEnd = soFar.indexFromEnd + 1
                                                     , substitutions = substitutionsWithLetDeclaration
-                                                    , nodesReverse =
+                                                    , nodes =
                                                         letDeclarationInferred.node
-                                                            :: soFar.nodesReverse
+                                                            :: soFar.nodes
                                                     , introducedTypeVariables =
                                                         FastSet.union soFar.introducedTypeVariables
                                                             letDeclarationInferred.introducedTypeVariables
@@ -5790,8 +5772,8 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             |> letDeclarationTypeInfer
                                                 { containingDeclarationName = context.containingDeclarationName
                                                 , path =
-                                                    ("letDeclaration"
-                                                        ++ (soFar.index |> String.fromInt)
+                                                    ("letDeclarationFromEnd"
+                                                        ++ (soFar.indexFromEnd |> String.fromInt)
                                                     )
                                                         :: context.path
                                                 , locallyIntroducedExpressionVariables =
@@ -6685,8 +6667,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                             { substitutions =
                                 variableSubstitutionsFromVariableToType
                                     letDeclarationTypeVariable
-                                    (parametersInferred.nodesReverse
-                                        |> List.foldl
+                                    (parametersInferred.nodes
+                                        |> List.foldr
                                             (\parameterTypedNode outputSoFar ->
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -6698,7 +6680,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             resultInferred.node.type_
                                     )
                             , introducedTypeVariables =
-                                parametersInferred.nodesReverse
+                                parametersInferred.nodes
                                     |> listMapToFastSetsAndUnify
                                         patternTypedNodeContainedTypeVariables
                                     |> FastSet.union resultInferred.introducedTypeVariables
@@ -6721,8 +6703,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                             }
                                                     }
                                                 )
-                                                (parametersInferred.nodesReverse
-                                                    |> listFoldlWhileOkFrom []
+                                                (parametersInferred.nodes
+                                                    |> listFoldrWhileOkFrom []
                                                         (\parameterInferred soFar ->
                                                             Result.map
                                                                 (\parameterSubstituted ->
@@ -6784,7 +6766,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                     let
                                                         parametersInferredContainedTypeVariables : FastSet.Set TypeVariableFromContext
                                                         parametersInferredContainedTypeVariables =
-                                                            parametersInferred.nodesReverse
+                                                            parametersInferred.nodes
                                                                 |> listMapToFastSetsAndUnify
                                                                     (\parameterInferred ->
                                                                         parameterInferred.type_ |> typeContainedVariables
@@ -6825,8 +6807,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                                     }
                                                                             }
                                                                         )
-                                                                        (parametersInferred.nodesReverse
-                                                                            |> listFoldlWhileOkFrom []
+                                                                        (parametersInferred.nodes
+                                                                            |> listFoldrWhileOkFrom []
                                                                                 (\parameter soFar ->
                                                                                     Result.map
                                                                                         (\parameterInferredSubstituted ->
@@ -6856,8 +6838,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                         )
                                         (typeUnify context.declarationTypes
                                             annotationAsTypeWithContext
-                                            (parametersInferred.nodesReverse
-                                                |> List.foldl
+                                            (parametersInferred.nodes
+                                                |> List.foldr
                                                     (\parameterTypedNode outputSoFar ->
                                                         TypeNotVariable
                                                             (TypeFunction
@@ -8336,8 +8318,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             , signature = Nothing
                                                             , result = resultInferred.node
                                                             , type_ = TypeVariable fullTypeVariable
-                                                            , parameters =
-                                                                parametersInferred.nodesReverse |> List.reverse
+                                                            , parameters = parametersInferred.nodes
                                                             }
                                                 }
                                             )
@@ -8346,8 +8327,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 resultInferred.substitutions
                                                 (variableSubstitutionsFromVariableToType
                                                     fullTypeVariable
-                                                    (parametersInferred.nodesReverse
-                                                        |> List.foldl
+                                                    (parametersInferred.nodes
+                                                        |> List.foldr
                                                             (\parameterTypedNode typeSoFar ->
                                                                 TypeNotVariable
                                                                     (TypeFunction
@@ -8386,8 +8367,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         let
                                             inferredFullType : Type TypeVariableFromContext
                                             inferredFullType =
-                                                parametersInferred.nodesReverse
-                                                    |> List.foldl
+                                                parametersInferred.nodes
+                                                    |> List.foldr
                                                         (\parameterTypedNode typeSoFar ->
                                                             TypeNotVariable
                                                                 (TypeFunction
@@ -8418,7 +8399,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 , introducedTypeVariables =
                                                     FastSet.union
                                                         resultInferred.introducedTypeVariables
-                                                        (parametersInferred.nodesReverse
+                                                        (parametersInferred.nodes
                                                             |> listMapToFastSetsAndUnify
                                                                 patternTypedNodeContainedTypeVariables
                                                         )
@@ -8442,8 +8423,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                         |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
                                                                             substitutionsToApply
                                                                     )
-                                                                    (parametersInferred.nodesReverse
-                                                                        |> listFoldlWhileOkFrom []
+                                                                    (parametersInferred.nodes
+                                                                        |> listFoldrWhileOkFrom []
                                                                             (\parameterInferred parametersSubstitutedSoFar ->
                                                                                 Result.map
                                                                                     (\parameterSubstituted ->
@@ -8501,7 +8482,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         |> expressionTypeInfer
                                             { declarationTypes = declarationTypes
                                             , locallyIntroducedExpressionVariables =
-                                                parametersInferred.nodesReverse
+                                                parametersInferred.nodes
                                                     |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
                                             , locallyIntroducedDeclarationTypes =
                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
@@ -9878,16 +9859,14 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes r
 
     else
         resultAndThen3
-            (\argumentsInferred resultInferred typeInferred ->
+            (\parametersInferred resultInferred typeInferred ->
                 Result.map
                     (\fullSubstitutions ->
                         { declaration =
                             { nameRange = declarationValueOrFunctionSoFar.nameRange
                             , documentation = declarationValueOrFunctionSoFar.documentation
                             , signature = declarationValueOrFunctionSoFar.signature
-                            , parameters =
-                                argumentsInferred.nodesReverse
-                                    |> List.reverse
+                            , parameters = parametersInferred.nodes
                             , result = resultInferred.node
                             , type_ =
                                 -- reconstructing the function at the end is faster
@@ -9897,15 +9876,15 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes r
                         }
                     )
                     (variableSubstitutionsMerge3 declarationTypes
-                        argumentsInferred.substitutions
+                        parametersInferred.substitutions
                         resultInferred.substitutions
                         typeInferred.substitutions
                     )
             )
             (declarationValueOrFunctionSoFar.parameters
-                |> listFoldlWhileOkFrom
+                |> listFoldrWhileOkFrom
                     { substitutions = variableSubstitutionsNone
-                    , nodesReverse = []
+                    , nodes = []
                     }
                     (\patternTypedNode soFar ->
                         Result.andThen
@@ -9913,9 +9892,9 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes r
                                 Result.map
                                     (\fullSubstitutions ->
                                         { substitutions = fullSubstitutions
-                                        , nodesReverse =
+                                        , nodes =
                                             patternSubstituted.node
-                                                :: soFar.nodesReverse
+                                                :: soFar.nodes
                                         }
                                     )
                                     (variableSubstitutionsMerge declarationTypes
@@ -10458,9 +10437,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 { range = expressionTypedNode.range
                                 , value =
                                     ExpressionList
-                                        (elementsSubstituted.nodesReverse
-                                            |> List.reverse
-                                        )
+                                        elementsSubstituted.nodes
                                 , type_ = typeSubstituted.type_
                                 }
                             }
@@ -10475,9 +10452,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
                 (expressionListElements
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\elementNode soFar ->
                             Result.andThen
@@ -10485,9 +10462,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\substitutionsSoFarWithElement ->
                                             { substitutions = substitutionsSoFarWithElement
-                                            , nodesReverse =
+                                            , nodes =
                                                 elementSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge declarationTypes
@@ -10514,9 +10491,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     ExpressionCall
                                         { called = calledSubstituted.node
                                         , argument0 = argument0Substituted.node
-                                        , argument1Up =
-                                            argument1UpSubstituted.nodesReverse
-                                                |> List.reverse
+                                        , argument1Up = argument1UpSubstituted.nodes
                                         }
                                 , type_ = typeSubstituted.type_
                                 }
@@ -10542,9 +10517,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
                 (expressionCall.argument1Up
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\argumentNode soFar ->
                             Result.andThen
@@ -10552,9 +10527,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 argumentSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge
@@ -10577,14 +10552,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                     , node =
                         { range = expressionTypedNode.range
                         , value =
-                            ExpressionRecord
-                                (fieldsSubstituted.nodesReverse
-                                    |> List.reverse
-                                )
+                            ExpressionRecord fieldsSubstituted.nodes
                         , type_ =
                             TypeNotVariable
                                 (TypeRecord
-                                    (fieldsSubstituted.nodesReverse
+                                    (fieldsSubstituted.nodes
                                         |> List.foldl
                                             (\fieldSubstituted soFar ->
                                                 soFar
@@ -10598,9 +10570,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                     }
                 )
                 (expressionRecordFields
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\fieldNode soFar ->
                             Result.andThen
@@ -10608,13 +10580,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 { range = fieldNode.range
                                                 , name = fieldNode.name
                                                 , nameRange = fieldNode.nameRange
                                                 , value = fieldValueSubstituted.node
                                                 }
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge
@@ -10646,9 +10618,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                             , type_ = typeSubstituted.type_
                                             }
                                         , field0 = field0Substituted.node
-                                        , field1Up =
-                                            field1UpSubstituted.nodesReverse
-                                                |> List.reverse
+                                        , field1Up = field1UpSubstituted.nodes
                                         }
                                 , type_ = typeSubstituted.type_
                                 }
@@ -10681,9 +10651,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                     )
                 )
                 (expressionRecordUpdate.field1Up
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\fieldNode soFar ->
                             Result.andThen
@@ -10691,13 +10661,13 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 { range = fieldNode.range
                                                 , name = fieldNode.name
                                                 , nameRange = fieldNode.nameRange
                                                 , value = fieldValueSubstituted.node
                                                 }
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge
@@ -10724,9 +10694,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 , value =
                                     ExpressionLambda
                                         { parameter0 = parameter0Substituted.node
-                                        , parameter1Up =
-                                            parameter1UpSubstituted.nodesReverse
-                                                |> List.reverse
+                                        , parameter1Up = parameter1UpSubstituted.nodes
                                         , result = resultSubstituted.node
                                         }
                                 , type_ =
@@ -10734,8 +10702,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                         (TypeFunction
                                             { input = parameter0Substituted.node.type_
                                             , output =
-                                                parameter1UpSubstituted.nodesReverse
-                                                    |> List.foldl
+                                                parameter1UpSubstituted.nodes
+                                                    |> List.foldr
                                                         (\argumentTypedNode output ->
                                                             TypeNotVariable
                                                                 (TypeFunction
@@ -10761,9 +10729,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
                 (expressionLambda.parameter1Up
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\parameterNode soFar ->
                             Result.andThen
@@ -10771,9 +10739,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\substitutionsSoFarWithParameter ->
                                             { substitutions = substitutionsSoFarWithParameter
-                                            , nodesReverse =
+                                            , nodes =
                                                 argumentSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge
@@ -10805,8 +10773,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     ExpressionCaseOf
                                         { case0 = case0Substituted.node
                                         , case1Up =
-                                            case1UpSubstituted.nodesReverse
-                                                |> List.reverse
+                                            case1UpSubstituted.nodes
                                         , matchedExpression = matchedSubstituted.node
                                         }
                                 , type_ = case0Substituted.node.result.type_
@@ -10849,9 +10816,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                     )
                 )
                 (expressionCaseOf.case1Up
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\case_ soFar ->
                             resultAndThen2
@@ -10859,11 +10826,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 { pattern = patternSubstituted.node
                                                 , result = resultSubstituted.node
                                                 }
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge3 declarationTypes
@@ -10895,9 +10862,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     ExpressionLetIn
                                         { declaration0 =
                                             declaration0Substituted.node
-                                        , declaration1Up =
-                                            declaration1UpSubstituted.nodesReverse
-                                                |> List.reverse
+                                        , declaration1Up = declaration1UpSubstituted.nodes
                                         , result = resultSubstituted.node
                                         }
                                 , type_ = resultSubstituted.node.type_
@@ -10915,9 +10880,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         replacement
                 )
                 (expressionLetIn.declaration1Up
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\letDeclarationNode soFar ->
                             Result.andThen
@@ -10925,9 +10890,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 declarationSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge declarationTypes
@@ -11008,9 +10973,7 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                                 { range = letDeclarationAndRange.range
                                 , declaration =
                                     LetValueOrFunctionDeclaration
-                                        { parameters =
-                                            argumentsSubstituted.nodesReverse
-                                                |> List.reverse
+                                        { parameters = argumentsSubstituted.nodes
                                         , result = resultSubstituted.node
                                         , type_ = typeSubstituted.type_
                                         , signature = letValueOrFunction.signature
@@ -11027,9 +10990,9 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                         )
                 )
                 (letValueOrFunction.parameters
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\argumentNode soFar ->
                             Result.andThen
@@ -11037,9 +11000,9 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                                     Result.map
                                         (\fullSubstitutions ->
                                             { substitutions = fullSubstitutions
-                                            , nodesReverse =
+                                            , nodes =
                                                 argumentSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge
@@ -12062,13 +12025,11 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                 { range = patternTypedNode.range
                                 , value =
                                     PatternRecord
-                                        (fieldsSubstituted.nodesReverse
-                                            |> List.reverse
-                                        )
+                                        fieldsSubstituted.nodes
                                 , type_ =
                                     TypeNotVariable
                                         (TypeRecord
-                                            (fieldsSubstituted.nodesReverse
+                                            (fieldsSubstituted.nodes
                                                 |> List.foldl
                                                     (\fieldSubstituted soFar ->
                                                         soFar
@@ -12091,9 +12052,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         replacement
                 )
                 (patternRecordFields
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\fieldNode soFar ->
                             Result.andThen
@@ -12101,12 +12062,12 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                     Result.map
                                         (\substitutionsWithField ->
                                             { substitutions = substitutionsWithField
-                                            , nodesReverse =
+                                            , nodes =
                                                 { value = fieldNode.value
                                                 , range = fieldNode.range
                                                 , type_ = fieldTypeSubstituted.type_
                                                 }
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge declarationTypes
@@ -12131,9 +12092,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                 { range = patternTypedNode.range
                                 , value =
                                     PatternListExact
-                                        (elementsSubstituted.nodesReverse
-                                            |> List.reverse
-                                        )
+                                        elementsSubstituted.nodes
                                 , type_ = typeSubstituted.type_
                                 }
                             }
@@ -12148,9 +12107,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         replacement
                 )
                 (patternListElements
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\elementNode soFar ->
                             Result.andThen
@@ -12158,9 +12117,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                     Result.map
                                         (\substitutionsWithElement ->
                                             { substitutions = substitutionsWithElement
-                                            , nodesReverse =
+                                            , nodes =
                                                 fieldSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge declarationTypes
@@ -12177,7 +12136,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
 
         PatternVariant patternVariant ->
             resultAndThen2
-                (\typeSubstituted elementsSubstituted ->
+                (\typeSubstituted valuesSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -12188,9 +12147,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                         { qualification = patternVariant.qualification
                                         , name = patternVariant.name
                                         , moduleOrigin = patternVariant.moduleOrigin
-                                        , values =
-                                            elementsSubstituted.nodesReverse
-                                                |> List.reverse
+                                        , values = valuesSubstituted.nodes
                                         }
                                 , type_ = typeSubstituted.type_
                                 }
@@ -12198,7 +12155,7 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         )
                         (variableSubstitutionsMerge declarationTypes
                             typeSubstituted.substitutions
-                            elementsSubstituted.substitutions
+                            valuesSubstituted.substitutions
                         )
                 )
                 (patternTypedNode.type_
@@ -12206,9 +12163,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                         replacement
                 )
                 (patternVariant.values
-                    |> listFoldlWhileOkFrom
+                    |> listFoldrWhileOkFrom
                         { substitutions = variableSubstitutionsNone
-                        , nodesReverse = []
+                        , nodes = []
                         }
                         (\argumentNode soFar ->
                             Result.andThen
@@ -12216,9 +12173,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                                     Result.map
                                         (\substitutionsWithElement ->
                                             { substitutions = substitutionsWithElement
-                                            , nodesReverse =
+                                            , nodes =
                                                 argumentSubstituted.node
-                                                    :: soFar.nodesReverse
+                                                    :: soFar.nodes
                                             }
                                         )
                                         (variableSubstitutionsMerge declarationTypes
@@ -12509,7 +12466,7 @@ parameterPatternsTypeInfer :
             String
             { introducedExpressionVariables :
                 FastDict.Dict String (Type TypeVariableFromContext)
-            , nodesReverse :
+            , nodes :
                 List
                     (TypedNode
                         (Pattern (Type TypeVariableFromContext))
@@ -12518,18 +12475,18 @@ parameterPatternsTypeInfer :
             }
 parameterPatternsTypeInfer context parameterPatterns =
     parameterPatterns
-        |> listFoldlWhileOkFrom
+        |> listFoldrWhileOkFrom
             { introducedExpressionVariables = FastDict.empty
-            , nodesReverse = []
-            , index = 0
+            , nodes = []
+            , indexFromEnd = 0
             }
             (\pattern soFar ->
                 Result.map
                     (\patternInferred ->
-                        { index = soFar.index + 1
-                        , nodesReverse =
+                        { indexFromEnd = soFar.indexFromEnd + 1
+                        , nodes =
                             patternInferred
-                                :: soFar.nodesReverse
+                                :: soFar.nodes
                         , introducedExpressionVariables =
                             FastDict.union soFar.introducedExpressionVariables
                                 (patternInferred |> patternTypedNodeIntroducedVariables)
@@ -12539,15 +12496,16 @@ parameterPatternsTypeInfer context parameterPatterns =
                         |> patternTypeInfer
                             (context
                                 |> patternContextToInPath
-                                    ("parameter" ++ (soFar.index |> String.fromInt))
+                                    ("parameterFromEnd"
+                                        ++ (soFar.indexFromEnd |> String.fromInt)
+                                    )
                             )
                     )
             )
         |> Result.map
             (\folded ->
-                { introducedExpressionVariables =
-                    folded.introducedExpressionVariables
-                , nodesReverse = folded.nodesReverse
+                { introducedExpressionVariables = folded.introducedExpressionVariables
+                , nodes = folded.nodes
                 }
             )
 
@@ -12642,8 +12600,7 @@ moduleInterfaceToTypes moduleInterface =
                                         Result.map
                                             (\variantValues ->
                                                 variantsSoFar
-                                                    |> FastDict.insert
-                                                        variantName
+                                                    |> FastDict.insert variantName
                                                         variantValues
                                             )
                                             (variantValueInterfaces
@@ -13233,6 +13190,27 @@ listFoldlWhileOkFrom initialOkFolded reduceOnOk list =
 
                 Ok okFoldedWithHead ->
                     listFoldlWhileOkFrom okFoldedWithHead reduceOnOk tail
+
+
+{-| Prefer `listFoldlWhileOkFrom` whenever you don't need to reverse the result
+-}
+listFoldrWhileOkFrom :
+    okFolded
+    -> (a -> okFolded -> Result err okFolded)
+    -> List a
+    -> Result err okFolded
+listFoldrWhileOkFrom initialOkFolded reduceOnOk list =
+    list
+        |> List.foldr
+            (\element soFar ->
+                case soFar of
+                    Err error ->
+                        Err error
+
+                    Ok soFarOk ->
+                        soFarOk |> reduceOnOk element
+            )
+            (Ok initialOkFolded)
 
 
 listMapAndCombineOk : (a -> Result err ok) -> List a -> Result err (List ok)
