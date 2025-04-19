@@ -8107,6 +8107,9 @@ in a module.
     
 See [`ModuleTypes`](#ModuleTypes) and [`ModuleOriginLookup`](#ModuleOriginLookup)
 
+Warning! Always first verify that provided type alias declarations aren't (mutually) recursive.
+Otherwise this function might never terminate. 
+
 -}
 valueAndFunctionDeclarations :
     { importedTypes :

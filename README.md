@@ -59,7 +59,6 @@ exampleModuleOriginLookup =
 ## TODO
 
 -   add more tests
--   (mutually) recursive type aliases can run into an infinite loop
 -   add local types in a fully separate (optional!) step
 
 Right now, this can't handle medium to large files at an acceptable speed.
