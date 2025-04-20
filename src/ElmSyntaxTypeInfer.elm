@@ -337,7 +337,8 @@ typeNotVariableContainedVariables typeNotVariable =
             typeRecordFields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastSet.union (value |> typeContainedVariables) soFar
+                        FastSet.union soFar
+                            (value |> typeContainedVariables)
                     )
                     FastSet.empty
 
@@ -345,7 +346,8 @@ typeNotVariableContainedVariables typeNotVariable =
             typeRecordExtension.fields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastSet.union (value |> typeContainedVariables) soFar
+                        FastSet.union soFar
+                            (value |> typeContainedVariables)
                     )
                     (FastSet.singleton typeRecordExtension.recordVariable)
 
@@ -4643,8 +4645,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                             |> FastSet.insert introducedNumberTypeVariable
                     }
                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                            { declarationTypes = context.declarationTypes
-                            }
+                            context.declarationTypes
                             (variableSubstitutionsFromVariableToType
                                 introducedNumberTypeVariable
                                 negatedInferred.node.type_
@@ -4693,8 +4694,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     |> FastSet.insert introducedFieldValueTypeVariable
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                    { declarationTypes = context.declarationTypes
-                                    }
+                                    context.declarationTypes
                                     recordWithAccessedFieldUnified.substitutions
                         )
                         (typeUnify context.declarationTypes
@@ -4760,8 +4760,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         )
                                         (conditionInferred
                                             |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                                { declarationTypes = context.declarationTypes
-                                                }
+                                                context.declarationTypes
                                                 conditionTypeInferredUnifiedWithBool.substitutions
                                         )
                                         ({ substitutions = onFalseOnTrueInferredSubstitutions
@@ -4983,8 +4982,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     tailElementsInferred.introducedTypeVariables
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                                    { declarationTypes = context.declarationTypes
-                                                    }
+                                                    context.declarationTypes
                                                     elementTypeUnified.substitutions
                                         )
                                         (variableSubstitutionsMerge context.declarationTypes
@@ -5080,8 +5078,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     |> FastSet.insert introducedResultTypeVariable
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                                    { declarationTypes = context.declarationTypes
-                                                    }
+                                                    context.declarationTypes
                                                     callTypeUnified.substitutions
                                         )
                                         (variableSubstitutionsMerge3 context.declarationTypes
@@ -5263,8 +5260,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     |> FastSet.insert introducedRecordTypeVariable
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                                    { declarationTypes = context.declarationTypes
-                                                    }
+                                                    context.declarationTypes
                                                     recordVariableUnifiedWithUpdate.substitutions
                                         )
                                         (variableSubstitutionsMerge context.declarationTypes
@@ -5414,7 +5410,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                             resultInferred.introducedTypeVariables
                                     }
                                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                            { declarationTypes = context.declarationTypes }
+                                            context.declarationTypes
                                             resultInferred.substitutions
                                 )
                                 (lambda.expression
@@ -5501,8 +5497,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                     |> FastSet.union case1UpInferred.introducedTypeVariables
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                                    { declarationTypes = context.declarationTypes
-                                                    }
+                                                    context.declarationTypes
                                                     unifiedTypes.substitutions
                                         )
                                         (variableSubstitutionsMerge3 context.declarationTypes
@@ -5756,7 +5751,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     }
                                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                            { declarationTypes = context.declarationTypes }
+                                            context.declarationTypes
                                             fullSubstitutions
                                 )
                                 (variableSubstitutionsMerge3 context.declarationTypes
@@ -7009,8 +7004,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                                     |> FastSet.insert introducedResultTypeVariable
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                    { declarationTypes = context.declarationTypes
-                                    }
+                                    context.declarationTypes
                                     unifiedType.substitutions
                         )
                         (variableSubstitutionsMerge context.declarationTypes
@@ -11383,8 +11377,7 @@ letDeclarationMapTypes typeChange expressionLetDeclaration =
 
 
 expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    }
+    ModuleLevelDeclarationTypesAvailableInModule
     -> VariableSubstitutions
     ->
         { substitutions : VariableSubstitutions
@@ -11404,13 +11397,13 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables :
                     (Type TypeVariableFromContext)
             , introducedTypeVariables : FastSet.Set TypeVariableFromContext
             }
-expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables context substitutionsToAddOrApply expressionTypeInferResult =
+expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declarationTypes substitutionsToAddOrApply expressionTypeInferResult =
     typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
-        { declarationTypes = context.declarationTypes
+        { declarationTypes = declarationTypes
         , nodeApplyVariableSubstitutions =
             \substitutionsToApply ->
                 expressionTypeInferResult.node
-                    |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                    |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
                         substitutionsToApply
         }
         substitutionsToAddOrApply
