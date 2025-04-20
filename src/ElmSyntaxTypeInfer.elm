@@ -1600,12 +1600,14 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
                                                             Result.map
                                                                 (\fullSubstitutions ->
                                                                     { substitutions = fullSubstitutions
-                                                                    , types = soFar.types |> FastDict.insert name valueUnified.type_
+                                                                    , types =
+                                                                        soFar.types
+                                                                            |> FastDict.insert name valueUnified.type_
                                                                     }
                                                                 )
                                                                 (variableSubstitutionsMerge declarationTypes
-                                                                    valueUnified.substitutions
                                                                     soFar.substitutions
+                                                                    valueUnified.substitutions
                                                                 )
                                                         )
                                                         (typeUnify declarationTypes
@@ -1662,12 +1664,14 @@ typeNotVariableSubstituteVariableByNotVariable declarationTypes replacement type
                                                             Result.map
                                                                 (\fullSubstitutions ->
                                                                     { substitutions = fullSubstitutions
-                                                                    , types = soFar.types |> FastDict.insert name valueUnified.type_
+                                                                    , types =
+                                                                        soFar.types
+                                                                            |> FastDict.insert name valueUnified.type_
                                                                     }
                                                                 )
                                                                 (variableSubstitutionsMerge declarationTypes
-                                                                    valueUnified.substitutions
                                                                     soFar.substitutions
+                                                                    valueUnified.substitutions
                                                                 )
                                                         )
                                                         (typeUnify declarationTypes
@@ -2661,10 +2665,9 @@ typeNotVariableUnify declarationTypes a b =
                                                         substitutionsWithArgument
                                                     }
                                                 )
-                                                (variableSubstitutionsMerge
-                                                    declarationTypes
-                                                    argumentTypeUnifiedAndSubstitutions.substitutions
+                                                (variableSubstitutionsMerge declarationTypes
                                                     soFar.substitutions
+                                                    argumentTypeUnifiedAndSubstitutions.substitutions
                                                 )
                                         )
                                         (typeUnify declarationTypes ab.a ab.b)
@@ -3079,7 +3082,7 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
                                         (\constructedAliasedTypeUnifiedWithB ->
                                             Result.map
                                                 (\fullSubstitutions ->
-                                                    { type_ = constructedAliasedType.type_
+                                                    { type_ = constructedAliasedTypeUnifiedWithB.type_
                                                     , substitutions = fullSubstitutions
                                                     }
                                                 )
@@ -3184,8 +3187,8 @@ typeRecordUnify declarationTypes aFields bFields =
                                 }
                             )
                             (variableSubstitutionsMerge declarationTypes
-                                abValueUnified.substitutions
                                 soFar.substitutions
+                                abValueUnified.substitutions
                             )
                     )
                     (typeUnify declarationTypes aValue bValue)
@@ -3261,8 +3264,8 @@ typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields
                                 }
                             )
                             (variableSubstitutionsMerge declarationTypes
-                                abValueUnified.substitutions
                                 soFar.substitutions
+                                abValueUnified.substitutions
                             )
                     )
                     (typeUnify declarationTypes aValue bValue)
@@ -3397,8 +3400,8 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                                 }
                             )
                             (variableSubstitutionsMerge declarationTypes
-                                abValueUnified.substitutions
                                 soFar.substitutions
+                                abValueUnified.substitutions
                             )
                     )
                     (typeUnify declarationTypes aValue bValue)
@@ -4088,8 +4091,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                         fullListTypeUnified.substitutions
                                 )
                         )
-                        (typeUnify
-                            context.declarationTypes
+                        (typeUnify context.declarationTypes
                             (typeListList headInferred.type_)
                             tailInferred.type_
                         )
@@ -4326,7 +4328,7 @@ patternVariantTypeInfer context patternVariant =
                             }
                         )
                 }
-                (\argument soFar ->
+                (\value soFar ->
                     Result.andThen
                         (\valueInferred ->
                             Result.andThen
@@ -4351,10 +4353,10 @@ patternVariantTypeInfer context patternVariant =
                                 )
                                 (typeUnify context.declarationTypes
                                     valueInferred.type_
-                                    argument.typeInVariant
+                                    value.typeInVariant
                                 )
                         )
-                        (argument.pattern
+                        (value.pattern
                             |> patternTypeInfer
                                 (context
                                     |> patternContextToInPath
@@ -4757,8 +4759,12 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     onFalseInferred.substitutions
                                 )
                                 (variableSubstitutionsMerge context.declarationTypes
-                                    conditionTypeInferredUnifiedWithBool.substitutions
-                                    resultTypesUnified.substitutions
+                                    (-- TODO only apply these to condition
+                                     conditionTypeInferredUnifiedWithBool.substitutions
+                                    )
+                                    (-- TODO only apply these to onTrue and onFalse
+                                     resultTypesUnified.substitutions
+                                    )
                                 )
                         )
                         (typeUnify context.declarationTypes
