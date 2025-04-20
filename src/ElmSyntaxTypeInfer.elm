@@ -4729,42 +4729,69 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
             resultAndThen3
                 (\conditionInferred onTrueInferred onFalseInferred ->
                     resultAndThen2
-                        (\conditionTypeInferredUnifiedWithBool resultTypesUnified ->
-                            resultAndThen2
-                                (\fullSubstitutions unificationSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , node =
-                                        { range = fullRange
-                                        , value =
-                                            ExpressionIfThenElse
-                                                { condition = conditionInferred.node
-                                                , onTrue = onTrueInferred.node
-                                                , onFalse = onFalseInferred.node
+                        (\conditionTypeInferredUnifiedWithBool onTrueOnFalseTypesUnified ->
+                            Result.andThen
+                                (\onFalseOnTrueInferredSubstitutions ->
+                                    resultAndThen2
+                                        (\conditionSubstituted onTrueOnFalseSubstituted ->
+                                            Result.map
+                                                (\fullSubstitutions ->
+                                                    { substitutions = fullSubstitutions
+                                                    , introducedTypeVariables =
+                                                        FastSet.union
+                                                            conditionSubstituted.introducedTypeVariables
+                                                            onTrueOnFalseSubstituted.introducedTypeVariables
+                                                    , node =
+                                                        { range = fullRange
+                                                        , value =
+                                                            ExpressionIfThenElse
+                                                                { condition = conditionSubstituted.node
+                                                                , onTrue = onTrueOnFalseSubstituted.node.onTrue
+                                                                , onFalse = onTrueOnFalseSubstituted.node.onFalse
+                                                                }
+                                                        , type_ = onTrueOnFalseSubstituted.node.onTrue.type_
+                                                        }
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge context.declarationTypes
+                                                    conditionSubstituted.substitutions
+                                                    onTrueOnFalseSubstituted.substitutions
+                                                )
+                                        )
+                                        (conditionInferred
+                                            |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
+                                                { declarationTypes = context.declarationTypes
                                                 }
-                                        , type_ = onTrueInferred.node.type_
-                                        }
-                                    , introducedTypeVariables =
-                                        conditionInferred.introducedTypeVariables
-                                            |> FastSet.union onTrueInferred.introducedTypeVariables
-                                            |> FastSet.union onFalseInferred.introducedTypeVariables
-                                    }
-                                        |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
-                                            { declarationTypes = context.declarationTypes
-                                            }
-                                            unificationSubstitutions
-                                )
-                                (variableSubstitutionsMerge3 context.declarationTypes
-                                    conditionInferred.substitutions
-                                    onTrueInferred.substitutions
-                                    onFalseInferred.substitutions
+                                                conditionTypeInferredUnifiedWithBool.substitutions
+                                        )
+                                        ({ substitutions = onFalseOnTrueInferredSubstitutions
+                                         , introducedTypeVariables =
+                                            onTrueInferred.introducedTypeVariables
+                                                |> FastSet.union onFalseInferred.introducedTypeVariables
+                                         }
+                                            |> typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
+                                                { declarationTypes = context.declarationTypes
+                                                , nodeApplyVariableSubstitutions =
+                                                    \substitutionsToApply ->
+                                                        Result.map2
+                                                            (\onTrueSubstituted onFalseSubstituted ->
+                                                                { onTrue = onTrueSubstituted, onFalse = onFalseSubstituted }
+                                                            )
+                                                            (onTrueInferred.node
+                                                                |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                                    substitutionsToApply
+                                                            )
+                                                            (onFalseInferred.node
+                                                                |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
+                                                                    substitutionsToApply
+                                                            )
+                                                }
+                                                onTrueOnFalseTypesUnified.substitutions
+                                        )
                                 )
                                 (variableSubstitutionsMerge context.declarationTypes
-                                    (-- TODO only apply these to condition
-                                     conditionTypeInferredUnifiedWithBool.substitutions
-                                    )
-                                    (-- TODO only apply these to onTrue and onFalse
-                                     resultTypesUnified.substitutions
-                                    )
+                                    onTrueInferred.substitutions
+                                    onFalseInferred.substitutions
                                 )
                         )
                         (typeUnify context.declarationTypes
