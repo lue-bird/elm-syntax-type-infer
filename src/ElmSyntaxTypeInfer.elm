@@ -2563,7 +2563,7 @@ typeUnify declarationTypes a b =
             case b of
                 TypeVariable bVariableName ->
                     Ok
-                        { type_ = TypeNotVariable aTypeNotVariable
+                        { type_ = a
                         , substitutions =
                             { variableToType =
                                 FastDict.singleton bVariableName
@@ -2581,7 +2581,7 @@ typeUnify declarationTypes a b =
             case b of
                 TypeVariable bVariable ->
                     Ok
-                        { type_ = TypeVariable aVariable
+                        { type_ = a
                         , substitutions =
                             { variableToType = FastDict.empty
                             , equivalentVariables =
@@ -2593,7 +2593,7 @@ typeUnify declarationTypes a b =
 
                 TypeNotVariable bTypeNotVariable ->
                     Ok
-                        { type_ = TypeNotVariable bTypeNotVariable
+                        { type_ = b
                         , substitutions =
                             { variableToType =
                                 FastDict.singleton aVariable
@@ -2614,451 +2614,434 @@ typeNotVariableUnify :
             , substitutions : VariableSubstitutions
             }
 typeNotVariableUnify declarationTypes a b =
-    let
-        maybeTypeConstructsWithSameName :
-            Maybe
-                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-                , name : String
-                , aArguments : List (Type TypeVariableFromContext)
-                , bArguments : List (Type TypeVariableFromContext)
-                }
-        maybeTypeConstructsWithSameName =
-            case a of
-                TypeConstruct aTypeConstruct ->
-                    case b of
-                        TypeConstruct bTypeConstruct ->
-                            if
-                                (aTypeConstruct.moduleOrigin
-                                    == bTypeConstruct.moduleOrigin
-                                )
-                                    && (aTypeConstruct.name
-                                            == bTypeConstruct.name
-                                       )
-                            then
-                                Just
-                                    { moduleOrigin = aTypeConstruct.moduleOrigin
-                                    , name = aTypeConstruct.name
-                                    , aArguments = aTypeConstruct.arguments
-                                    , bArguments = bTypeConstruct.arguments
-                                    }
-
-                            else
-                                Nothing
-
-                        TypeUnit ->
-                            Nothing
-
-                        TypeTuple _ ->
-                            Nothing
-
-                        TypeTriple _ ->
-                            Nothing
-
-                        TypeRecord _ ->
-                            Nothing
-
-                        TypeRecordExtension _ ->
-                            Nothing
-
-                        TypeFunction _ ->
-                            Nothing
-
+    case a of
+        TypeUnit ->
+            case b of
                 TypeUnit ->
-                    Nothing
+                    okTypeUnitSubstitutionsNone
 
-                TypeTuple _ ->
-                    Nothing
-
-                TypeTriple _ ->
-                    Nothing
-
-                TypeRecord _ ->
-                    Nothing
-
-                TypeRecordExtension _ ->
-                    Nothing
-
-                TypeFunction _ ->
-                    Nothing
-
-        maybeUnifiedWithTypeConstruct :
-            Maybe
-                (Result
-                    String
-                    { type_ : Type TypeVariableFromContext
-                    , substitutions : VariableSubstitutions
-                    }
-                )
-        maybeUnifiedWithTypeConstruct =
-            case maybeTypeConstructsWithSameName of
-                Just matchingTypeConstructs ->
-                    Result.map
-                        (\argumentsABUnified ->
-                            { type_ =
-                                TypeNotVariable
-                                    (TypeConstruct
-                                        { moduleOrigin = matchingTypeConstructs.moduleOrigin
-                                        , name = matchingTypeConstructs.name
-                                        , arguments = argumentsABUnified.arguments
-                                        }
-                                    )
-                            , substitutions = argumentsABUnified.substitutions
-                            }
-                        )
-                        (-- TODO single operation
-                         List.map2
-                            (\aArgument bArgument -> { a = aArgument, b = bArgument })
-                            matchingTypeConstructs.aArguments
-                            matchingTypeConstructs.bArguments
-                            |> listFoldrWhileOkFrom
-                                argumentsListEmptySubstitutionsNone
-                                (\ab soFar ->
-                                    Result.andThen
-                                        (\argumentTypeUnifiedAndSubstitutions ->
-                                            Result.map
-                                                (\substitutionsWithArgument ->
-                                                    { arguments =
-                                                        argumentTypeUnifiedAndSubstitutions.type_
-                                                            :: soFar.arguments
-                                                    , substitutions =
-                                                        substitutionsWithArgument
-                                                    }
-                                                )
-                                                (variableSubstitutionsMerge declarationTypes
-                                                    soFar.substitutions
-                                                    argumentTypeUnifiedAndSubstitutions.substitutions
-                                                )
-                                        )
-                                        (typeUnify declarationTypes ab.a ab.b)
-                                )
-                        )
-                        |> Just
-
-                Nothing ->
-                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes a b of
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
                         Just result ->
-                            Just result
+                            result
 
                         Nothing ->
-                            typeUnifyWithTryToExpandTypeConstruct declarationTypes b a
-    in
-    case maybeUnifiedWithTypeConstruct of
-        Just result ->
-            result
+                            Err "unit (`()`) cannot be unified with types other than unit"
 
-        Nothing ->
-            case a of
+                TypeTuple _ ->
+                    Err "unit (`()`) cannot be unified with types other than unit"
+
+                TypeTriple _ ->
+                    Err "unit (`()`) cannot be unified with types other than unit"
+
+                TypeRecord _ ->
+                    Err "unit (`()`) cannot be unified with types other than unit"
+
+                TypeRecordExtension _ ->
+                    Err "unit (`()`) cannot be unified with types other than unit"
+
+                TypeFunction _ ->
+                    Err "unit (`()`) cannot be unified with types other than unit"
+
+        TypeConstruct aTypeConstruct ->
+            let
+                aDescription : () -> String
+                aDescription () =
+                    "choice type "
+                        ++ qualifiedToString
+                            { qualification = aTypeConstruct.moduleOrigin
+                            , name = aTypeConstruct.name
+                            }
+            in
+            case b of
+                TypeConstruct bTypeConstruct ->
+                    if
+                        (aTypeConstruct.moduleOrigin == bTypeConstruct.moduleOrigin)
+                            && (aTypeConstruct.name == bTypeConstruct.name)
+                    then
+                        Result.map
+                            (\argumentsABUnified ->
+                                { type_ =
+                                    TypeNotVariable
+                                        (TypeConstruct
+                                            { moduleOrigin = aTypeConstruct.moduleOrigin
+                                            , name = aTypeConstruct.name
+                                            , arguments = argumentsABUnified.arguments
+                                            }
+                                        )
+                                , substitutions = argumentsABUnified.substitutions
+                                }
+                            )
+                            (-- TODO single operation
+                             List.map2
+                                (\aArgument bArgument -> { a = aArgument, b = bArgument })
+                                aTypeConstruct.arguments
+                                bTypeConstruct.arguments
+                                |> listFoldrWhileOkFrom
+                                    argumentsListEmptySubstitutionsNone
+                                    (\ab soFar ->
+                                        Result.andThen
+                                            (\argumentTypeUnifiedAndSubstitutions ->
+                                                Result.map
+                                                    (\substitutionsWithArgument ->
+                                                        { arguments =
+                                                            argumentTypeUnifiedAndSubstitutions.type_
+                                                                :: soFar.arguments
+                                                        , substitutions =
+                                                            substitutionsWithArgument
+                                                        }
+                                                    )
+                                                    (variableSubstitutionsMerge declarationTypes
+                                                        soFar.substitutions
+                                                        argumentTypeUnifiedAndSubstitutions.substitutions
+                                                    )
+                                            )
+                                            (typeUnify declarationTypes ab.a ab.b)
+                                    )
+                            )
+
+                    else
+                        case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                            Just result ->
+                                result
+
+                            Nothing ->
+                                case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                                    Just result ->
+                                        result
+
+                                    Nothing ->
+                                        Err
+                                            (aDescription ()
+                                                ++ " cannot be unified be with a choice type with a different name: "
+                                                ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
+                                            )
+
                 TypeUnit ->
-                    case b of
-                        TypeUnit ->
-                            okTypeUnitSubstitutionsNone
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                        TypeConstruct _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeTuple _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                TypeTuple _ ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                        TypeTriple _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeRecord _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                TypeTriple _ ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                        TypeRecordExtension _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeFunction _ ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                TypeRecord _ ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                TypeConstruct aTypeConstruct ->
-                    let
-                        aDescription : String
-                        aDescription =
-                            "choice type "
-                                ++ qualifiedToString
-                                    { qualification = aTypeConstruct.moduleOrigin
-                                    , name = aTypeConstruct.name
-                                    }
-                    in
-                    case b of
-                        TypeUnit ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeConstruct bTypeConstruct ->
-                            Err
-                                (aDescription
-                                    ++ " cannot be unified be with a choice type with a different name: "
-                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
-                                )
+                TypeRecordExtension _ ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                        TypeTuple _ ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeTriple _ ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+                TypeFunction _ ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
+                        Just result ->
+                            result
 
-                        TypeRecord _ ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
+                        Nothing ->
+                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
 
-                        TypeRecordExtension _ ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
-
-                        TypeFunction _ ->
-                            Err (aDescription ++ " cannot be unified with types other than choice type/type alias")
-
-                TypeTuple aTuple ->
-                    case b of
-                        TypeTuple bTuple ->
-                            resultAndThen2
-                                (\part0ABUnified part1ABUnified ->
-                                    Result.map
-                                        (\substitutionsABMerged ->
-                                            { type_ =
-                                                TypeNotVariable
-                                                    (TypeTuple
-                                                        { part0 = part0ABUnified.type_
-                                                        , part1 = part1ABUnified.type_
-                                                        }
-                                                    )
-                                            , substitutions = substitutionsABMerged
-                                            }
-                                        )
-                                        (variableSubstitutionsMerge declarationTypes
-                                            part0ABUnified.substitutions
-                                            part1ABUnified.substitutions
-                                        )
-                                )
-                                (typeUnify declarationTypes aTuple.part0 bTuple.part0)
-                                (typeUnify declarationTypes aTuple.part1 bTuple.part1)
-
-                        TypeUnit ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                        TypeConstruct _ ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                        TypeTriple _ ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                        TypeRecord _ ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                        TypeRecordExtension _ ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                        TypeFunction _ ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
-
-                TypeTriple aTriple ->
-                    case b of
-                        TypeTriple bTriple ->
-                            resultAndThen3
-                                (\part0ABUnified part1ABUnified part2ABUnified ->
-                                    Result.map
-                                        (\substitutionsABMerged ->
-                                            { type_ =
-                                                TypeNotVariable
-                                                    (TypeTriple
-                                                        { part0 = part0ABUnified.type_
-                                                        , part1 = part1ABUnified.type_
-                                                        , part2 = part2ABUnified.type_
-                                                        }
-                                                    )
-                                            , substitutions = substitutionsABMerged
-                                            }
-                                        )
-                                        (variableSubstitutionsMerge3 declarationTypes
-                                            part0ABUnified.substitutions
-                                            part1ABUnified.substitutions
-                                            part2ABUnified.substitutions
-                                        )
-                                )
-                                (typeUnify declarationTypes aTriple.part0 bTriple.part0)
-                                (typeUnify declarationTypes aTriple.part1 bTriple.part1)
-                                (typeUnify declarationTypes aTriple.part1 bTriple.part1)
-
-                        TypeUnit ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                        TypeConstruct _ ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                        TypeTuple _ ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                        TypeRecord _ ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                        TypeRecordExtension _ ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                        TypeFunction _ ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
-
-                TypeRecord aRecord ->
-                    case b of
-                        TypeRecord bRecord ->
+        TypeTuple aTuple ->
+            case b of
+                TypeTuple bTuple ->
+                    resultAndThen2
+                        (\part0ABUnified part1ABUnified ->
                             Result.map
-                                (\unified ->
-                                    { type_ = TypeNotVariable unified.type_
-                                    , substitutions = unified.substitutions
+                                (\substitutionsABMerged ->
+                                    { type_ =
+                                        TypeNotVariable
+                                            (TypeTuple
+                                                { part0 = part0ABUnified.type_
+                                                , part1 = part1ABUnified.type_
+                                                }
+                                            )
+                                    , substitutions = substitutionsABMerged
                                     }
                                 )
-                                (typeRecordUnify declarationTypes aRecord bRecord)
+                                (variableSubstitutionsMerge declarationTypes
+                                    part0ABUnified.substitutions
+                                    part1ABUnified.substitutions
+                                )
+                        )
+                        (typeUnify declarationTypes aTuple.part0 bTuple.part0)
+                        (typeUnify declarationTypes aTuple.part1 bTuple.part1)
 
-                        TypeRecordExtension bRecordExtension ->
+                TypeUnit ->
+                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                        Just result ->
+                            result
+
+                        Nothing ->
+                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                TypeTriple _ ->
+                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                TypeRecord _ ->
+                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                TypeRecordExtension _ ->
+                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+                TypeFunction _ ->
+                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+
+        TypeTriple aTriple ->
+            case b of
+                TypeTriple bTriple ->
+                    resultAndThen3
+                        (\part0ABUnified part1ABUnified part2ABUnified ->
                             Result.map
-                                (\unified ->
-                                    { type_ = TypeNotVariable unified.type_
-                                    , substitutions = unified.substitutions
+                                (\substitutionsABMerged ->
+                                    { type_ =
+                                        TypeNotVariable
+                                            (TypeTriple
+                                                { part0 = part0ABUnified.type_
+                                                , part1 = part1ABUnified.type_
+                                                , part2 = part2ABUnified.type_
+                                                }
+                                            )
+                                    , substitutions = substitutionsABMerged
                                     }
                                 )
-                                (typeRecordExtensionUnifyWithRecord declarationTypes
-                                    bRecordExtension
-                                    aRecord
+                                (variableSubstitutionsMerge3 declarationTypes
+                                    part0ABUnified.substitutions
+                                    part1ABUnified.substitutions
+                                    part2ABUnified.substitutions
                                 )
+                        )
+                        (typeUnify declarationTypes aTriple.part0 bTriple.part0)
+                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
+                        (typeUnify declarationTypes aTriple.part1 bTriple.part1)
 
-                        TypeUnit ->
+                TypeUnit ->
+                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                        Just result ->
+                            result
+
+                        Nothing ->
+                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeTuple _ ->
+                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeRecord _ ->
+                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeRecordExtension _ ->
+                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+                TypeFunction _ ->
+                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+
+        TypeRecord aRecord ->
+            case b of
+                TypeRecord bRecord ->
+                    Result.map
+                        (\unified ->
+                            { type_ = TypeNotVariable unified.type_
+                            , substitutions = unified.substitutions
+                            }
+                        )
+                        (typeRecordUnify declarationTypes aRecord bRecord)
+
+                TypeRecordExtension bRecordExtension ->
+                    Result.map
+                        (\unified ->
+                            { type_ = TypeNotVariable unified.type_
+                            , substitutions = unified.substitutions
+                            }
+                        )
+                        (typeRecordExtensionUnifyWithRecord declarationTypes
+                            bRecordExtension
+                            aRecord
+                        )
+
+                TypeUnit ->
+                    Err
+                        ("record "
+                            ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeUnit |> typeNotVariableToInfoString)
+                        )
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                        Just result ->
+                            result
+
+                        Nothing ->
                             Err
                                 ("record "
                                     ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeUnit |> typeNotVariableToInfoString)
-                                )
-
-                        TypeConstruct bTypeConstruct ->
-                            Err
-                                ("record "
-                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
-                                )
-
-                        TypeTuple bParts ->
-                            Err
-                                ("record "
-                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeTuple bParts |> typeNotVariableToInfoString)
-                                )
-
-                        TypeTriple bParts ->
-                            Err
-                                ("record "
-                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeTriple bParts |> typeNotVariableToInfoString)
-                                )
-
-                        TypeFunction bTypeFunction ->
-                            Err
-                                ("record "
-                                    ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
-                                )
-
-                TypeRecordExtension aRecordExtension ->
-                    case b of
-                        TypeRecord bRecord ->
-                            Result.map
-                                (\unified ->
-                                    { type_ = TypeNotVariable unified.type_
-                                    , substitutions = unified.substitutions
-                                    }
-                                )
-                                (typeRecordExtensionUnifyWithRecord declarationTypes
-                                    aRecordExtension
-                                    bRecord
-                                )
-
-                        TypeRecordExtension bRecordExtension ->
-                            Result.map
-                                (\unified ->
-                                    { type_ = TypeNotVariable unified.type_
-                                    , substitutions = unified.substitutions
-                                    }
-                                )
-                                (typeRecordExtensionUnifyWithRecordExtension declarationTypes
-                                    aRecordExtension
-                                    bRecordExtension
-                                )
-
-                        TypeUnit ->
-                            Err
-                                ("record extension "
-                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeUnit |> typeNotVariableToInfoString)
-                                )
-
-                        TypeConstruct bTypeConstruct ->
-                            Err
-                                ("record extension "
-                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                                     ++ " cannot be unified with types other than record or record extension, found: "
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                 )
 
-                        TypeTuple bParts ->
+                TypeTuple bParts ->
+                    Err
+                        ("record "
+                            ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeTuple bParts |> typeNotVariableToInfoString)
+                        )
+
+                TypeTriple bParts ->
+                    Err
+                        ("record "
+                            ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeTriple bParts |> typeNotVariableToInfoString)
+                        )
+
+                TypeFunction bTypeFunction ->
+                    Err
+                        ("record "
+                            ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
+                        )
+
+        TypeRecordExtension aRecordExtension ->
+            case b of
+                TypeRecord bRecord ->
+                    Result.map
+                        (\unified ->
+                            { type_ = TypeNotVariable unified.type_
+                            , substitutions = unified.substitutions
+                            }
+                        )
+                        (typeRecordExtensionUnifyWithRecord declarationTypes
+                            aRecordExtension
+                            bRecord
+                        )
+
+                TypeRecordExtension bRecordExtension ->
+                    Result.map
+                        (\unified ->
+                            { type_ = TypeNotVariable unified.type_
+                            , substitutions = unified.substitutions
+                            }
+                        )
+                        (typeRecordExtensionUnifyWithRecordExtension declarationTypes
+                            aRecordExtension
+                            bRecordExtension
+                        )
+
+                TypeUnit ->
+                    Err
+                        ("record extension "
+                            ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeUnit |> typeNotVariableToInfoString)
+                        )
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                        Just result ->
+                            result
+
+                        Nothing ->
                             Err
                                 ("record extension "
                                     ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                                     ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeTuple bParts |> typeNotVariableToInfoString)
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                 )
 
-                        TypeTriple bParts ->
-                            Err
-                                ("record extension "
-                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeTriple bParts |> typeNotVariableToInfoString)
-                                )
+                TypeTuple bParts ->
+                    Err
+                        ("record extension "
+                            ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeTuple bParts |> typeNotVariableToInfoString)
+                        )
 
-                        TypeFunction bTypeFunction ->
-                            Err
-                                ("record extension "
-                                    ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than record or record extension, found: "
-                                    ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
-                                )
+                TypeTriple bParts ->
+                    Err
+                        ("record extension "
+                            ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeTriple bParts |> typeNotVariableToInfoString)
+                        )
 
-                TypeFunction aFunction ->
-                    case b of
-                        TypeFunction bFunction ->
-                            resultAndThen2
-                                (\inputABUnified outputABUnified ->
-                                    Result.map
-                                        (\substitutionsABMerged ->
-                                            { type_ =
-                                                TypeNotVariable
-                                                    (TypeFunction
-                                                        { input = inputABUnified.type_
-                                                        , output = outputABUnified.type_
-                                                        }
-                                                    )
-                                            , substitutions = substitutionsABMerged
-                                            }
-                                        )
-                                        (variableSubstitutionsMerge declarationTypes
-                                            inputABUnified.substitutions
-                                            outputABUnified.substitutions
-                                        )
-                                )
-                                (typeUnify declarationTypes aFunction.input bFunction.input)
-                                (typeUnify declarationTypes aFunction.output bFunction.output)
+                TypeFunction bTypeFunction ->
+                    Err
+                        ("record extension "
+                            ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than record or record extension, found: "
+                            ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
+                        )
 
-                        TypeUnit ->
-                            Err
-                                ("function "
-                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than function: "
-                                    ++ (TypeUnit |> typeNotVariableToInfoString)
+        TypeFunction aFunction ->
+            case b of
+                TypeFunction bFunction ->
+                    resultAndThen2
+                        (\inputABUnified outputABUnified ->
+                            Result.map
+                                (\substitutionsABMerged ->
+                                    { type_ =
+                                        TypeNotVariable
+                                            (TypeFunction
+                                                { input = inputABUnified.type_
+                                                , output = outputABUnified.type_
+                                                }
+                                            )
+                                    , substitutions = substitutionsABMerged
+                                    }
                                 )
+                                (variableSubstitutionsMerge declarationTypes
+                                    inputABUnified.substitutions
+                                    outputABUnified.substitutions
+                                )
+                        )
+                        (typeUnify declarationTypes aFunction.input bFunction.input)
+                        (typeUnify declarationTypes aFunction.output bFunction.output)
 
-                        TypeConstruct bTypeConstruct ->
+                TypeUnit ->
+                    Err
+                        ("function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeUnit |> typeNotVariableToInfoString)
+                        )
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct declarationTypes bTypeConstruct a of
+                        Just result ->
+                            result
+
+                        Nothing ->
                             Err
                                 ("function "
                                     ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
@@ -3066,37 +3049,37 @@ typeNotVariableUnify declarationTypes a b =
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                 )
 
-                        TypeTuple bTypeTuple ->
-                            Err
-                                ("function "
-                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than function: "
-                                    ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
-                                )
+                TypeTuple bTypeTuple ->
+                    Err
+                        ("function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
+                        )
 
-                        TypeTriple bTypeTriple ->
-                            Err
-                                ("function "
-                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than function: "
-                                    ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
-                                )
+                TypeTriple bTypeTriple ->
+                    Err
+                        ("function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
+                        )
 
-                        TypeRecord bTypeRecord ->
-                            Err
-                                ("function "
-                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than function: "
-                                    ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
-                                )
+                TypeRecord bTypeRecord ->
+                    Err
+                        ("function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
+                        )
 
-                        TypeRecordExtension bTypeRecordExtension ->
-                            Err
-                                ("function "
-                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
-                                    ++ " cannot be unified with types other than function: "
-                                    ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
-                                )
+                TypeRecordExtension bTypeRecordExtension ->
+                    Err
+                        ("function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
+                        )
 
 
 argumentsListEmptySubstitutionsNone :
@@ -3119,7 +3102,11 @@ okTypeUnitSubstitutionsNone =
 
 typeUnifyWithTryToExpandTypeConstruct :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable TypeVariableFromContext
+    ->
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        , name : String
+        , arguments : List (Type TypeVariableFromContext)
+        }
     -> TypeNotVariable TypeVariableFromContext
     ->
         Maybe
@@ -3129,99 +3116,79 @@ typeUnifyWithTryToExpandTypeConstruct :
                 , type_ : Type TypeVariableFromContext
                 }
             )
-typeUnifyWithTryToExpandTypeConstruct declarationTypes aToExpand b =
-    case aToExpand of
-        TypeConstruct aTypeConstructToExpand ->
-            case declarationTypes |> FastDict.get aTypeConstructToExpand.moduleOrigin of
+typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstructToExpand b =
+    case declarationTypes |> FastDict.get aTypeConstructToExpand.moduleOrigin of
+        Nothing ->
+            Just
+                (Err
+                    ("could not find declaration types in the origin module of the type construct "
+                        ++ qualifiedToString
+                            { qualification = aTypeConstructToExpand.moduleOrigin
+                            , name = aTypeConstructToExpand.name
+                            }
+                    )
+                )
+
+        Just aOriginModuleTypes ->
+            case aOriginModuleTypes.typeAliases |> FastDict.get aTypeConstructToExpand.name of
                 Nothing ->
-                    Just
-                        (Err
-                            ("could not find declaration types in the origin module of the type construct "
-                                ++ qualifiedToString
-                                    { qualification = aTypeConstructToExpand.moduleOrigin
-                                    , name = aTypeConstructToExpand.name
-                                    }
-                            )
-                        )
+                    Nothing
 
-                Just aOriginModuleTypes ->
-                    case aOriginModuleTypes.typeAliases |> FastDict.get aTypeConstructToExpand.name of
-                        Nothing ->
-                            Nothing
-
-                        Just aOriginAliasDeclaration ->
+                Just aOriginAliasDeclaration ->
+                    Result.andThen
+                        (\constructedAliasedType ->
                             Result.andThen
-                                (\constructedAliasedType ->
+                                (\constructedAliasedTypeUnifiedWithB ->
+                                    Result.map
+                                        (\fullSubstitutions ->
+                                            { type_ = constructedAliasedTypeUnifiedWithB.type_
+                                            , substitutions = fullSubstitutions
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            constructedAliasedTypeUnifiedWithB.substitutions
+                                            constructedAliasedType.substitutions
+                                        )
+                                )
+                                (typeUnify declarationTypes
+                                    constructedAliasedType.type_
+                                    (TypeNotVariable b)
+                                )
+                        )
+                        (-- TODO single operation
+                         List.map2
+                            (\parameterName argument ->
+                                { variable = ( [], parameterName ), type_ = argument }
+                            )
+                            aOriginAliasDeclaration.parameters
+                            aTypeConstructToExpand.arguments
+                            |> listFoldlWhileOkFrom
+                                { type_ =
+                                    aOriginAliasDeclaration.type_
+                                        |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                , substitutions = variableSubstitutionsNone
+                                }
+                                (\substitution constructedAliasedTypeSoFar ->
                                     Result.andThen
-                                        (\constructedAliasedTypeUnifiedWithB ->
+                                        (\afterSubstitution ->
                                             Result.map
-                                                (\fullSubstitutions ->
-                                                    { type_ = constructedAliasedTypeUnifiedWithB.type_
-                                                    , substitutions = fullSubstitutions
+                                                (\substitutionsSoFarAndAfterSubstitution ->
+                                                    { type_ = afterSubstitution.type_
+                                                    , substitutions = substitutionsSoFarAndAfterSubstitution
                                                     }
                                                 )
                                                 (variableSubstitutionsMerge declarationTypes
-                                                    constructedAliasedTypeUnifiedWithB.substitutions
-                                                    constructedAliasedType.substitutions
+                                                    constructedAliasedTypeSoFar.substitutions
+                                                    afterSubstitution.substitutions
                                                 )
                                         )
-                                        (typeUnify declarationTypes
-                                            constructedAliasedType.type_
-                                            (TypeNotVariable b)
-                                        )
-                                )
-                                (-- TODO single operation
-                                 List.map2
-                                    (\parameterName argument ->
-                                        { variable = ( [], parameterName ), type_ = argument }
-                                    )
-                                    aOriginAliasDeclaration.parameters
-                                    aTypeConstructToExpand.arguments
-                                    |> listFoldlWhileOkFrom
-                                        { type_ =
-                                            aOriginAliasDeclaration.type_
-                                                |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
-                                        , substitutions = variableSubstitutionsNone
-                                        }
-                                        (\substitution constructedAliasedTypeSoFar ->
-                                            Result.andThen
-                                                (\afterSubstitution ->
-                                                    Result.map
-                                                        (\substitutionsSoFarAndAfterSubstitution ->
-                                                            { type_ = afterSubstitution.type_
-                                                            , substitutions = substitutionsSoFarAndAfterSubstitution
-                                                            }
-                                                        )
-                                                        (variableSubstitutionsMerge declarationTypes
-                                                            constructedAliasedTypeSoFar.substitutions
-                                                            afterSubstitution.substitutions
-                                                        )
-                                                )
-                                                (constructedAliasedTypeSoFar.type_
-                                                    |> typeSubstituteVariable declarationTypes
-                                                        substitution
-                                                )
+                                        (constructedAliasedTypeSoFar.type_
+                                            |> typeSubstituteVariable declarationTypes
+                                                substitution
                                         )
                                 )
-                                |> Just
-
-        TypeUnit ->
-            Nothing
-
-        TypeTuple _ ->
-            Nothing
-
-        TypeTriple _ ->
-            Nothing
-
-        TypeRecord _ ->
-            Nothing
-
-        TypeRecordExtension _ ->
-            Nothing
-
-        TypeFunction _ ->
-            Nothing
+                        )
+                        |> Just
 
 
 typeRecordUnify :
