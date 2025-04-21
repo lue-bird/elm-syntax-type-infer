@@ -10018,7 +10018,7 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes r
         else
             Err
                 ("cannot unify the variable "
-                    ++ (replacement.variable |> typeVariableFromContextToName)
+                    ++ (replacement.variable |> typeVariableFromContextToInfoString)
                     ++ " with the type "
                     ++ (replacement.type_ |> typeNotVariableToInfoString)
                     ++ " because that type contains the type variable itself."
@@ -13151,22 +13151,6 @@ typeVariablesFromContextToDisambiguationLookupInto soFar variables =
                         variableAsDisambiguatedString
                 )
                 remainingVariables
-
-
-typeVariableFromContextToName : TypeVariableFromContext -> String
-typeVariableFromContextToName ( context, name ) =
-    (name
-        |> String.replace "_" ""
-    )
-        ++ (context
-                |> List.map
-                    (\part ->
-                        part
-                            |> String.replace "_" ""
-                            |> stringFirstCharToUpper
-                    )
-                |> String.concat
-           )
 
 
 nameDisambiguateBy : (String -> Bool) -> String -> String
