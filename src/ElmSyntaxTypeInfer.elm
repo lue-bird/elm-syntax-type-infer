@@ -10020,7 +10020,7 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes r
                 ("cannot unify the variable "
                     ++ (replacement.variable |> typeVariableFromContextToName)
                     ++ " with the type "
-                    ++ (replacement.type_ |> typeNotVariablePrintRoughly)
+                    ++ (replacement.type_ |> typeNotVariableToInfoString)
                     ++ " because that type contains the type variable itself."
                 )
 
@@ -10133,93 +10133,6 @@ typeIsEquivalentToTypeVariable declarationTypes type_ =
         TypeNotVariable typeNotVariable ->
             typeNotVariable
                 |> typeNotVariableIsEquivalentToTypeVariable declarationTypes
-
-
-typePrintRoughly : Type TypeVariableFromContext -> String
-typePrintRoughly type_ =
-    case type_ of
-        TypeVariable variable ->
-            variable |> typeVariableFromContextToName
-
-        TypeNotVariable typeNotVariable ->
-            typeNotVariablePrintRoughly typeNotVariable
-
-
-typeNotVariablePrintRoughly : TypeNotVariable TypeVariableFromContext -> String
-typeNotVariablePrintRoughly typeNotVariable =
-    case typeNotVariable of
-        TypeUnit ->
-            "()"
-
-        TypeFunction typeFunction ->
-            "("
-                ++ (typeFunction.input |> typePrintRoughly)
-                ++ ") -> ("
-                ++ (typeFunction.output |> typePrintRoughly)
-                ++ ")"
-
-        TypeTuple parts ->
-            "( "
-                ++ (parts.part0 |> typePrintRoughly)
-                ++ ", "
-                ++ (parts.part1 |> typePrintRoughly)
-                ++ " )"
-
-        TypeTriple parts ->
-            "( "
-                ++ (parts.part0 |> typePrintRoughly)
-                ++ ", "
-                ++ (parts.part1 |> typePrintRoughly)
-                ++ ", "
-                ++ (parts.part2 |> typePrintRoughly)
-                ++ " )"
-
-        TypeConstruct typeConstruct ->
-            (typeConstruct.moduleOrigin
-                |> String.join "."
-            )
-                ++ "."
-                ++ typeConstruct.name
-                ++ " "
-                ++ (typeConstruct.arguments
-                        |> List.map
-                            (\argument ->
-                                "(" ++ (argument |> typePrintRoughly) ++ ")"
-                            )
-                        |> String.join ", "
-                   )
-
-        TypeRecord fields ->
-            "{ "
-                ++ (fields
-                        |> FastDict.toList
-                        |> List.map
-                            (\( fieldName, fieldValue ) ->
-                                fieldName
-                                    ++ " : "
-                                    ++ (fieldValue |> typePrintRoughly)
-                            )
-                        |> String.join ", "
-                   )
-                ++ " }"
-
-        TypeRecordExtension typeRecordExtension ->
-            "{ "
-                ++ (typeRecordExtension.recordVariable
-                        |> typeVariableFromContextToName
-                   )
-                ++ " | "
-                ++ (typeRecordExtension.fields
-                        |> FastDict.toList
-                        |> List.map
-                            (\( fieldName, fieldValue ) ->
-                                fieldName
-                                    ++ " : "
-                                    ++ (fieldValue |> typePrintRoughly)
-                            )
-                        |> String.join ", "
-                   )
-                ++ " }"
 
 
 declarationValueOrFunctionInfoMapTypeVariables :
