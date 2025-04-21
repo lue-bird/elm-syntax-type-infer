@@ -2583,12 +2583,9 @@ typeUnify declarationTypes a b =
                     Ok
                         { type_ = a
                         , substitutions =
-                            { variableToType = FastDict.empty
-                            , equivalentVariables =
-                                [ FastSet.singleton aVariable
-                                    |> FastSet.insert bVariable
-                                ]
-                            }
+                            variableSubstitutionsFrom2EquivalentVariables
+                                aVariable
+                                bVariable
                         }
 
                 TypeNotVariable bTypeNotVariable ->
@@ -8821,16 +8818,26 @@ variableSubstitutionsFromVariableToType variableToReplace replacementType =
             }
 
         TypeVariable replacementVariable ->
-            if variableToReplace == replacementVariable then
-                variableSubstitutionsNone
+            variableSubstitutionsFrom2EquivalentVariables
+                variableToReplace
+                replacementVariable
 
-            else
-                { variableToType = FastDict.empty
-                , equivalentVariables =
-                    [ FastSet.singleton variableToReplace
-                        |> FastSet.insert replacementVariable
-                    ]
-                }
+
+variableSubstitutionsFrom2EquivalentVariables :
+    TypeVariableFromContext
+    -> TypeVariableFromContext
+    -> VariableSubstitutions
+variableSubstitutionsFrom2EquivalentVariables variableToReplace replacementVariable =
+    if variableToReplace == replacementVariable then
+        variableSubstitutionsNone
+
+    else
+        { variableToType = FastDict.empty
+        , equivalentVariables =
+            [ FastSet.singleton variableToReplace
+                |> FastSet.insert replacementVariable
+            ]
+        }
 
 
 type alias ValueOrFunctionDeclarationInfo type_ =
