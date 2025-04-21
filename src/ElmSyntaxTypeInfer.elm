@@ -2867,25 +2867,12 @@ typeNotVariableUnify declarationTypes a b =
         TypeRecord aRecord ->
             case b of
                 TypeRecord bRecord ->
-                    Result.map
-                        (\unified ->
-                            { type_ = TypeNotVariable unified.type_
-                            , substitutions = unified.substitutions
-                            }
-                        )
-                        (typeRecordUnify declarationTypes aRecord bRecord)
+                    typeRecordUnify declarationTypes aRecord bRecord
 
                 TypeRecordExtension bRecordExtension ->
-                    Result.map
-                        (\unified ->
-                            { type_ = TypeNotVariable unified.type_
-                            , substitutions = unified.substitutions
-                            }
-                        )
-                        (typeRecordExtensionUnifyWithRecord declarationTypes
-                            bRecordExtension
-                            aRecord
-                        )
+                    typeRecordExtensionUnifyWithRecord declarationTypes
+                        bRecordExtension
+                        aRecord
 
                 TypeUnit ->
                     Err
@@ -2935,28 +2922,14 @@ typeNotVariableUnify declarationTypes a b =
         TypeRecordExtension aRecordExtension ->
             case b of
                 TypeRecord bRecord ->
-                    Result.map
-                        (\unified ->
-                            { type_ = TypeNotVariable unified.type_
-                            , substitutions = unified.substitutions
-                            }
-                        )
-                        (typeRecordExtensionUnifyWithRecord declarationTypes
-                            aRecordExtension
-                            bRecord
-                        )
+                    typeRecordExtensionUnifyWithRecord declarationTypes
+                        aRecordExtension
+                        bRecord
 
                 TypeRecordExtension bRecordExtension ->
-                    Result.map
-                        (\unified ->
-                            { type_ = TypeNotVariable unified.type_
-                            , substitutions = unified.substitutions
-                            }
-                        )
-                        (typeRecordExtensionUnifyWithRecordExtension declarationTypes
-                            aRecordExtension
-                            bRecordExtension
-                        )
+                    typeRecordExtensionUnifyWithRecordExtension declarationTypes
+                        aRecordExtension
+                        bRecordExtension
 
                 TypeUnit ->
                     Err
@@ -3198,13 +3171,15 @@ typeRecordUnify :
     ->
         Result
             String
-            { type_ : TypeNotVariable TypeVariableFromContext
+            { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeRecordUnify declarationTypes aFields bFields =
     Result.map
         (\fieldsUnified ->
-            { type_ = TypeRecord fieldsUnified.fieldsUnified
+            { type_ =
+                TypeNotVariable
+                    (TypeRecord fieldsUnified.fieldsUnified)
             , substitutions = fieldsUnified.substitutions
             }
         )
@@ -3258,7 +3233,7 @@ typeRecordExtensionUnifyWithRecord :
     ->
         Result
             String
-            { type_ : TypeNotVariable TypeVariableFromContext
+            { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields =
@@ -3268,7 +3243,8 @@ typeRecordExtensionUnifyWithRecord declarationTypes recordExtension recordFields
                 (\fullSubstitutions ->
                     { substitutions = fullSubstitutions
                     , type_ =
-                        TypeRecord fieldsUnified.fieldsUnified
+                        TypeNotVariable
+                            (TypeRecord fieldsUnified.fieldsUnified)
                     }
                 )
                 (variableSubstitutionsMerge declarationTypes
@@ -3338,7 +3314,7 @@ typeRecordExtensionUnifyWithRecordExtension :
     ->
         Result
             String
-            { type_ : TypeNotVariable TypeVariableFromContext
+            { type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bRecordExtension =
@@ -3371,10 +3347,12 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                 (\fullSubstitutions ->
                     { substitutions = fullSubstitutions
                     , type_ =
-                        TypeRecordExtension
-                            { recordVariable = newBaseVariable
-                            , fields = fieldsUnified.fieldsUnified
-                            }
+                        TypeNotVariable
+                            (TypeRecordExtension
+                                { recordVariable = newBaseVariable
+                                , fields = fieldsUnified.fieldsUnified
+                                }
+                            )
                     }
                 )
                 (variableSubstitutionsMerge3 declarationTypes
