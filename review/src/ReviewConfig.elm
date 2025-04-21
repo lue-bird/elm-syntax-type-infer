@@ -166,9 +166,10 @@ config =
         |> Review.Rule.ignoreErrorsForDirectories [ "tests/" ]
     , NoDebug.TodoOrToString.rule
         |> Review.Rule.ignoreErrorsForDirectories [ "tests/" ]
-    , VariablesBetweenCaseOf.AccessInCases.forbid
-        |> Review.Rule.ignoreErrorsForFiles
-            [ "src/ParserFast.elm", "src/ElmSyntaxParserLenient.elm", "src/Print.elm", "src/Rope.elm", "src/ElmSyntaxPrintDefunctionalized.elm" ]
+    -- allowed for performance reasons
+    -- , VariablesBetweenCaseOf.AccessInCases.forbid
+    --     |> Review.Rule.ignoreErrorsForFiles
+    --         [ "src/ParserFast.elm", "src/ElmSyntaxParserLenient.elm", "src/Print.elm", "src/Rope.elm", "src/ElmSyntaxPrintDefunctionalized.elm" ]
     , EqualsCaseable.forbid EqualsCaseable.Everywhere
     , NoDeprecated.rule NoDeprecated.defaults
     , NoPrematureLetComputation.rule
