@@ -58,7 +58,14 @@ exampleModuleOriginLookup =
 
 ## TODO
 
-- go through typeUnify and add e.g. typeUnifyWithFunction
 - right now, this can't handle medium to large files at an acceptable speed.
-Last measurement: for 10k lines, expect 0.8-2s  (report if you have other numbers)
+  Last measurement: for 10k lines, expect 0.8-2s  (report if you have other numbers)
 - more tests
+
+Optimization ideas
+- go through typeUnify and add e.g. typeUnifyWithFunction
+- idea: optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
+- somehow avoid excessive Result.mapError in list substitutions combine
+- when applying substitutions, check whether iteration via pop or toList etc is fastest and check for empty early specifically
+- optimize equivalentVariableSetMerge
+- in expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables inline typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
