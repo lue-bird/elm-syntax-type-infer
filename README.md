@@ -68,4 +68,3 @@ Optimization ideas
 - somehow avoid excessive Result.mapError in list substitutions combine
 - when applying substitutions, check whether iteration via pop or toList etc is fastest and check for empty early specifically
 - optimize equivalentVariableSetMerge
-- in expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables inline typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable

@@ -11549,19 +11549,68 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables :
             , introducedTypeVariables : FastSet.Set TypeVariableFromContext
             }
 expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declarationTypes substitutionsToAddOrApply expressionTypeInferResult =
-    typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
-        { declarationTypes = declarationTypes
-        , nodeApplyVariableSubstitutions =
-            \substitutionsToApply ->
-                expressionTypeInferResult.node
-                    |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+    let
+        ( substitutionsVariableToTypeToApply, substitutionsVariableToTypeToAdd ) =
+            substitutionsToAddOrApply.variableToType
+                |> FastDict.partition
+                    (\variableToReplace _ ->
+                        expressionTypeInferResult.introducedTypeVariables
+                            |> FastSet.member variableToReplace
+                    )
+
+        ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
+            substitutionsToAddOrApply.equivalentVariables
+                |> List.partition
+                    (\equivalentVariableSet ->
+                        expressionTypeInferResult.introducedTypeVariables
+                            |> fastSetIsSupersetOf equivalentVariableSet
+                    )
+
+        substitutionsToApply : VariableSubstitutions
+        substitutionsToApply =
+            { equivalentVariables = equivalentVariableSubstitutionsToApply
+            , variableToType = substitutionsVariableToTypeToApply
+            }
+
+        substitutionsToAddNotSubstituted : VariableSubstitutions
+        substitutionsToAddNotSubstituted =
+            { equivalentVariables = equivalentVariableSubstitutionsToAdd
+            , variableToType = substitutionsVariableToTypeToAdd
+            }
+    in
+    Result.map3
+        (\nodeSubstituted variableToCondensedLookup substitutionsWithAdded ->
+            { substitutions = substitutionsWithAdded
+            , node = nodeSubstituted
+            , introducedTypeVariables =
+                expressionTypeInferResult.introducedTypeVariables
+                    |> FastSet.map
+                        (\variable ->
+                            variableToCondensedLookup
+                                |> FastDict.get variable
+                                |> Maybe.withDefault variable
+                        )
+            }
+        )
+        (expressionTypeInferResult.node
+            |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                substitutionsToApply
+        )
+        (createEquivalentVariablesToCondensedVariableLookup
+            substitutionsToApply.equivalentVariables
+        )
+        (Result.andThen
+            (\substitutionsToKeep ->
+                substitutionsToKeep
+                    |> variableSubstitutionsApplyVariableSubstitutions
+                        declarationTypes
                         substitutionsToApply
-        }
-        substitutionsToAddOrApply
-        { substitutions = expressionTypeInferResult.substitutions
-        , introducedTypeVariables =
-            expressionTypeInferResult.introducedTypeVariables
-        }
+            )
+            (variableSubstitutionsMerge declarationTypes
+                expressionTypeInferResult.substitutions
+                substitutionsToAddNotSubstituted
+            )
+        )
 
 
 typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable :
