@@ -2263,29 +2263,36 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge declarationTypes a b =
     -- IGNORE TCO
-    if a == variableSubstitutionsNone then
-        Ok b
-
-    else if b == variableSubstitutionsNone then
+    if b == variableSubstitutionsNone then
         Ok a
 
     else if a.variableToType |> FastDict.isEmpty then
-        Ok
-            { variableToType = b.variableToType
-            , equivalentVariables =
-                equivalentVariableSetMerge
-                    a.equivalentVariables
-                    b.equivalentVariables
-            }
+        case a.equivalentVariables of
+            [] ->
+                Ok b
+
+            _ :: _ ->
+                Ok
+                    { variableToType = b.variableToType
+                    , equivalentVariables =
+                        equivalentVariableSetMerge
+                            a.equivalentVariables
+                            b.equivalentVariables
+                    }
 
     else if b.variableToType |> FastDict.isEmpty then
-        Ok
-            { variableToType = a.variableToType
-            , equivalentVariables =
-                equivalentVariableSetMerge
-                    a.equivalentVariables
-                    b.equivalentVariables
-            }
+        case b.equivalentVariables of
+            [] ->
+                Ok a
+
+            _ :: _ ->
+                Ok
+                    { variableToType = a.variableToType
+                    , equivalentVariables =
+                        equivalentVariableSetMerge
+                            a.equivalentVariables
+                            b.equivalentVariables
+                    }
 
     else
         FastDict.merge
@@ -2449,42 +2456,52 @@ equivalentVariableSetMerge :
     -> List (FastSet.Set comparableTypeVariable)
     -> List (FastSet.Set comparableTypeVariable)
 equivalentVariableSetMerge a b =
-    let
-        mergedIntoA :
-            { sets : List (FastSet.Set comparableTypeVariable)
-            , bRemaining : List (FastSet.Set comparableTypeVariable)
-            }
-        mergedIntoA =
-            a
-                |> List.foldl
-                    (\aEquivalentVariableSet soFar ->
-                        case
-                            soFar.bRemaining
-                                |> listMapAndFirstJustAndRemainingAnyOrder
-                                    (\bEquivalentVariableSet ->
-                                        if fastSetShareElements aEquivalentVariableSet bEquivalentVariableSet then
-                                            Just bEquivalentVariableSet
+    case a of
+        [] ->
+            b
 
-                                        else
-                                            Nothing
+        _ :: _ ->
+            case b of
+                [] ->
+                    a
+
+                _ :: _ ->
+                    let
+                        mergedIntoA :
+                            { sets : List (FastSet.Set comparableTypeVariable)
+                            , bRemaining : List (FastSet.Set comparableTypeVariable)
+                            }
+                        mergedIntoA =
+                            a
+                                |> List.foldl
+                                    (\aEquivalentVariableSet soFar ->
+                                        case
+                                            soFar.bRemaining
+                                                |> listMapAndFirstJustAndRemainingAnyOrder
+                                                    (\bEquivalentVariableSet ->
+                                                        if fastSetShareElements aEquivalentVariableSet bEquivalentVariableSet then
+                                                            Just bEquivalentVariableSet
+
+                                                        else
+                                                            Nothing
+                                                    )
+                                        of
+                                            Nothing ->
+                                                { sets = aEquivalentVariableSet :: soFar.sets
+                                                , bRemaining = soFar.bRemaining
+                                                }
+
+                                            Just bEquivalentVariableSetAndRemaining ->
+                                                { sets =
+                                                    FastSet.union aEquivalentVariableSet bEquivalentVariableSetAndRemaining.value
+                                                        :: soFar.sets
+                                                , bRemaining = bEquivalentVariableSetAndRemaining.remaining
+                                                }
                                     )
-                        of
-                            Nothing ->
-                                { sets = aEquivalentVariableSet :: soFar.sets
-                                , bRemaining = soFar.bRemaining
-                                }
-
-                            Just bEquivalentVariableSetAndRemaining ->
-                                { sets =
-                                    FastSet.union aEquivalentVariableSet bEquivalentVariableSetAndRemaining.value
-                                        :: soFar.sets
-                                , bRemaining = bEquivalentVariableSetAndRemaining.remaining
-                                }
-                    )
-                    { sets = [], bRemaining = b }
-    in
-    mergedIntoA.sets
-        ++ mergedIntoA.bRemaining
+                                    { sets = [], bRemaining = b }
+                    in
+                    mergedIntoA.sets
+                        ++ mergedIntoA.bRemaining
 
 
 fastSetShareElements : FastSet.Set comparable -> FastSet.Set comparable -> Bool
