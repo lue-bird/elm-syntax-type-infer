@@ -2263,75 +2263,100 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge declarationTypes a b =
     -- IGNORE TCO
-    FastDict.merge
-        (\variable aType soFarOrError ->
-            Result.map
-                (\soFar ->
-                    { variableToType =
-                        soFar.variableToType
-                            |> FastDict.insert variable aType
-                    , equivalentVariables =
-                        soFar.equivalentVariables
-                    }
-                )
-                soFarOrError
-        )
-        (\variable aType bType soFarOrError ->
-            Result.andThen
-                (\soFar ->
-                    Result.andThen
-                        (\abTypesUnified ->
-                            Result.map
-                                (\substitutionsWithAB ->
-                                    case abTypesUnified.type_ of
-                                        TypeVariable abUnifiedVariable ->
-                                            { equivalentVariables =
-                                                substitutionsWithAB.equivalentVariables
-                                                    |> equivalentVariablesMergeWithSetOf2
-                                                        variable
-                                                        abUnifiedVariable
-                                            , variableToType =
-                                                substitutionsWithAB.variableToType
-                                            }
+    if a == variableSubstitutionsNone then
+        Ok b
 
-                                        TypeNotVariable abUnifiedNotVariable ->
-                                            { equivalentVariables = substitutionsWithAB.equivalentVariables
-                                            , variableToType =
-                                                substitutionsWithAB.variableToType
-                                                    |> FastDict.insert variable abUnifiedNotVariable
-                                            }
-                                )
-                                (variableSubstitutionsMerge declarationTypes
-                                    soFar
-                                    abTypesUnified.substitutions
-                                )
-                        )
-                        (typeNotVariableUnify declarationTypes aType bType)
-                )
-                soFarOrError
-        )
-        (\variable bType soFarOrError ->
-            Result.map
-                (\soFar ->
-                    { variableToType =
-                        soFar.variableToType
-                            |> FastDict.insert variable bType
-                    , equivalentVariables =
-                        soFar.equivalentVariables
-                    }
-                )
-                soFarOrError
-        )
-        a.variableToType
-        b.variableToType
-        (Ok
-            { variableToType = FastDict.empty
+    else if b == variableSubstitutionsNone then
+        Ok a
+
+    else if a.variableToType |> FastDict.isEmpty then
+        Ok
+            { variableToType = b.variableToType
             , equivalentVariables =
                 equivalentVariableSetMerge
                     a.equivalentVariables
                     b.equivalentVariables
             }
-        )
+
+    else if b.variableToType |> FastDict.isEmpty then
+        Ok
+            { variableToType = a.variableToType
+            , equivalentVariables =
+                equivalentVariableSetMerge
+                    a.equivalentVariables
+                    b.equivalentVariables
+            }
+
+    else
+        FastDict.merge
+            (\variable aType soFarOrError ->
+                Result.map
+                    (\soFar ->
+                        { variableToType =
+                            soFar.variableToType
+                                |> FastDict.insert variable aType
+                        , equivalentVariables =
+                            soFar.equivalentVariables
+                        }
+                    )
+                    soFarOrError
+            )
+            (\variable aType bType soFarOrError ->
+                Result.andThen
+                    (\soFar ->
+                        Result.andThen
+                            (\abTypesUnified ->
+                                Result.map
+                                    (\substitutionsWithAB ->
+                                        case abTypesUnified.type_ of
+                                            TypeVariable abUnifiedVariable ->
+                                                { equivalentVariables =
+                                                    substitutionsWithAB.equivalentVariables
+                                                        |> equivalentVariablesMergeWithSetOf2
+                                                            variable
+                                                            abUnifiedVariable
+                                                , variableToType =
+                                                    substitutionsWithAB.variableToType
+                                                }
+
+                                            TypeNotVariable abUnifiedNotVariable ->
+                                                { equivalentVariables = substitutionsWithAB.equivalentVariables
+                                                , variableToType =
+                                                    substitutionsWithAB.variableToType
+                                                        |> FastDict.insert variable abUnifiedNotVariable
+                                                }
+                                    )
+                                    (variableSubstitutionsMerge declarationTypes
+                                        soFar
+                                        abTypesUnified.substitutions
+                                    )
+                            )
+                            (typeNotVariableUnify declarationTypes aType bType)
+                    )
+                    soFarOrError
+            )
+            (\variable bType soFarOrError ->
+                Result.map
+                    (\soFar ->
+                        { variableToType =
+                            soFar.variableToType
+                                |> FastDict.insert variable bType
+                        , equivalentVariables =
+                            soFar.equivalentVariables
+                        }
+                    )
+                    soFarOrError
+            )
+            a.variableToType
+            b.variableToType
+            (Ok
+                { variableToType = FastDict.empty
+                , equivalentVariables =
+                    equivalentVariableSetMerge
+                        a.equivalentVariables
+                        b.equivalentVariables
+                }
+            )
 
 
 variableSubstitutionsMerge3 :
@@ -4422,43 +4447,7 @@ expressionTypeInfer :
                     (Type TypeVariableFromContext)
             , introducedTypeVariables : FastSet.Set TypeVariableFromContext
             }
-expressionTypeInfer context syntaxExpressionNode =
-    Result.mapError
-        (\error ->
-            if error |> String.startsWith "(" then
-                error
-
-            else
-                "("
-                    ++ (syntaxExpressionNode |> Elm.Syntax.Node.range |> rangeToInfoString)
-                    ++ ") "
-                    ++ error
-        )
-        (expressionTypeInferInner context syntaxExpressionNode)
-
-
-expressionTypeInferInner :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
-    , locallyIntroducedDeclarationTypes :
-        FastDict.Dict String (Type TypeVariableFromContext)
-    , containingDeclarationName : String
-    , path : List String
-    , moduleOriginLookup : ModuleOriginLookup
-    }
-    -> Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
-    ->
-        Result
-            String
-            { substitutions : VariableSubstitutions
-            , node :
-                TypedNode
-                    (Expression (Type TypeVariableFromContext))
-                    (Type TypeVariableFromContext)
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
-            }
-expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
+expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
     -- IGNORE TCO
     case expression of
         Elm.Syntax.Expression.UnitExpr ->
@@ -4557,6 +4546,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                 (operatorFunctionType
                     { path = context.path
                     , moduleOriginLookup = context.moduleOriginLookup
+                    , errorRange = fullRange
                     }
                     operator
                 )
@@ -4584,7 +4574,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
             let
                 fieldName : String
                 fieldName =
-                    dotFieldName |> String.replace "." ""
+                    dotFieldName |> String.dropLeft 1
 
                 introducedRecordTypeVariable : TypeVariableFromContext
                 introducedRecordTypeVariable =
@@ -4653,8 +4643,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                     in
                     { node =
                         { range = fullRange
-                        , value =
-                            ExpressionNegation negatedInferred.node
+                        , value = ExpressionNegation negatedInferred.node
                         , type_ = negatedInferred.node.type_
                         }
                     , substitutions = negatedInferred.substitutions
@@ -4667,6 +4656,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                             (variableSubstitutionsFromVariableToType
                                 introducedNumberTypeVariable
                                 negatedInferred.node.type_
+                            )
+                        |> Result.mapError
+                            (\error ->
+                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
                             )
                 )
                 (negated
@@ -4727,6 +4720,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                             )
                         )
+                        |> Result.mapError
+                            (\error ->
+                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                            )
                 )
                 (recordNode
                     |> expressionTypeInfer
@@ -4819,6 +4816,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                             onTrueInferred.node.type_
                             onFalseInferred.node.type_
                         )
+                        |> Result.mapError
+                            (\error ->
+                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                            )
                 )
                 (condition
                     |> expressionTypeInfer
@@ -4895,6 +4896,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     part0Inferred.substitutions
                                     part1Inferred.substitutions
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (part0
                             |> expressionTypeInfer
@@ -4939,6 +4944,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     part1Inferred.substitutions
                                     part2Inferred.substitutions
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (part0
                             |> expressionTypeInfer
@@ -5012,6 +5021,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     .type_
                                     ( headInferred.node, tailElementsInferred.nodes )
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (expressionTypeInfer
                             (context |> expressionContextToInPath "head")
@@ -5039,6 +5052,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (variableSubstitutionsMerge context.declarationTypes
                                                     elementInferred.substitutions
                                                     soFar.substitutions
+                                                    |> Result.mapError
+                                                        (\error ->
+                                                            "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                                        )
                                                 )
                                         )
                                         (expressionTypeInfer
@@ -5122,6 +5139,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     )
                                     calledInferred.node.type_
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (called
                             |> expressionTypeInfer
@@ -5153,6 +5174,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (variableSubstitutionsMerge context.declarationTypes
                                                     argumentInferred.substitutions
                                                     soFar.substitutions
+                                                    |> Result.mapError
+                                                        (\error ->
+                                                            "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                                        )
                                                 )
                                         )
                                         (argumentNode
@@ -5216,6 +5241,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (variableSubstitutionsMerge context.declarationTypes
                                             fieldValueInferred.substitutions
                                             soFar.substitutions
+                                            |> Result.mapError
+                                                (\error ->
+                                                    "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                                )
                                         )
                                 )
                                 (fieldValueNode
@@ -5296,6 +5325,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         )
                                     )
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         ({ fullRange = recordVariableRange
                          , qualification = []
@@ -5349,6 +5382,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (variableSubstitutionsMerge context.declarationTypes
                                                     soFar.substitutions
                                                     fieldValueInferred.substitutions
+                                                    |> Result.mapError
+                                                        (\error ->
+                                                            "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                                        )
                                                 )
                                         )
                                         (valueNode
@@ -5416,6 +5453,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                             context.declarationTypes
                                             resultInferred.substitutions
+                                        |> Result.mapError
+                                            (\error ->
+                                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                            )
                                 )
                                 (lambda.expression
                                     |> expressionTypeInfer
@@ -5454,8 +5495,7 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                         (\patternInferred ->
                                             { indexFromEnd = soFar.indexFromEnd + 1
                                             , nodes =
-                                                patternInferred
-                                                    :: soFar.nodes
+                                                patternInferred :: soFar.nodes
                                             }
                                         )
                                         (pattern
@@ -5548,6 +5588,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 )
                                         )
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (caseOf.expression
                             |> expressionTypeInfer
@@ -5585,6 +5629,17 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (variableSubstitutionsMerge context.declarationTypes
                                                     soFar.substitutions
                                                     caseInferred.substitutions
+                                                    |> Result.mapError
+                                                        (\error ->
+                                                            "("
+                                                                ++ ({ start = case_ |> Tuple.first |> Elm.Syntax.Node.range |> .start
+                                                                    , end = case_ |> Tuple.second |> Elm.Syntax.Node.range |> .end
+                                                                    }
+                                                                        |> rangeToInfoString
+                                                                   )
+                                                                ++ ") "
+                                                                ++ error
+                                                        )
                                                 )
                                         )
                                         (case_
@@ -5754,6 +5809,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                     declaration1UpInferred.substitutions
                                     resultInferred.substitutions
                                 )
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (letDeclaration0Node
                             |> letDeclarationTypeInfer
@@ -5788,6 +5847,10 @@ expressionTypeInferInner context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (variableSubstitutionsMerge context.declarationTypes
                                                     letDeclarationInferred.substitutions
                                                     soFar.substitutions
+                                                    |> Result.mapError
+                                                        (\error ->
+                                                            "(" ++ (letDeclarationInferred.node.range |> rangeToInfoString) ++ ") " ++ error
+                                                        )
                                                 )
                                         )
                                         (letDeclarationNode
@@ -6084,7 +6147,10 @@ expressionReferenceTypeInfer context expressionReference =
             case context.declarationTypes |> FastDict.get moduleOrigin of
                 Nothing ->
                     Err
-                        ("No declaration types found for the reference "
+                        ("("
+                            ++ (expressionReference.fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "no declaration types found for the reference "
                             ++ qualifiedToString
                                 { qualification = expressionReference.qualification
                                 , name = expressionReference.name
@@ -6238,7 +6304,10 @@ expressionReferenceTypeInfer context expressionReference =
 
                                                 _ ->
                                                     Err
-                                                        ("no value/function/port/variant/record type alias constructor was found in the origin module of the reference "
+                                                        ("("
+                                                            ++ (expressionReference.fullRange |> rangeToInfoString)
+                                                            ++ ") "
+                                                            ++ "no value/function/port/variant/record type alias constructor was found in the origin module of the reference "
                                                             ++ qualifiedToString
                                                                 { qualification = moduleOrigin
                                                                 , name = expressionReference.name
@@ -6247,7 +6316,10 @@ expressionReferenceTypeInfer context expressionReference =
 
                                         Nothing ->
                                             Err
-                                                ("No value/function/port/variant/record type alias constructor found in the origin module of the reference "
+                                                ("("
+                                                    ++ (expressionReference.fullRange |> rangeToInfoString)
+                                                    ++ ") "
+                                                    ++ "no value/function/port/variant/record type alias constructor found in the origin module of the reference "
                                                     ++ qualifiedToString
                                                         { qualification = moduleOrigin, name = expressionReference.name }
                                                 )
@@ -6689,6 +6761,10 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                             patternInferred.type_
                             expressionInferred.node.type_
                         )
+                        |> Result.mapError
+                            (\error ->
+                                "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
+                            )
                 )
                 (letDestructuringPattern
                     |> patternTypeInfer
@@ -6808,6 +6884,10 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                 )
                                     }
                                     resultInferred.substitutions
+                                |> Result.mapError
+                                    (\error ->
+                                        "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
+                                    )
                         )
                         (implementation.expression
                             |> expressionTypeInfer
@@ -6937,6 +7017,10 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                     resultInferred.node.type_
                                             )
                                         )
+                                        |> Result.mapError
+                                            (\error ->
+                                                "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
+                                            )
                                 )
                                 (implementation.expression
                                     |> expressionTypeInfer
@@ -7083,10 +7167,18 @@ expressionInfixOperationTypeInfer context infixOperation =
                         )
                     )
                 )
+                |> Result.mapError
+                    (\error ->
+                        "("
+                            ++ (infixOperation.fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                    )
         )
         (operatorFunctionType
             { path = "operator" :: context.path
             , moduleOriginLookup = context.moduleOriginLookup
+            , errorRange = infixOperation.fullRange
             }
             infixOperation.operator
         )
@@ -7105,7 +7197,10 @@ expressionInfixOperationTypeInfer context infixOperation =
 
 
 operatorFunctionType :
-    { path : List String, moduleOriginLookup : ModuleOriginLookup }
+    { path : List String
+    , errorRange : Elm.Syntax.Range.Range
+    , moduleOriginLookup : ModuleOriginLookup
+    }
     -> String
     ->
         Result
@@ -7994,7 +8089,14 @@ operatorFunctionType context operator =
                 }
 
         unknownOperator ->
-            Err ("unknown operator (" ++ unknownOperator ++ ")")
+            Err
+                ("("
+                    ++ (context.errorRange |> rangeToInfoString)
+                    ++ ") "
+                    ++ "unknown operator ("
+                    ++ unknownOperator
+                    ++ ")"
+                )
 
 
 okIdivOperatorInfo :
@@ -8637,7 +8739,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                         (\inferError ->
                             "inferring the value/function declaration "
                                 ++ name
-                                ++ ", I found a problem: "
+                                ++ ": "
                                 ++ inferError
                         )
             )
