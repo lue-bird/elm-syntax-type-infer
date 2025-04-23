@@ -508,132 +508,13 @@ importsToModuleOriginLookup modulesTypes imports =
                 , referenceExposes : List String
                 }
         importsNormal =
-            implicitImports
-                ++ (imports
-                        |> List.map
-                            (\(Elm.Syntax.Node.Node _ syntaxImport) ->
-                                let
-                                    importModuleName : Elm.Syntax.ModuleName.ModuleName
-                                    importModuleName =
-                                        syntaxImport.moduleName |> Elm.Syntax.Node.value
-                                in
-                                { moduleName = importModuleName
-                                , alias =
-                                    syntaxImport.moduleAlias
-                                        |> Maybe.map
-                                            (\(Elm.Syntax.Node.Node _ syntaxAlias) ->
-                                                syntaxAlias |> String.join "."
-                                            )
-                                , typeExposes =
-                                    case syntaxImport.exposingList of
-                                        Nothing ->
-                                            []
-
-                                        Just (Elm.Syntax.Node.Node _ syntaxExposing) ->
-                                            case modulesTypes |> FastDict.get importModuleName of
-                                                Nothing ->
-                                                    []
-
-                                                Just moduleTypes ->
-                                                    case syntaxExposing of
-                                                        Elm.Syntax.Exposing.All _ ->
-                                                            (moduleTypes.typeAliases |> FastDict.keys)
-                                                                ++ (moduleTypes.choiceTypes
-                                                                        |> FastDict.foldl
-                                                                            (\choiceTypeName _ soFar ->
-                                                                                choiceTypeName :: soFar
-                                                                            )
-                                                                            []
-                                                                   )
-
-                                                        Elm.Syntax.Exposing.Explicit exposes ->
-                                                            exposes
-                                                                |> List.filterMap
-                                                                    (\(Elm.Syntax.Node.Node _ expose) ->
-                                                                        case expose of
-                                                                            Elm.Syntax.Exposing.InfixExpose _ ->
-                                                                                Nothing
-
-                                                                            Elm.Syntax.Exposing.FunctionExpose _ ->
-                                                                                Nothing
-
-                                                                            Elm.Syntax.Exposing.TypeOrAliasExpose name ->
-                                                                                Just name
-
-                                                                            Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
-                                                                                Just choiceTypeExpose.name
-                                                                    )
-                                , referenceExposes =
-                                    case syntaxImport.exposingList of
-                                        Nothing ->
-                                            []
-
-                                        Just (Elm.Syntax.Node.Node _ syntaxExposing) ->
-                                            case modulesTypes |> FastDict.get importModuleName of
-                                                Nothing ->
-                                                    []
-
-                                                Just moduleTypes ->
-                                                    case syntaxExposing of
-                                                        Elm.Syntax.Exposing.All _ ->
-                                                            (moduleTypes.signatures |> FastDict.keys)
-                                                                ++ (moduleTypes.typeAliases
-                                                                        |> FastDict.foldl
-                                                                            (\typeAliasName info soFar ->
-                                                                                case info.recordFieldOrder of
-                                                                                    Nothing ->
-                                                                                        soFar
-
-                                                                                    Just _ ->
-                                                                                        typeAliasName :: soFar
-                                                                            )
-                                                                            []
-                                                                   )
-                                                                ++ (moduleTypes.choiceTypes
-                                                                        |> FastDict.foldl
-                                                                            (\_ choiceTypeInfo soFar ->
-                                                                                (choiceTypeInfo.variants |> FastDict.keys)
-                                                                                    ++ soFar
-                                                                            )
-                                                                            []
-                                                                   )
-
-                                                        Elm.Syntax.Exposing.Explicit exposes ->
-                                                            exposes
-                                                                |> List.foldl
-                                                                    (\(Elm.Syntax.Node.Node _ expose) namesSoFar ->
-                                                                        case expose of
-                                                                            Elm.Syntax.Exposing.TypeOrAliasExpose _ ->
-                                                                                namesSoFar
-
-                                                                            Elm.Syntax.Exposing.InfixExpose operator ->
-                                                                                operator :: namesSoFar
-
-                                                                            Elm.Syntax.Exposing.FunctionExpose name ->
-                                                                                name :: namesSoFar
-
-                                                                            Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
-                                                                                case choiceTypeExpose.open of
-                                                                                    Nothing ->
-                                                                                        namesSoFar
-
-                                                                                    Just _ ->
-                                                                                        case moduleTypes.choiceTypes |> FastDict.get choiceTypeExpose.name of
-                                                                                            Nothing ->
-                                                                                                namesSoFar
-
-                                                                                            Just choiceTypeDeclared ->
-                                                                                                choiceTypeDeclared.variants
-                                                                                                    |> FastDict.foldl
-                                                                                                        (\name _ namesSoFarWithVariantNames ->
-                                                                                                            name :: namesSoFarWithVariantNames
-                                                                                                        )
-                                                                                                        namesSoFar
-                                                                    )
-                                                                    []
-                                }
-                            )
-                   )
+            imports
+                |> List.foldl
+                    (\(Elm.Syntax.Node.Node _ syntaxImport) importNormalsSoFar ->
+                        (syntaxImport |> importToNormal modulesTypes)
+                            :: importNormalsSoFar
+                    )
+                    implicitImports
                 |> importsCombine
 
         operatorIsExposedFromParserAdvanced : String -> Bool
@@ -669,15 +550,17 @@ importsToModuleOriginLookup modulesTypes imports =
                             let
                                 exposedFromImportedModuleItself : List String
                                 exposedFromImportedModuleItself =
-                                    (moduleTypes.signatures |> FastDict.keys)
-                                        ++ (moduleTypes.choiceTypes
-                                                |> FastDict.foldl
-                                                    (\_ choiceType variantNamesSoFar ->
-                                                        (choiceType.variants |> FastDict.keys)
-                                                            ++ variantNamesSoFar
-                                                    )
-                                                    []
-                                           )
+                                    moduleTypes.choiceTypes
+                                        |> FastDict.foldl
+                                            (\_ choiceType variantNamesSoFar ->
+                                                choiceType.variants
+                                                    |> FastDict.foldl
+                                                        (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
+                                                            variantName :: soFarAndVariantNamesOfCurrentChoiceType
+                                                        )
+                                                        variantNamesSoFar
+                                            )
+                                            (moduleTypes.signatures |> FastDict.keys)
                             in
                             FastDict.union soFar
                                 (FastDict.union
@@ -723,14 +606,12 @@ importsToModuleOriginLookup modulesTypes imports =
                             let
                                 exposedFromImportedModuleItself : List String
                                 exposedFromImportedModuleItself =
-                                    (moduleTypes.typeAliases |> FastDict.keys)
-                                        ++ (moduleTypes.choiceTypes
-                                                |> FastDict.foldl
-                                                    (\choiceTypeName _ variantNamesSoFar ->
-                                                        choiceTypeName :: variantNamesSoFar
-                                                    )
-                                                    []
-                                           )
+                                    moduleTypes.choiceTypes
+                                        |> FastDict.foldl
+                                            (\choiceTypeName _ variantNamesSoFar ->
+                                                choiceTypeName :: variantNamesSoFar
+                                            )
+                                            (moduleTypes.typeAliases |> FastDict.keys)
                             in
                             FastDict.union
                                 (FastDict.union
@@ -769,6 +650,137 @@ importsToModuleOriginLookup modulesTypes imports =
         operatorIsExposedFromParserAdvanced "|."
     , ignoreOperatorIsExposedFromParserAdvanced =
         operatorIsExposedFromParserAdvanced "|="
+    }
+
+
+importToNormal :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> Elm.Syntax.Import.Import
+    ->
+        { moduleName : Elm.Syntax.ModuleName.ModuleName
+        , alias : Maybe String
+        , typeExposes : List String
+        , referenceExposes : List String
+        }
+importToNormal modulesTypes syntaxImport =
+    let
+        importModuleName : Elm.Syntax.ModuleName.ModuleName
+        importModuleName =
+            syntaxImport.moduleName |> Elm.Syntax.Node.value
+    in
+    { moduleName = importModuleName
+    , alias =
+        syntaxImport.moduleAlias
+            |> Maybe.map
+                (\(Elm.Syntax.Node.Node _ syntaxAlias) ->
+                    syntaxAlias |> String.join "."
+                )
+    , typeExposes =
+        case syntaxImport.exposingList of
+            Nothing ->
+                []
+
+            Just (Elm.Syntax.Node.Node _ syntaxExposing) ->
+                case modulesTypes |> FastDict.get importModuleName of
+                    Nothing ->
+                        []
+
+                    Just moduleTypes ->
+                        case syntaxExposing of
+                            Elm.Syntax.Exposing.All _ ->
+                                moduleTypes.choiceTypes
+                                    |> FastDict.foldl
+                                        (\choiceTypeName _ soFar ->
+                                            choiceTypeName :: soFar
+                                        )
+                                        (moduleTypes.typeAliases |> FastDict.keys)
+
+                            Elm.Syntax.Exposing.Explicit exposes ->
+                                exposes
+                                    |> List.filterMap
+                                        (\(Elm.Syntax.Node.Node _ expose) ->
+                                            case expose of
+                                                Elm.Syntax.Exposing.InfixExpose _ ->
+                                                    Nothing
+
+                                                Elm.Syntax.Exposing.FunctionExpose _ ->
+                                                    Nothing
+
+                                                Elm.Syntax.Exposing.TypeOrAliasExpose name ->
+                                                    Just name
+
+                                                Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
+                                                    Just choiceTypeExpose.name
+                                        )
+    , referenceExposes =
+        case syntaxImport.exposingList of
+            Nothing ->
+                []
+
+            Just (Elm.Syntax.Node.Node _ syntaxExposing) ->
+                case modulesTypes |> FastDict.get importModuleName of
+                    Nothing ->
+                        []
+
+                    Just moduleTypes ->
+                        case syntaxExposing of
+                            Elm.Syntax.Exposing.All _ ->
+                                moduleTypes.typeAliases
+                                    |> FastDict.foldl
+                                        (\typeAliasName info soFar ->
+                                            case info.recordFieldOrder of
+                                                Nothing ->
+                                                    soFar
+
+                                                Just _ ->
+                                                    typeAliasName :: soFar
+                                        )
+                                        (moduleTypes.choiceTypes
+                                            |> FastDict.foldl
+                                                (\_ choiceTypeInfo soFar ->
+                                                    choiceTypeInfo.variants
+                                                        |> FastDict.foldl
+                                                            (\variantName _ soFarWithVariants ->
+                                                                variantName :: soFarWithVariants
+                                                            )
+                                                            soFar
+                                                )
+                                                (moduleTypes.signatures |> FastDict.keys)
+                                        )
+
+                            Elm.Syntax.Exposing.Explicit exposes ->
+                                exposes
+                                    |> List.foldl
+                                        (\(Elm.Syntax.Node.Node _ expose) namesSoFar ->
+                                            case expose of
+                                                Elm.Syntax.Exposing.TypeOrAliasExpose _ ->
+                                                    namesSoFar
+
+                                                Elm.Syntax.Exposing.InfixExpose operator ->
+                                                    operator :: namesSoFar
+
+                                                Elm.Syntax.Exposing.FunctionExpose name ->
+                                                    name :: namesSoFar
+
+                                                Elm.Syntax.Exposing.TypeExpose choiceTypeExpose ->
+                                                    case choiceTypeExpose.open of
+                                                        Nothing ->
+                                                            namesSoFar
+
+                                                        Just _ ->
+                                                            case moduleTypes.choiceTypes |> FastDict.get choiceTypeExpose.name of
+                                                                Nothing ->
+                                                                    namesSoFar
+
+                                                                Just choiceTypeDeclared ->
+                                                                    choiceTypeDeclared.variants
+                                                                        |> FastDict.foldl
+                                                                            (\name _ namesSoFarWithVariantNames ->
+                                                                                name :: namesSoFarWithVariantNames
+                                                                            )
+                                                                            namesSoFar
+                                        )
+                                        []
     }
 
 
@@ -955,7 +967,8 @@ importsMerge earlier later =
 
 exposingCombine : List String -> List String -> List String
 exposingCombine a b =
-    a ++ b |> exposeListToNormal
+    listAppendFastButInReverseOrder a b
+        |> exposeListToNormal
 
 
 exposeListToNormal :
@@ -2446,8 +2459,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     |> FastDict.insert aEquivalentVariable ()
                     |> FastDict.insert bEquivalentVariable ()
                 )
-                    :: soFar
-                    ++ equivalentVariablesSet1Up
+                    :: listAppendFastButInReverseOrder
+                        soFar
+                        equivalentVariablesSet1Up
 
             else
                 equivalentVariablesMergeWithSetOf2Into
@@ -2455,6 +2469,16 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     aEquivalentVariable
                     bEquivalentVariable
                     equivalentVariablesSet1Up
+
+
+listAppendFastButInReverseOrder : List a -> List a -> List a
+listAppendFastButInReverseOrder aList bList =
+    case aList of
+        [] ->
+            bList
+
+        aHead :: aTail ->
+            listAppendFastButInReverseOrder aTail (aHead :: bList)
 
 
 equivalentVariableSetMerge :
@@ -2506,8 +2530,9 @@ equivalentVariableSetMerge a b =
                                     )
                                     { sets = [], bRemaining = b }
                     in
-                    mergedIntoA.sets
-                        ++ mergedIntoA.bRemaining
+                    listAppendFastButInReverseOrder
+                        mergedIntoA.sets
+                        mergedIntoA.bRemaining
 
 
 fastSetShareElements : FastSetFast comparable -> FastSetFast comparable -> Bool
@@ -2547,8 +2572,9 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
                     Just
                         { value = headValue
                         , remaining =
-                            (elementsBeforeReverse |> List.reverse)
-                                ++ tail
+                            listAppendFastButInReverseOrder
+                                elementsBeforeReverse
+                                tail
                         }
 
                 Nothing ->
@@ -2689,15 +2715,6 @@ typeNotVariableUnify declarationTypes a b =
                     Err "unit (`()`) cannot be unified with types other than unit"
 
         TypeConstruct aTypeConstruct ->
-            let
-                aDescription : () -> String
-                aDescription () =
-                    "choice type "
-                        ++ qualifiedToString
-                            { qualification = aTypeConstruct.moduleOrigin
-                            , name = aTypeConstruct.name
-                            }
-            in
             case b of
                 TypeConstruct bTypeConstruct ->
                     if
@@ -2757,7 +2774,11 @@ typeNotVariableUnify declarationTypes a b =
 
                                     Nothing ->
                                         Err
-                                            (aDescription ()
+                                            ("choice type "
+                                                ++ qualifiedToString
+                                                    { qualification = aTypeConstruct.moduleOrigin
+                                                    , name = aTypeConstruct.name
+                                                    }
                                                 ++ " cannot be unified be with a choice type with a different name: "
                                                 ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
                                             )
@@ -2768,7 +2789,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
                 TypeTuple _ ->
                     case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
@@ -2776,7 +2804,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
                 TypeTriple _ ->
                     case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
@@ -2784,7 +2819,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
                 TypeRecord _ ->
                     case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
@@ -2792,7 +2834,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
                 TypeRecordExtension _ ->
                     case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
@@ -2800,7 +2849,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
                 TypeFunction _ ->
                     case typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstruct b of
@@ -2808,7 +2864,14 @@ typeNotVariableUnify declarationTypes a b =
                             result
 
                         Nothing ->
-                            Err (aDescription () ++ " cannot be unified with types other than choice type/type alias")
+                            Err
+                                ("choice type "
+                                    ++ qualifiedToString
+                                        { qualification = aTypeConstruct.moduleOrigin
+                                        , name = aTypeConstruct.name
+                                        }
+                                    ++ " cannot be unified with types other than choice type/type alias"
+                                )
 
         TypeTuple aTuple ->
             case b of
@@ -6670,7 +6733,7 @@ usesOfPartiallyInferredDeclarationsMerge aUses bUses =
             soFar
                 |> FastDict.insert key
                     { partiallyInferredDeclarationType = a.partiallyInferredDeclarationType
-                    , uses = a.uses ++ b.uses
+                    , uses = listAppendFastButInReverseOrder a.uses b.uses
                     }
         )
         (\key b soFar -> soFar |> FastDict.insert key b)
@@ -12686,6 +12749,7 @@ typeVariableNameReplaceConstraint replacementConstraint typeVariableNameWithPote
     in
     (replacementConstraint |> typeVariableConstraintToString)
         ++ (typeVariableNameWithoutConstraint |> stringFirstCharToUpper)
+        ++ ""
 
 
 fastDictFoldlWhileOkFrom : ok -> (key -> value -> ok -> Result err ok) -> FastDict.Dict key value -> Result err ok
@@ -13382,7 +13446,7 @@ nameDisambiguateWithIndexBy index alreadyExists currentName =
                     currentName
 
                 indexAtLeast1 ->
-                    currentName ++ (indexAtLeast1 |> String.fromInt)
+                    currentName ++ (indexAtLeast1 |> String.fromInt) ++ ""
     in
     if alreadyExists indexedCurrentName then
         nameDisambiguateWithIndexBy (index + 1) alreadyExists currentName
