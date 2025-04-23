@@ -3,29 +3,40 @@ module Main exposing (main)
 import Benchmark
 import Benchmark.Alternative exposing (rank)
 import Benchmark.Runner.Alternative as BenchmarkRunner
+import Browser
 import Elm.Parser
 import Elm.Syntax.Declaration
 import Elm.Syntax.Expression
 import Elm.Syntax.Node
 import ElmSyntaxTypeInfer
+import Html
 
 
 main =
-    BenchmarkRunner.program suite
-
-
-suite =
-    Benchmark.describe "elm-syntax-type-infer"
-        [ Benchmark.benchmark "ElmSyntaxTypeInfer.valueAndFunctionDeclarations"
-            (\() ->
-                parsedModuleDeclarations.valuesAndFunctions
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = parsedModuleDeclarations.moduleOriginLookup
-                        , otherModuleDeclaredTypes = parsedModuleDeclarations.otherModuleDeclaredTypes
-                        }
-            )
-        ]
+    Browser.sandbox
+        { init =
+            List.repeat 100 ()
+                |> List.foldl
+                    (\() () ->
+                        let
+                            _ =
+                                parsedModuleDeclarations.valuesAndFunctions
+                                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                                        , moduleOriginLookup = parsedModuleDeclarations.moduleOriginLookup
+                                        , otherModuleDeclaredTypes = parsedModuleDeclarations.otherModuleDeclaredTypes
+                                        }
+                        in
+                        ()
+                    )
+                    ()
+        , update =
+            \() () ->
+                ()
+        , view =
+            \() ->
+                Html.text "type checking worked"
+        }
 
 
 explode () =
