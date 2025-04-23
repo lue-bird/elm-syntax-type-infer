@@ -371,7 +371,7 @@ typeContainedVariables type_ =
             FastDict.singleton variable ()
 
         TypeNotVariable typeNotVariable ->
-            typeNotVariable |> typeNotVariableContainedVariables
+            typeNotVariableContainedVariables typeNotVariable
 
 
 typeNotVariableContainedVariables :
@@ -431,13 +431,10 @@ typeNotVariableMapVariables variableMap typeNotVariable =
         TypeUnit ->
             TypeUnit
 
-        TypeConstruct typeConstruct ->
-            TypeConstruct
-                { moduleOrigin = typeConstruct.moduleOrigin
-                , name = typeConstruct.name
-                , arguments =
-                    typeConstruct.arguments
-                        |> List.map (\arg -> arg |> typeMapVariables variableMap)
+        TypeFunction typeFunction ->
+            TypeFunction
+                { input = typeFunction.input |> typeMapVariables variableMap
+                , output = typeFunction.output |> typeMapVariables variableMap
                 }
 
         TypeTuple typeTuple ->
@@ -451,6 +448,18 @@ typeNotVariableMapVariables variableMap typeNotVariable =
                 { part0 = typeTriple.part0 |> typeMapVariables variableMap
                 , part1 = typeTriple.part1 |> typeMapVariables variableMap
                 , part2 = typeTriple.part2 |> typeMapVariables variableMap
+                }
+
+        TypeConstruct typeConstruct ->
+            TypeConstruct
+                { moduleOrigin = typeConstruct.moduleOrigin
+                , name = typeConstruct.name
+                , arguments =
+                    typeConstruct.arguments
+                        |> List.map
+                            (\argument ->
+                                argument |> typeMapVariables variableMap
+                            )
                 }
 
         TypeRecord typeRecordFields ->
@@ -473,12 +482,6 @@ typeNotVariableMapVariables variableMap typeNotVariable =
                             (\_ fieldValue ->
                                 fieldValue |> typeMapVariables variableMap
                             )
-                }
-
-        TypeFunction typeFunction ->
-            TypeFunction
-                { input = typeFunction.input |> typeMapVariables variableMap
-                , output = typeFunction.output |> typeMapVariables variableMap
                 }
 
 
@@ -585,6 +588,15 @@ importsToModuleOriginLookup modulesTypes imports =
                                                         variantNamesSoFar
                                             )
                                             (moduleTypes.signatures |> FastDict.keys)
+
+                                moduleAliasOrFullName : Elm.Syntax.ModuleName.ModuleName
+                                moduleAliasOrFullName =
+                                    case syntaxImport.alias of
+                                        Nothing ->
+                                            syntaxImport.moduleName
+
+                                        Just importAlias ->
+                                            [ importAlias ]
                             in
                             soFar
                                 |> FastDict.union
@@ -597,24 +609,13 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                     )
                                 |> FastDict.union
-                                    (case syntaxImport.alias of
-                                        Nothing ->
-                                            exposedFromImportedModuleItself
-                                                |> listMapToFastDict
-                                                    (\exposeFromImportedModule ->
-                                                        { key = ( syntaxImport.moduleName, exposeFromImportedModule )
-                                                        , value = syntaxImport.moduleName
-                                                        }
-                                                    )
-
-                                        Just importAlias ->
-                                            exposedFromImportedModuleItself
-                                                |> listMapToFastDict
-                                                    (\exposeFromImportedModule ->
-                                                        { key = ( [ importAlias ], exposeFromImportedModule )
-                                                        , value = syntaxImport.moduleName
-                                                        }
-                                                    )
+                                    (exposedFromImportedModuleItself
+                                        |> listMapToFastDict
+                                            (\exposeFromImportedModule ->
+                                                { key = ( moduleAliasOrFullName, exposeFromImportedModule )
+                                                , value = syntaxImport.moduleName
+                                                }
+                                            )
                                     )
                 )
                 FastDict.empty
@@ -636,6 +637,15 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 choiceTypeName :: variantNamesSoFar
                                             )
                                             (moduleTypes.typeAliases |> FastDict.keys)
+
+                                moduleAliasOrFullName : Elm.Syntax.ModuleName.ModuleName
+                                moduleAliasOrFullName =
+                                    case syntaxImport.alias of
+                                        Nothing ->
+                                            syntaxImport.moduleName
+
+                                        Just importAlias ->
+                                            [ importAlias ]
                             in
                             soFar
                                 |> FastDict.union
@@ -648,24 +658,13 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                     )
                                 |> FastDict.union
-                                    (case syntaxImport.alias of
-                                        Nothing ->
-                                            exposedFromImportedModuleItself
-                                                |> listMapToFastDict
-                                                    (\exposeFromImportedModule ->
-                                                        { key = ( syntaxImport.moduleName, exposeFromImportedModule )
-                                                        , value = syntaxImport.moduleName
-                                                        }
-                                                    )
-
-                                        Just importAlias ->
-                                            exposedFromImportedModuleItself
-                                                |> listMapToFastDict
-                                                    (\exposeFromImportedModule ->
-                                                        { key = ( [ importAlias ], exposeFromImportedModule )
-                                                        , value = syntaxImport.moduleName
-                                                        }
-                                                    )
+                                    (exposedFromImportedModuleItself
+                                        |> listMapToFastDict
+                                            (\exposeFromImportedModule ->
+                                                { key = ( moduleAliasOrFullName, exposeFromImportedModule )
+                                                , value = syntaxImport.moduleName
+                                                }
+                                            )
                                     )
                 )
                 FastDict.empty
@@ -2307,10 +2306,7 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge declarationTypes a b =
     -- IGNORE TCO
-    if b == variableSubstitutionsNone then
-        Ok a
-
-    else if a.variableToType |> FastDict.isEmpty then
+    if a.variableToType |> FastDict.isEmpty then
         case a.equivalentVariables of
             [] ->
                 Ok b
@@ -3459,12 +3455,11 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
     Result.andThen
         (\fieldsUnified ->
             let
+                ( aRecordVariableContext, aRecordVariableWithoutContext ) =
+                    aRecordExtension.recordVariable
+
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    let
-                        ( aRecordVariableContext, aRecordVariableWithoutContext ) =
-                            aRecordExtension.recordVariable
-                    in
                     ( typeVariableContextAddPathSegment "base" aRecordVariableContext
                     , aRecordVariableWithoutContext
                     )
@@ -6210,11 +6205,11 @@ expressionReferenceTypeInfer context expressionReference =
                                 Nothing ->
                                     Nothing
 
-                                Just partiallyInferredType ->
+                                Just locallyIntroducedDeclarationType ->
                                     let
-                                        type_ : Type TypeVariableFromContext
-                                        type_ =
-                                            partiallyInferredType
+                                        locallyIntroducedDeclarationTypeWithContext : Type TypeVariableFromContext
+                                        locallyIntroducedDeclarationTypeWithContext =
+                                            locallyIntroducedDeclarationType
                                                 |> typeMapVariables
                                                     (\( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) ->
                                                         ( typeVariableContextsAppend
@@ -6232,10 +6227,10 @@ expressionReferenceTypeInfer context expressionReference =
                                                 , moduleOrigin = []
                                                 , name = expressionReference.name
                                                 }
-                                            , type_ = type_
+                                            , type_ = locallyIntroducedDeclarationTypeWithContext
                                             }
                                         , introducedTypeVariables =
-                                            type_ |> typeContainedVariables
+                                            locallyIntroducedDeclarationTypeWithContext |> typeContainedVariables
                                         }
     in
     case useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration of
