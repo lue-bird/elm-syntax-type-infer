@@ -69,7 +69,7 @@ type alias ModuleTypes =
 {-| [`ModuleTypes`](#ModuleTypes) exposed in `elm/core`.
 
 Please _always_ start with [`elmCoreTypes`](#elmCoreTypes)
-and add further module info with [`FastDict.union`]()
+and add further module info with [`FastDict.union`](https://dark.elm.dmy.fr/packages/miniBill/elm-fast-dict/latest/FastDict#union)
 using [`moduleDeclarationsToTypes`](#moduleDeclarationsToTypes)
 and [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 
@@ -393,16 +393,15 @@ typeNotVariableContainedVariables typeNotVariable =
                 (typeTuple.part1 |> typeContainedVariables)
 
         TypeTriple typeTriple ->
-            FastDict.union
-                (FastDict.union
-                    (typeTriple.part0 |> typeContainedVariables)
+            (typeTriple.part0 |> typeContainedVariables)
+                |> FastDict.union
                     (typeTriple.part1 |> typeContainedVariables)
-                )
-                (typeTriple.part2 |> typeContainedVariables)
+                |> FastDict.union
+                    (typeTriple.part2 |> typeContainedVariables)
 
         TypeConstruct typeConstruct ->
             typeConstruct.arguments
-                |> listMapToFastSetsAndUnify typeContainedVariables
+                |> listMapToFastSetFastsAndUnify typeContainedVariables
 
         TypeRecord typeRecordFields ->
             typeRecordFields
@@ -587,8 +586,8 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                             (moduleTypes.signatures |> FastDict.keys)
                             in
-                            FastDict.union soFar
-                                (FastDict.union
+                            soFar
+                                |> FastDict.union
                                     (syntaxImport.referenceExposes
                                         |> listMapToFastDict
                                             (\expose ->
@@ -597,6 +596,7 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 }
                                             )
                                     )
+                                |> FastDict.union
                                     (case syntaxImport.alias of
                                         Nothing ->
                                             exposedFromImportedModuleItself
@@ -616,7 +616,6 @@ importsToModuleOriginLookup modulesTypes imports =
                                                         }
                                                     )
                                     )
-                                )
                 )
                 FastDict.empty
     , typeConstructs =
@@ -638,8 +637,8 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                             (moduleTypes.typeAliases |> FastDict.keys)
                             in
-                            FastDict.union
-                                (FastDict.union
+                            soFar
+                                |> FastDict.union
                                     (syntaxImport.typeExposes
                                         |> listMapToFastDict
                                             (\expose ->
@@ -648,6 +647,7 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 }
                                             )
                                     )
+                                |> FastDict.union
                                     (case syntaxImport.alias of
                                         Nothing ->
                                             exposedFromImportedModuleItself
@@ -667,8 +667,6 @@ importsToModuleOriginLookup modulesTypes imports =
                                                         }
                                                     )
                                     )
-                                )
-                                soFar
                 )
                 FastDict.empty
     , keepOperatorIsExposedFromParserAdvanced =
@@ -5539,7 +5537,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         parameterIntroducedTypeVariables : FastSetFast TypeVariableFromContext
                                         parameterIntroducedTypeVariables =
                                             (parameter0Inferred :: parameter1UpInferred.nodes)
-                                                |> listMapToFastSetsAndUnify
+                                                |> listMapToFastSetFastsAndUnify
                                                     (\parameterInferred ->
                                                         parameterInferred.type_ |> typeContainedVariables
                                                     )
@@ -6951,7 +6949,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                     )
                             , introducedTypeVariables =
                                 parametersInferred.nodes
-                                    |> listMapToFastSetsAndUnify
+                                    |> listMapToFastSetFastsAndUnify
                                         patternTypedNodeContainedTypeVariables
                                     |> FastDict.union resultInferred.introducedTypeVariables
                             }
@@ -7043,7 +7041,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                         parametersInferredContainedTypeVariables : FastSetFast TypeVariableFromContext
                                                         parametersInferredContainedTypeVariables =
                                                             parametersInferred.nodes
-                                                                |> listMapToFastSetsAndUnify
+                                                                |> listMapToFastSetFastsAndUnify
                                                                     (\parameterInferred ->
                                                                         parameterInferred.type_ |> typeContainedVariables
                                                                     )
@@ -8745,7 +8743,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                     FastDict.union
                                                         resultInferred.introducedTypeVariables
                                                         (parametersInferred.nodes
-                                                            |> listMapToFastSetsAndUnify
+                                                            |> listMapToFastSetFastsAndUnify
                                                                 patternTypedNodeContainedTypeVariables
                                                         )
                                                 }
@@ -9110,19 +9108,17 @@ valueOrFunctionDeclarationInfoContainedTypeVariables :
     ValueOrFunctionDeclarationInfo (Type comparableTypeVariable)
     -> FastSetFast comparableTypeVariable
 valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
-    FastDict.union
-        (declarationValueOrFunction.parameters
-            |> listMapToFastSetsAndUnify
-                patternTypedNodeContainedTypeVariables
-        )
-        (FastDict.union
+    declarationValueOrFunction.parameters
+        |> listMapToFastSetFastsAndUnify
+            patternTypedNodeContainedTypeVariables
+        |> FastDict.union
             (declarationValueOrFunction.type_
                 |> typeContainedVariables
             )
+        |> FastDict.union
             (declarationValueOrFunction.result
                 |> expressionTypedNodeContainedTypeVariables
             )
-        )
 
 
 patternTypedNodeContainedTypeVariables :
@@ -9184,18 +9180,16 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternTriple parts ->
-            FastDict.union
-                (parts.part0
-                    |> patternTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            parts.part0
+                |> patternTypedNodeContainedTypeVariables
+                |> FastDict.union
                     (parts.part1
                         |> patternTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (parts.part2
                         |> patternTypedNodeContainedTypeVariables
                     )
-                )
 
         PatternListCons patternListCons ->
             FastDict.union
@@ -9208,7 +9202,7 @@ patternContainedTypeVariables pattern =
 
         PatternListExact elements ->
             elements
-                |> listMapToFastSetsAndUnify
+                |> listMapToFastSetFastsAndUnify
                     (\element ->
                         element
                             |> patternTypedNodeContainedTypeVariables
@@ -9216,7 +9210,7 @@ patternContainedTypeVariables pattern =
 
         PatternVariant patternVariant ->
             patternVariant.values
-                |> listMapToFastSetsAndUnify
+                |> listMapToFastSetFastsAndUnify
                     (\value ->
                         value
                             |> patternTypedNodeContainedTypeVariables
@@ -9224,21 +9218,20 @@ patternContainedTypeVariables pattern =
 
         PatternRecord fields ->
             fields
-                |> listMapToFastSetsAndUnify
+                |> listMapToFastSetFastsAndUnify
                     (\fieldTypedNode ->
                         fieldTypedNode.type_
                             |> typeContainedVariables
                     )
 
 
-listMapToFastSetsAndUnify : (a -> FastSetFast comparable) -> List a -> FastSetFast comparable
-listMapToFastSetsAndUnify elementToSet elements =
+listMapToFastSetFastsAndUnify : (a -> FastSetFast comparable) -> List a -> FastSetFast comparable
+listMapToFastSetFastsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
-                FastDict.union
+                FastDict.union soFar
                     (element |> elementToSet)
-                    soFar
             )
             FastDict.empty
 
@@ -9251,9 +9244,8 @@ listMapToFastDictsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
-                FastDict.union
+                FastDict.union soFar
                     (element |> elementToSet)
-                    soFar
             )
             FastDict.empty
 
@@ -9331,135 +9323,116 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionTriple parts ->
-            FastDict.union
-                (parts.part0
-                    |> expressionTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            parts.part0
+                |> expressionTypedNodeContainedTypeVariables
+                |> FastDict.union
                     (parts.part1
                         |> expressionTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (parts.part2
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                )
 
         ExpressionIfThenElse expressionIfThenElse ->
-            FastDict.union
-                (expressionIfThenElse.condition
-                    |> expressionTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            (expressionIfThenElse.condition
+                |> expressionTypedNodeContainedTypeVariables
+            )
+                |> FastDict.union
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (expressionIfThenElse.onFalse
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                )
 
         ExpressionList elements ->
             elements
-                |> listMapToFastSetsAndUnify
-                    (\element ->
-                        element
-                            |> expressionTypedNodeContainedTypeVariables
-                    )
+                |> listMapToFastSetFastsAndUnify
+                    expressionTypedNodeContainedTypeVariables
 
         ExpressionRecord fields ->
             fields
-                |> listMapToFastSetsAndUnify
+                |> listMapToFastSetFastsAndUnify
                     (\field ->
                         field.value
                             |> expressionTypedNodeContainedTypeVariables
                     )
 
         ExpressionCall expressionCall ->
-            FastDict.union
-                (expressionCall.called
-                    |> expressionTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            expressionCall.called
+                |> expressionTypedNodeContainedTypeVariables
+                |> FastDict.union
                     (expressionCall.argument0
                         |> expressionTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (expressionCall.argument1Up
-                        |> listMapToFastSetsAndUnify
-                            (\argument ->
-                                argument
-                                    |> expressionTypedNodeContainedTypeVariables
-                            )
+                        |> listMapToFastSetFastsAndUnify
+                            expressionTypedNodeContainedTypeVariables
                     )
-                )
 
         ExpressionLambda expressionLambda ->
-            FastDict.union
-                (expressionLambda.parameter0
-                    |> patternTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            expressionLambda.parameter0
+                |> patternTypedNodeContainedTypeVariables
+                |> FastDict.union
                     (expressionLambda.parameter1Up
-                        |> listMapToFastSetsAndUnify
+                        |> listMapToFastSetFastsAndUnify
                             (\parameter ->
                                 parameter
                                     |> patternTypedNodeContainedTypeVariables
                             )
                     )
+                |> FastDict.union
                     (expressionLambda.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                )
 
         ExpressionRecordUpdate expressionRecordUpdate ->
-            FastDict.union
-                (expressionRecordUpdate.recordVariable.type_
-                    |> typeContainedVariables
-                )
-                (FastDict.union
+            expressionRecordUpdate.recordVariable.type_
+                |> typeContainedVariables
+                |> FastDict.union
                     (expressionRecordUpdate.field0.value
                         |> expressionTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (expressionRecordUpdate.field1Up
-                        |> listMapToFastSetsAndUnify
+                        |> listMapToFastSetFastsAndUnify
                             (\field ->
                                 field.value
                                     |> expressionTypedNodeContainedTypeVariables
                             )
                     )
-                )
 
         ExpressionCaseOf expressionCaseOf ->
-            FastDict.union
-                (expressionCaseOf.matchedExpression
-                    |> expressionTypedNodeContainedTypeVariables
-                )
-                (FastDict.union
+            expressionCaseOf.matchedExpression
+                |> expressionTypedNodeContainedTypeVariables
+                |> FastDict.union
                     (expressionCaseOf.case0
                         |> expressionCaseOfCaseContainedTypeVariables
                     )
+                |> FastDict.union
                     (expressionCaseOf.case1Up
-                        |> listMapToFastSetsAndUnify
+                        |> listMapToFastSetFastsAndUnify
                             expressionCaseOfCaseContainedTypeVariables
                     )
-                )
 
         ExpressionLetIn expressionLetIn ->
-            FastDict.union
-                (expressionLetIn.declaration0.declaration
-                    |> letDeclarationContainedTypeVariables
-                )
-                (FastDict.union
+            expressionLetIn.declaration0.declaration
+                |> letDeclarationContainedTypeVariables
+                |> FastDict.union
                     (expressionLetIn.declaration1Up
-                        |> listMapToFastSetsAndUnify
+                        |> listMapToFastSetFastsAndUnify
                             (\letDeclaration ->
                                 letDeclaration.declaration
                                     |> letDeclarationContainedTypeVariables
                             )
                     )
+                |> FastDict.union
                     (expressionLetIn.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                )
 
 
 letDeclarationContainedTypeVariables :
@@ -9477,22 +9450,17 @@ letDeclarationContainedTypeVariables letDeclaration =
                 )
 
         LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
-            FastDict.union
-                (letValueOrFunctionDeclaration.type_
-                    |> typeContainedVariables
-                )
-                (FastDict.union
+            letValueOrFunctionDeclaration.type_
+                |> typeContainedVariables
+                |> FastDict.union
                     (letValueOrFunctionDeclaration.parameters
-                        |> listMapToFastSetsAndUnify
-                            (\parameter ->
-                                parameter
-                                    |> patternTypedNodeContainedTypeVariables
-                            )
+                        |> listMapToFastSetFastsAndUnify
+                            patternTypedNodeContainedTypeVariables
                     )
+                |> FastDict.union
                     (letValueOrFunctionDeclaration.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                )
 
 
 expressionCaseOfCaseContainedTypeVariables :
@@ -11663,7 +11631,7 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declar
                 |> listPartitionToAnyOrder
                     (\equivalentVariableSet ->
                         expressionTypeInferResult.introducedTypeVariables
-                            |> fastSetIsSupersetOf equivalentVariableSet
+                            |> fastSetFastIsSupersetOf equivalentVariableSet
                     )
 
         substitutionsToApply : VariableSubstitutions
@@ -11751,7 +11719,7 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
                 |> listPartitionToAnyOrder
                     (\equivalentVariableSet ->
                         expressionTypeInferResult.introducedTypeVariables
-                            |> fastSetIsSupersetOf equivalentVariableSet
+                            |> fastSetFastIsSupersetOf equivalentVariableSet
                     )
 
         substitutionsToApply : VariableSubstitutions
@@ -11821,8 +11789,8 @@ tupleListEmptyListEmpty =
     ( [], [] )
 
 
-fastSetIsSupersetOf : FastSetFast comparable -> FastSetFast comparable -> Bool
-fastSetIsSupersetOf sub super =
+fastSetFastIsSupersetOf : FastSetFast comparable -> FastSetFast comparable -> Bool
+fastSetFastIsSupersetOf sub super =
     -- not sure there's a faster alternative since FastSet does not offer restructure
     super == FastDict.union sub super
 
