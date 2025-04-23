@@ -101,28 +101,53 @@ and can be different types.
 So in practice these are
 
     ( 0, 1 )
-    -- ( ( [ "0" ], "number" ), ( [ "1" ], "number" ) )
+    -- ( ( "0", "number" ), ( "1", "number" ) )
+
     ( identity, List.map identity )
-    -- ( ( [ "0" ], "a" ) -> ( [ "0" ], "a" )
-    -- , List ( [ "1", "argument0" ], "a" )
-    --   -> List ( [ "1", "argument0" ], "a" )
+    -- ( ( "0", "a" ) -> ( "0", "a" )
+    -- , List ( "1#argument0", "a" ) -> List ( "1#argument0", "a" )
     -- )
 
-`"0"` and `"1"` referring to the tuple part location
-and `"argument0"` referring to the applied argument index.
-
-We could work with some kind of name disambiguation system
-but preserving names and context is usually nicer
-for the final inferred variable names.
+0 and 1 referring to the tuple part location
+and argument0 referring to the applied argument index.
 
 Performance note: `TypeVariableFromContext` is a tuple to allow for internal use as a dict key.
 
 -}
 type alias TypeVariableFromContext =
     ( -- path inner to outer
-      List String
+      TypeVariableContext
     , String
     )
+
+
+{-| Unique path of an origin of a type variable, see `TypeVariableFromContext`.
+
+Performance note: The path should be a `List String` but a regular separated String is more performant.
+
+-}
+type alias TypeVariableContext =
+    String
+
+
+typeVariableContextEmpty : TypeVariableContext
+typeVariableContextEmpty =
+    ""
+
+
+typeVariableContextFromPathSegment : String -> TypeVariableContext
+typeVariableContextFromPathSegment pathSegment =
+    pathSegment
+
+
+typeVariableContextAddPathSegment : String -> TypeVariableContext -> TypeVariableContext
+typeVariableContextAddPathSegment additionalPathSegment contextSoFar =
+    contextSoFar ++ "#" ++ additionalPathSegment
+
+
+typeVariableContextsAppend : TypeVariableContext -> TypeVariableContext -> TypeVariableContext
+typeVariableContextsAppend baseContext additionalContext =
+    baseContext ++ "#" ++ additionalContext
 
 
 type TypeVariableConstraint
@@ -1389,7 +1414,7 @@ typeToInfoString type_ =
 
 typeVariableFromContextToInfoString : TypeVariableFromContext -> String
 typeVariableFromContextToInfoString ( context, variable ) =
-    variable ++ "_" ++ (context |> String.join "_")
+    variable ++ "_" ++ context
 
 
 typeNotVariableToInfoString : TypeNotVariable TypeVariableFromContext -> String
@@ -2232,13 +2257,15 @@ typeConstructFullyExpandIfAlias declarationTypes typeConstructToExpand =
                 Just originAliasDeclaration ->
                     List.map2
                         (\parameterName argument ->
-                            { variable = ( [], parameterName ), type_ = argument }
+                            { variable = ( typeVariableContextEmpty, parameterName )
+                            , type_ = argument
+                            }
                         )
                         originAliasDeclaration.parameters
                         typeConstructToExpand.arguments
                         |> listFoldlWhileOkFrom
                             (originAliasDeclaration.type_
-                                |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                |> typeMapVariables (\aliasVariable -> ( typeVariableContextEmpty, aliasVariable ))
                             )
                             (\substitution typeSoFar ->
                                 typeSoFar
@@ -3239,14 +3266,19 @@ typeUnifyWithTryToExpandTypeConstruct declarationTypes aTypeConstructToExpand b 
                         (-- TODO single operation
                          List.map2
                             (\parameterName argument ->
-                                { variable = ( [], parameterName ), type_ = argument }
+                                { variable = ( typeVariableContextEmpty, parameterName )
+                                , type_ = argument
+                                }
                             )
                             aOriginAliasDeclaration.parameters
                             aTypeConstructToExpand.arguments
                             |> listFoldlWhileOkFrom
                                 { type_ =
                                     aOriginAliasDeclaration.type_
-                                        |> typeMapVariables (\aliasVariable -> ( [], aliasVariable ))
+                                        |> typeMapVariables
+                                            (\aliasVariable ->
+                                                ( typeVariableContextEmpty, aliasVariable )
+                                            )
                                 , substitutions = variableSubstitutionsNone
                                 }
                                 (\substitution constructedAliasedTypeSoFar ->
@@ -3435,7 +3467,7 @@ typeRecordExtensionUnifyWithRecordExtension declarationTypes aRecordExtension bR
                         ( aRecordVariableContext, aRecordVariableWithoutContext ) =
                             aRecordExtension.recordVariable
                     in
-                    ( "base" :: aRecordVariableContext
+                    ( typeVariableContextAddPathSegment "base" aRecordVariableContext
                     , aRecordVariableWithoutContext
                     )
 
@@ -3948,24 +3980,24 @@ patternTypedNodeIntroducedVariables patternTypedNode =
 patternContextToInPath :
     String
     ->
-        { path : List String
+        { path : TypeVariableContext
         , moduleOriginLookup : ModuleOriginLookup
         , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         }
     ->
-        { path : List String
+        { path : TypeVariableContext
         , moduleOriginLookup : ModuleOriginLookup
         , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         }
 patternContextToInPath innermostPathPart context =
-    { path = innermostPathPart :: context.path
+    { path = typeVariableContextAddPathSegment innermostPathPart context.path
     , moduleOriginLookup = context.moduleOriginLookup
     , declarationTypes = context.declarationTypes
     }
 
 
 patternTypeInfer :
-    { path : List String
+    { path : TypeVariableContext
     , moduleOriginLookup : ModuleOriginLookup
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
@@ -4170,7 +4202,10 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 { range = fieldRange
                                 , value = fieldName
                                 , type_ =
-                                    TypeVariable ( "field" :: context.path, fieldName )
+                                    TypeVariable
+                                        ( typeVariableContextAddPathSegment "field" context.path
+                                        , fieldName
+                                        )
                                 }
                             )
             in
@@ -4396,7 +4431,7 @@ patternListExactEmpty =
 
 patternVariantTypeInfer :
     { moduleOriginLookup : ModuleOriginLookup
-    , path : List String
+    , path : TypeVariableContext
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
@@ -4519,7 +4554,7 @@ expressionTypeInfer :
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
@@ -4560,7 +4595,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionInteger { base = Base10, value = intValue }
                     , type_ = TypeVariable introducedNumberTypeVariable
                     }
-                , introducedTypeVariables = FastDict.singleton introducedNumberTypeVariable ()
+                , introducedTypeVariables =
+                    FastDict.singleton introducedNumberTypeVariable ()
                 }
 
         Elm.Syntax.Expression.Hex intValue ->
@@ -4668,7 +4704,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
                 introducedFieldValueTypeVariable : TypeVariableFromContext
                 introducedFieldValueTypeVariable =
-                    ( "field" :: context.path, fieldName )
+                    ( typeVariableContextAddPathSegment "field" context.path
+                    , fieldName
+                    )
 
                 fieldValueType : Type TypeVariableFromContext
                 fieldValueType =
@@ -4765,7 +4803,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
                         introducedFieldValueTypeVariable : TypeVariableFromContext
                         introducedFieldValueTypeVariable =
-                            ( "field" :: context.path, fieldName )
+                            ( typeVariableContextAddPathSegment "field" context.path
+                            , fieldName
+                            )
 
                         introducedRecordTypeVariable : TypeVariableFromContext
                         introducedRecordTypeVariable =
@@ -5547,7 +5587,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 (lambda.expression
                                     |> expressionTypeInfer
                                         { containingDeclarationName = context.containingDeclarationName
-                                        , path = "lambdaResult" :: context.path
+                                        , path = typeVariableContextAddPathSegment "lambdaResult" context.path
                                         , declarationTypes = context.declarationTypes
                                         , moduleOriginLookup = context.moduleOriginLookup
                                         , locallyIntroducedDeclarationTypes =
@@ -5568,7 +5608,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         )
                         (parameter0
                             |> patternTypeInfer
-                                { path = "parameter0" :: context.path
+                                { path = typeVariableContextAddPathSegment "parameter0" context.path
                                 , moduleOriginLookup = context.moduleOriginLookup
                                 , declarationTypes = context.declarationTypes
                                 }
@@ -5587,8 +5627,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         (pattern
                                             |> patternTypeInfer
                                                 { path =
-                                                    ("parameterFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
-                                                        :: context.path
+                                                    typeVariableContextAddPathSegment
+                                                        ("parameterFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
+                                                        context.path
                                                 , declarationTypes = context.declarationTypes
                                                 , moduleOriginLookup = context.moduleOriginLookup
                                                 }
@@ -5690,7 +5731,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 , partiallyInferredDeclarationTypes =
                                     context.locallyIntroducedDeclarationTypes
                                 , containingDeclarationName = context.containingDeclarationName
-                                , path = "case0" :: context.path
+                                , path = typeVariableContextAddPathSegment "case0" context.path
                                 , locallyIntroducedExpressionVariables =
                                     context.locallyIntroducedExpressionVariables
                                 }
@@ -5736,8 +5777,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , moduleOriginLookup = context.moduleOriginLookup
                                                 , containingDeclarationName = context.containingDeclarationName
                                                 , path =
-                                                    ("caseFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
-                                                        :: context.path
+                                                    typeVariableContextAddPathSegment
+                                                        ("caseFromEnd" ++ (soFar.indexFromEnd |> String.fromInt))
+                                                        context.path
                                                 , locallyIntroducedExpressionVariables = context.locallyIntroducedExpressionVariables
                                                 }
                                         )
@@ -5762,19 +5804,20 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 |> List.foldl
                                     (\(Elm.Syntax.Node.Node _ letDeclaration) soFar ->
                                         let
-                                            contextPath : List String
+                                            contextPath : TypeVariableContext
                                             contextPath =
-                                                ("letDeclaration"
-                                                    ++ (soFar.index |> String.fromInt)
-                                                )
-                                                    :: context.path
+                                                typeVariableContextAddPathSegment
+                                                    ("letDeclaration"
+                                                        ++ (soFar.index |> String.fromInt)
+                                                    )
+                                                    context.path
                                         in
                                         case letDeclaration of
                                             Elm.Syntax.Expression.LetDestructuring patternNode _ ->
                                                 case
                                                     patternNode
                                                         |> patternTypeInfer
-                                                            { path = "pattern" :: contextPath
+                                                            { path = typeVariableContextAddPathSegment "pattern" contextPath
                                                             , declarationTypes = context.declarationTypes
                                                             , moduleOriginLookup = context.moduleOriginLookup
                                                             }
@@ -5823,7 +5866,10 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             soFar.introducedDeclarationTypes
                                                                 |> FastDict.insert name
                                                                     (type_
-                                                                        |> typeMapVariables (\variable -> ( [], variable ))
+                                                                        |> typeMapVariables
+                                                                            (\variable ->
+                                                                                ( typeVariableContextEmpty, variable )
+                                                                            )
                                                                     )
                                                         }
 
@@ -5903,7 +5949,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (letDeclaration0Node
                             |> letDeclarationTypeInfer
                                 { containingDeclarationName = context.containingDeclarationName
-                                , path = "letDeclaration0" :: context.path
+                                , path = typeVariableContextAddPathSegment "letDeclaration0" context.path
                                 , locallyIntroducedExpressionVariables =
                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
                                 , locallyIntroducedDeclarationTypes =
@@ -5943,10 +5989,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             |> letDeclarationTypeInfer
                                                 { containingDeclarationName = context.containingDeclarationName
                                                 , path =
-                                                    ("letDeclarationFromEnd"
-                                                        ++ (soFar.indexFromEnd |> String.fromInt)
-                                                    )
-                                                        :: context.path
+                                                    typeVariableContextAddPathSegment
+                                                        ("letDeclarationFromEnd"
+                                                            ++ (soFar.indexFromEnd |> String.fromInt)
+                                                        )
+                                                        context.path
                                                 , locallyIntroducedExpressionVariables =
                                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
                                                 , locallyIntroducedDeclarationTypes =
@@ -5960,7 +6007,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (letIn.expression
                             |> expressionTypeInfer
                                 { containingDeclarationName = context.containingDeclarationName
-                                , path = "letInResult" :: context.path
+                                , path = typeVariableContextAddPathSegment "letInResult" context.path
                                 , locallyIntroducedExpressionVariables =
                                     acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
                                 , moduleOriginLookup = context.moduleOriginLookup
@@ -6039,7 +6086,7 @@ expressionCaseTypeInfer :
     , partiallyInferredDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     , moduleOriginLookup : ModuleOriginLookup
     }
     ->
@@ -6103,7 +6150,7 @@ expressionCaseTypeInfer context ( casePattern, caseResult ) =
                         , locallyIntroducedDeclarationTypes =
                             context.partiallyInferredDeclarationTypes
                         , containingDeclarationName = context.containingDeclarationName
-                        , path = "result" :: context.path
+                        , path = typeVariableContextAddPathSegment "result" context.path
                         , locallyIntroducedExpressionVariables =
                             FastDict.union context.locallyIntroducedExpressionVariables
                                 (patternInferred |> patternTypedNodeIntroducedVariables)
@@ -6114,7 +6161,7 @@ expressionCaseTypeInfer context ( casePattern, caseResult ) =
             |> patternTypeInfer
                 { declarationTypes = context.declarationTypes
                 , moduleOriginLookup = context.moduleOriginLookup
-                , path = "pattern" :: context.path
+                , path = typeVariableContextAddPathSegment "pattern" context.path
                 }
         )
 
@@ -6126,7 +6173,7 @@ expressionReferenceTypeInfer :
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict String (Type TypeVariableFromContext)
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     , moduleOriginLookup : ModuleOriginLookup
     }
     ->
@@ -6198,8 +6245,9 @@ expressionReferenceTypeInfer context expressionReference =
                                             partiallyInferredType
                                                 |> typeMapVariables
                                                     (\( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) ->
-                                                        ( partiallyInferredTypeVariableContext
-                                                            ++ context.path
+                                                        ( typeVariableContextsAppend
+                                                            context.path
+                                                            partiallyInferredTypeVariableContext
                                                         , partiallyInferredTypeVariableName
                                                         )
                                                     )
@@ -6785,7 +6833,7 @@ letDeclarationTypeInfer :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Expression.LetDeclaration
     ->
@@ -6854,7 +6902,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                 )
                 (letDestructuringPattern
                     |> patternTypeInfer
-                        { path = "pattern" :: context.path
+                        { path = typeVariableContextAddPathSegment "pattern" context.path
                         , declarationTypes = context.declarationTypes
                         , moduleOriginLookup = context.moduleOriginLookup
                         }
@@ -6877,7 +6925,7 @@ letFunctionOrValueDeclarationTypeInfer :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Expression.Function
     ->
@@ -6978,7 +7026,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                         (implementation.expression
                             |> expressionTypeInfer
                                 { containingDeclarationName = context.containingDeclarationName
-                                , path = "letDeclarationResult" :: context.path
+                                , path = typeVariableContextAddPathSegment "letDeclarationResult" context.path
                                 , declarationTypes = context.declarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
                                 , locallyIntroducedDeclarationTypes =
@@ -7006,7 +7054,9 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                     annotationAsType
                                         |> typeMapVariables
                                             (\variable ->
-                                                ( [ context.containingDeclarationName ], variable )
+                                                ( typeVariableContextFromPathSegment context.containingDeclarationName
+                                                , variable
+                                                )
                                             )
                             in
                             Result.andThen
@@ -7111,7 +7161,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 (implementation.expression
                                     |> expressionTypeInfer
                                         { containingDeclarationName = context.containingDeclarationName
-                                        , path = "letDeclarationResult" :: context.path
+                                        , path = typeVariableContextAddPathSegment "letDeclarationResult" context.path
                                         , declarationTypes = context.declarationTypes
                                         , moduleOriginLookup = context.moduleOriginLookup
                                         , locallyIntroducedDeclarationTypes =
@@ -7177,7 +7227,7 @@ expressionInfixOperationTypeInfer :
         FastDict.Dict String (Type TypeVariableFromContext)
     , moduleOriginLookup : ModuleOriginLookup
     , containingDeclarationName : String
-    , path : List String
+    , path : TypeVariableContext
     }
     ->
         { fullRange : Elm.Syntax.Range.Range
@@ -7262,7 +7312,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                     )
         )
         (operatorFunctionType
-            { path = "operator" :: context.path
+            { path = typeVariableContextAddPathSegment "operator" context.path
             , moduleOriginLookup = context.moduleOriginLookup
             , errorRange = infixOperation.fullRange
             }
@@ -7283,7 +7333,7 @@ expressionInfixOperationTypeInfer context infixOperation =
 
 
 operatorFunctionType :
-    { path : List String
+    { path : TypeVariableContext
     , errorRange : Elm.Syntax.Range.Range
     , moduleOriginLookup : ModuleOriginLookup
     }
@@ -8332,7 +8382,7 @@ expressionContextToInPath :
         , locallyIntroducedDeclarationTypes :
             FastDict.Dict String (Type TypeVariableFromContext)
         , containingDeclarationName : String
-        , path : List String
+        , path : TypeVariableContext
         , moduleOriginLookup : ModuleOriginLookup
         }
     ->
@@ -8342,12 +8392,12 @@ expressionContextToInPath :
         , locallyIntroducedDeclarationTypes :
             FastDict.Dict String (Type TypeVariableFromContext)
         , containingDeclarationName : String
-        , path : List String
+        , path : TypeVariableContext
         , moduleOriginLookup : ModuleOriginLookup
         }
 expressionContextToInPath innermostPathDescription context =
     { containingDeclarationName = context.containingDeclarationName
-    , path = innermostPathDescription :: context.path
+    , path = typeVariableContextAddPathSegment innermostPathDescription context.path
     , declarationTypes = context.declarationTypes
     , locallyIntroducedExpressionVariables =
         context.locallyIntroducedExpressionVariables
@@ -8567,7 +8617,11 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                 , partiallyInferredDeclarationTypes =
                                     soFar.partiallyInferredDeclarationTypes
                                         |> FastDict.insert name
-                                            (TypeVariable ( [ name ], name ))
+                                            (TypeVariable
+                                                ( typeVariableContextFromPathSegment name
+                                                , name
+                                                )
+                                            )
                                 }
                     )
                     partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty
@@ -8623,7 +8677,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                 let
                                     fullTypeVariable : TypeVariableFromContext
                                     fullTypeVariable =
-                                        ( [ name ], name )
+                                        ( typeVariableContextFromPathSegment name, name )
                                 in
                                 Result.andThen
                                     (\resultInferred ->
@@ -8677,7 +8731,9 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
                                                     |> FastDict.remove name
                                             , containingDeclarationName = name
-                                            , path = [ "declarationResult", name ]
+                                            , path =
+                                                typeVariableContextAddPathSegment "declarationResult"
+                                                    (typeVariableContextFromPathSegment name)
                                             , moduleOriginLookup = moduleOriginLookup
                                             }
                                     )
@@ -8709,7 +8765,11 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                     Just annotationType ->
                                                         annotationType
                                                             |> typeMapVariables
-                                                                (\variable -> ( [ name ], variable ))
+                                                                (\variable ->
+                                                                    ( typeVariableContextFromPathSegment name
+                                                                    , variable
+                                                                    )
+                                                                )
 
                                                     Nothing ->
                                                         inferredFullType
@@ -8809,7 +8869,9 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                             , locallyIntroducedDeclarationTypes =
                                                 acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
                                             , containingDeclarationName = name
-                                            , path = [ "declarationResult", name ]
+                                            , path =
+                                                typeVariableContextAddPathSegment "declarationResult"
+                                                    (typeVariableContextFromPathSegment name)
                                             , moduleOriginLookup = moduleOriginLookup
                                             }
                                     )
@@ -8817,7 +8879,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                     (implementation.arguments
                         |> parameterPatternsTypeInfer
                             { declarationTypes = declarationTypes
-                            , path = [ name ]
+                            , path = typeVariableContextFromPathSegment name
                             , moduleOriginLookup = moduleOriginLookup
                             }
                     )
@@ -9773,7 +9835,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                             partialTypeVariableAmongEquivalentVariables.partiallyInferredDeclarationType
                                                                 |> typeMapVariables
                                                                     (\( variableContext, variableName ) ->
-                                                                        ( usePathSegment :: variableContext
+                                                                        ( typeVariableContextAddPathSegment usePathSegment variableContext
                                                                         , variableName
                                                                         )
                                                                     )
@@ -9971,7 +10033,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                         substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
                                                                             |> typeMapVariables
                                                                                 (\( variableContext, variableName ) ->
-                                                                                    ( usePathSegment :: variableContext
+                                                                                    ( typeVariableContextAddPathSegment usePathSegment variableContext
                                                                                     , variableName
                                                                                     )
                                                                                 )
@@ -12685,12 +12747,11 @@ equivalentVariablesCreateCondensedVariable set =
 
                         Just unifiedConstraint ->
                             let
-                                ( variable0Context, variable0IgnoringContext ) =
+                                ( variable0Context, _ ) =
                                     variable0
                             in
                             ( variable0Context
-                            , variable0IgnoringContext
-                                |> typeVariableNameReplaceConstraint unifiedConstraint
+                            , unifiedConstraint |> typeVariableConstraintToString
                             )
                 )
                 ((variable0 :: variable1 :: variable2Up)
@@ -12732,26 +12793,6 @@ typeVariableConstraintToString constraint =
             "compappend"
 
 
-typeVariableNameReplaceConstraint : TypeVariableConstraint -> String -> String
-typeVariableNameReplaceConstraint replacementConstraint typeVariableNameWithPotentialConstraint =
-    let
-        typeVariableNameWithoutConstraint : String
-        typeVariableNameWithoutConstraint =
-            case typeVariableNameWithPotentialConstraint |> typeVariableConstraint of
-                Nothing ->
-                    typeVariableNameWithPotentialConstraint
-
-                Just constraint ->
-                    String.dropLeft
-                        (constraint |> typeVariableConstraintToString |> String.length)
-                        typeVariableNameWithPotentialConstraint
-                        |> stringFirstCharToLower
-    in
-    (replacementConstraint |> typeVariableConstraintToString)
-        ++ (typeVariableNameWithoutConstraint |> stringFirstCharToUpper)
-        ++ ""
-
-
 fastDictFoldlWhileOkFrom : ok -> (key -> value -> ok -> Result err ok) -> FastDict.Dict key value -> Result err ok
 fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
     fastDict
@@ -12759,15 +12800,15 @@ fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
             (\key value soFarOrError ->
                 case soFarOrError of
                     Err error ->
-                        Err error |> FastDict.Stop
+                        FastDict.Stop (Err error)
 
                     Ok soFar ->
                         case reduceToResult key value soFar of
                             Err error ->
-                                Err error |> FastDict.Stop
+                                FastDict.Stop (Err error)
 
                             Ok foldedWithEntry ->
-                                Ok foldedWithEntry |> FastDict.Continue
+                                FastDict.Continue (Ok foldedWithEntry)
             )
             (Ok initialFolded)
 
@@ -12779,7 +12820,7 @@ fastDictMapAndSmallestJust keyValueToMaybe fastDict =
             (\key value _ ->
                 case keyValueToMaybe key value of
                     Just foldedWithEntry ->
-                        Just foldedWithEntry |> FastDict.Stop
+                        FastDict.Stop (Just foldedWithEntry)
 
                     Nothing ->
                         fastDictContinueNothing
@@ -12793,7 +12834,7 @@ fastDictContinueNothing =
 
 
 parameterPatternsTypeInfer :
-    { path : List String
+    { path : TypeVariableContext
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , moduleOriginLookup : ModuleOriginLookup
     }

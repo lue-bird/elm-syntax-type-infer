@@ -152,7 +152,8 @@ config =
             |> UseCamelCase.withCamel toCamelCase
             |> UseCamelCase.withPascal toCamelCase
         )
-    , NoPrimitiveTypeAlias.rule
+    -- allowed for performance reasons
+    -- , NoPrimitiveTypeAlias.rule
     , Review.ImportSimple.rule
     , OnlyAllSingleUseTypeVarsEndWith_.rule
     , NoRecordAliasConstructor.rule
