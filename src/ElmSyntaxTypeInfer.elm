@@ -9576,17 +9576,6 @@ valueAndFunctionDeclarationsApplySubstitutions :
                 (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
             )
 valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarationsSoFar =
-    let
-        moduleLevelPartiallyInferredDeclarations :
-            FastDict.Dict
-                String
-                { nameRange : Elm.Syntax.Range.Range
-                , type_ : Type TypeVariableFromContext
-                }
-        moduleLevelPartiallyInferredDeclarations =
-            valueAndFunctionDeclarationsSoFar
-                |> valueAndFunctionDeclarationsGetPartiallyInferred
-    in
     case state.substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
             case equivalentVariablesCreateCondensedVariable equivalentVariableSet0 of
@@ -9595,6 +9584,16 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                 Ok condensedVariable ->
                     let
+                        moduleLevelPartiallyInferredDeclarations :
+                            FastDict.Dict
+                                String
+                                { nameRange : Elm.Syntax.Range.Range
+                                , type_ : Type TypeVariableFromContext
+                                }
+                        moduleLevelPartiallyInferredDeclarations =
+                            valueAndFunctionDeclarationsSoFar
+                                |> valueAndFunctionDeclarationsGetPartiallyInferred
+
                         allPartiallyInferredDeclarationsAndUsesBeforeSubstitution :
                             FastDict.Dict
                                 ( RangeAsComparable, String )
@@ -9867,6 +9866,16 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                 Ok remainingVariableToTypeAndSubstitutions ->
                                     let
+                                        moduleLevelPartiallyInferredDeclarations :
+                                            FastDict.Dict
+                                                String
+                                                { nameRange : Elm.Syntax.Range.Range
+                                                , type_ : Type TypeVariableFromContext
+                                                }
+                                        moduleLevelPartiallyInferredDeclarations =
+                                            valueAndFunctionDeclarationsSoFar
+                                                |> valueAndFunctionDeclarationsGetPartiallyInferred
+
                                         allPartiallyInferredDeclarationsAndUsesBeforeSubstitution :
                                             FastDict.Dict
                                                 ( RangeAsComparable, String )
