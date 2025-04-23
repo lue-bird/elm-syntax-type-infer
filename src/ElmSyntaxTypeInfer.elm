@@ -4906,8 +4906,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         )
                                         ({ substitutions = onFalseOnTrueInferredSubstitutions
                                          , introducedTypeVariables =
-                                            onTrueInferred.introducedTypeVariables
-                                                |> FastDict.union onFalseInferred.introducedTypeVariables
+                                            FastDict.union
+                                                onTrueInferred.introducedTypeVariables
+                                                onFalseInferred.introducedTypeVariables
                                          }
                                             |> typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
                                                 { declarationTypes = context.declarationTypes
@@ -5793,13 +5794,13 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
                 letDeclaration0Node :: letDeclaration1Up ->
                     let
-                        acrossLetIn :
-                            { introducedExpressionVariables :
+                        acrossLetInIncludingContextSoFar :
+                            { locallyIntroducedExpressionVariables :
                                 FastDict.Dict String (Type TypeVariableFromContext)
                             , introducedDeclarationTypes :
                                 FastDict.Dict String (Type TypeVariableFromContext)
                             }
-                        acrossLetIn =
+                        acrossLetInIncludingContextSoFar =
                             (letDeclaration0Node :: letDeclaration1Up)
                                 |> List.foldl
                                     (\(Elm.Syntax.Node.Node _ letDeclaration) soFar ->
@@ -5885,32 +5886,17 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                                     )
                                                         }
                                     )
-                                    index0AndIntroducedDeclarationTypesEmptyIntroducedExpressionVariablesEmpty
+                                    { index = 0
+                                    , introducedExpressionVariables =
+                                        context.locallyIntroducedExpressionVariables
+                                    , introducedDeclarationTypes =
+                                        context.locallyIntroducedDeclarationTypes
+                                    }
                                 |> (\result ->
-                                        { introducedExpressionVariables = result.introducedExpressionVariables
+                                        { locallyIntroducedExpressionVariables = result.introducedExpressionVariables
                                         , introducedDeclarationTypes = result.introducedDeclarationTypes
                                         }
                                    )
-
-                        acrossLetInIncludingContextSoFar :
-                            { locallyIntroducedExpressionVariables :
-                                FastDict.Dict String (Type TypeVariableFromContext)
-                            , introducedDeclarationTypes :
-                                FastDict.Dict String (Type TypeVariableFromContext)
-                            }
-                        acrossLetInIncludingContextSoFar =
-                            { locallyIntroducedExpressionVariables =
-                                FastDict.union
-                                    acrossLetIn.introducedExpressionVariables
-                                    context.locallyIntroducedExpressionVariables
-                            , introducedDeclarationTypes =
-                                FastDict.union
-                                    acrossLetIn.introducedDeclarationTypes
-                                    (FastDict.union
-                                        acrossLetIn.introducedDeclarationTypes
-                                        context.locallyIntroducedDeclarationTypes
-                                    )
-                            }
                     in
                     resultAndThen3
                         (\declaration0Inferred declaration1UpInferred resultInferred ->
@@ -6050,18 +6036,6 @@ indexFromEnd0NodesEmpty : { nodes : List node_, indexFromEnd : Int }
 indexFromEnd0NodesEmpty =
     { indexFromEnd = 0
     , nodes = []
-    }
-
-
-index0AndIntroducedDeclarationTypesEmptyIntroducedExpressionVariablesEmpty :
-    { index : Int
-    , introducedDeclarationTypes : FastDict.Dict String declarationType_
-    , introducedExpressionVariables : FastDict.Dict String variableType_
-    }
-index0AndIntroducedDeclarationTypesEmptyIntroducedExpressionVariablesEmpty =
-    { index = 0
-    , introducedDeclarationTypes = FastDict.empty
-    , introducedExpressionVariables = FastDict.empty
     }
 
 
@@ -7207,16 +7181,6 @@ stringFirstCharToUpper string =
 
         Just ( headChar, tailString ) ->
             String.cons (Char.toUpper headChar) tailString
-
-
-stringFirstCharToLower : String -> String
-stringFirstCharToLower string =
-    case string |> String.uncons of
-        Nothing ->
-            ""
-
-        Just ( headChar, tailString ) ->
-            String.cons (Char.toLower headChar) tailString
 
 
 expressionInfixOperationTypeInfer :
