@@ -12731,14 +12731,11 @@ patternMapTypes typeChange pattern =
 
 equivalentVariablesCreateCondensedVariable : FastSetFast TypeVariableFromContext -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    case set |> FastDict.keys of
-        [] ->
+    case set |> FastDict.getMin of
+        Nothing ->
             Err "implementation bug: equivalent variables set is empty"
 
-        [ onlyVariable ] ->
-            Ok onlyVariable
-
-        variable0 :: variable1 :: variable2Up ->
+        Just ( variable0, () ) ->
             Result.map
                 (\unifiedMaybeConstraint ->
                     case unifiedMaybeConstraint of
@@ -12754,9 +12751,9 @@ equivalentVariablesCreateCondensedVariable set =
                             , unifiedConstraint |> typeVariableConstraintToString
                             )
                 )
-                ((variable0 :: variable1 :: variable2Up)
-                    |> listFoldlWhileOkFrom Nothing
-                        (\variable soFar ->
+                (set
+                    |> fastDictFoldlWhileOkFrom Nothing
+                        (\variable () soFar ->
                             maybeTypeVariableConstraintMerge
                                 (variable
                                     |> typeVariableIgnoringContext
@@ -12796,19 +12793,16 @@ typeVariableConstraintToString constraint =
 fastDictFoldlWhileOkFrom : ok -> (key -> value -> ok -> Result err ok) -> FastDict.Dict key value -> Result err ok
 fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
     fastDict
-        |> FastDict.stoppableFoldl
+        |> -- we could use stoppableFoldl with some overhead for the case that all are ok
+           -- but elm-syntax-type-infer optimizes for the more common case
+           FastDict.foldl
             (\key value soFarOrError ->
                 case soFarOrError of
                     Err error ->
-                        FastDict.Stop (Err error)
+                        Err error
 
                     Ok soFar ->
-                        case reduceToResult key value soFar of
-                            Err error ->
-                                FastDict.Stop (Err error)
-
-                            Ok foldedWithEntry ->
-                                FastDict.Continue (Ok foldedWithEntry)
+                        reduceToResult key value soFar
             )
             (Ok initialFolded)
 
