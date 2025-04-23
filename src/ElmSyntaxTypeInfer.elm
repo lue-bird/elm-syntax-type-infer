@@ -39,7 +39,6 @@ import Elm.Syntax.Range
 import Elm.Syntax.TypeAnnotation
 import Elm.Type
 import FastDict
-import FastSet
 
 
 {-| Known types of members in a module.
@@ -331,13 +330,20 @@ typeMapVariables variableMap type_ =
                 )
 
 
+type alias FastSetFast a =
+    -- because the FastSet module doesn't offer certain helpers
+    -- that are highly valuable for performance which FastDict does have
+    -- e.g. fast conversion between the two or restructure
+    FastDict.Dict a ()
+
+
 typeContainedVariables :
     Type comparableTypeVariable
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 typeContainedVariables type_ =
     case type_ of
         TypeVariable variable ->
-            FastSet.singleton variable
+            FastDict.singleton variable ()
 
         TypeNotVariable typeNotVariable ->
             typeNotVariable |> typeNotVariableContainedVariables
@@ -345,25 +351,25 @@ typeContainedVariables type_ =
 
 typeNotVariableContainedVariables :
     TypeNotVariable comparableTypeVariable
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 typeNotVariableContainedVariables typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
-            FastSet.empty
+            FastDict.empty
 
         TypeFunction typeFunction ->
-            FastSet.union
+            FastDict.union
                 (typeFunction.input |> typeContainedVariables)
                 (typeFunction.output |> typeContainedVariables)
 
         TypeTuple typeTuple ->
-            FastSet.union
+            FastDict.union
                 (typeTuple.part0 |> typeContainedVariables)
                 (typeTuple.part1 |> typeContainedVariables)
 
         TypeTriple typeTriple ->
-            FastSet.union
-                (FastSet.union
+            FastDict.union
+                (FastDict.union
                     (typeTriple.part0 |> typeContainedVariables)
                     (typeTriple.part1 |> typeContainedVariables)
                 )
@@ -377,19 +383,19 @@ typeNotVariableContainedVariables typeNotVariable =
             typeRecordFields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastSet.union soFar
+                        FastDict.union soFar
                             (value |> typeContainedVariables)
                     )
-                    FastSet.empty
+                    FastDict.empty
 
         TypeRecordExtension typeRecordExtension ->
             typeRecordExtension.fields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastSet.union soFar
+                        FastDict.union soFar
                             (value |> typeContainedVariables)
                     )
-                    (FastSet.singleton typeRecordExtension.recordVariable)
+                    (FastDict.singleton typeRecordExtension.recordVariable ())
 
 
 typeNotVariableMapVariables :
@@ -2241,7 +2247,7 @@ variable substitutions get passed all the way to the top and only get processed 
 -}
 type alias VariableSubstitutions =
     { equivalentVariables :
-        List (FastSet.Set TypeVariableFromContext)
+        List (FastSetFast TypeVariableFromContext)
     , variableToType :
         FastDict.Dict
             TypeVariableFromContext
@@ -2411,34 +2417,34 @@ variableSubstitutionsMerge4 declarationTypes a b c d =
 equivalentVariablesMergeWithSetOf2 :
     comparable
     -> comparable
-    -> List (FastSet.Set comparable)
-    -> List (FastSet.Set comparable)
+    -> List (FastSetFast comparable)
+    -> List (FastSetFast comparable)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
     equivalentVariablesMergeWithSetOf2Into [] aEquivalentVariable bEquivalentVariable equivalentVariables
 
 
 equivalentVariablesMergeWithSetOf2Into :
-    List (FastSet.Set comparable)
+    List (FastSetFast comparable)
     -> comparable
     -> comparable
-    -> List (FastSet.Set comparable)
-    -> List (FastSet.Set comparable)
+    -> List (FastSetFast comparable)
+    -> List (FastSetFast comparable)
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
-            (FastSet.singleton aEquivalentVariable
-                |> FastSet.insert bEquivalentVariable
+            (FastDict.singleton aEquivalentVariable ()
+                |> FastDict.insert bEquivalentVariable ()
             )
                 :: soFar
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
             if
-                (equivalentVariablesSet0 |> FastSet.member aEquivalentVariable)
-                    || (equivalentVariablesSet0 |> FastSet.member bEquivalentVariable)
+                (equivalentVariablesSet0 |> FastDict.member aEquivalentVariable)
+                    || (equivalentVariablesSet0 |> FastDict.member bEquivalentVariable)
             then
                 (equivalentVariablesSet0
-                    |> FastSet.insert aEquivalentVariable
-                    |> FastSet.insert bEquivalentVariable
+                    |> FastDict.insert aEquivalentVariable ()
+                    |> FastDict.insert bEquivalentVariable ()
                 )
                     :: soFar
                     ++ equivalentVariablesSet1Up
@@ -2452,9 +2458,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
 
 
 equivalentVariableSetMerge :
-    List (FastSet.Set comparableTypeVariable)
-    -> List (FastSet.Set comparableTypeVariable)
-    -> List (FastSet.Set comparableTypeVariable)
+    List (FastSetFast comparableTypeVariable)
+    -> List (FastSetFast comparableTypeVariable)
+    -> List (FastSetFast comparableTypeVariable)
 equivalentVariableSetMerge a b =
     case a of
         [] ->
@@ -2468,8 +2474,8 @@ equivalentVariableSetMerge a b =
                 _ :: _ ->
                     let
                         mergedIntoA :
-                            { sets : List (FastSet.Set comparableTypeVariable)
-                            , bRemaining : List (FastSet.Set comparableTypeVariable)
+                            { sets : List (FastSetFast comparableTypeVariable)
+                            , bRemaining : List (FastSetFast comparableTypeVariable)
                             }
                         mergedIntoA =
                             a
@@ -2493,7 +2499,7 @@ equivalentVariableSetMerge a b =
 
                                             Just bEquivalentVariableSetAndRemaining ->
                                                 { sets =
-                                                    FastSet.union aEquivalentVariableSet bEquivalentVariableSetAndRemaining.value
+                                                    FastDict.union aEquivalentVariableSet bEquivalentVariableSetAndRemaining.value
                                                         :: soFar.sets
                                                 , bRemaining = bEquivalentVariableSetAndRemaining.remaining
                                                 }
@@ -2504,9 +2510,9 @@ equivalentVariableSetMerge a b =
                         ++ mergedIntoA.bRemaining
 
 
-fastSetShareElements : FastSet.Set comparable -> FastSet.Set comparable -> Bool
+fastSetShareElements : FastSetFast comparable -> FastSetFast comparable -> Bool
 fastSetShareElements a b =
-    FastSet.intersect a b /= FastSet.empty
+    FastDict.intersect a b /= FastDict.empty
 
 
 listMapAndFirstJustAndRemainingAnyOrder :
@@ -4462,7 +4468,7 @@ expressionTypeInfer :
                 TypedNode
                     (Expression (Type TypeVariableFromContext))
                     (Type TypeVariableFromContext)
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
     -- IGNORE TCO
@@ -4475,7 +4481,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionUnit
                     , type_ = typeUnit
                     }
-                , introducedTypeVariables = FastSet.empty
+                , introducedTypeVariables = FastDict.empty
                 }
 
         Elm.Syntax.Expression.Integer intValue ->
@@ -4491,7 +4497,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionInteger { base = Base10, value = intValue }
                     , type_ = TypeVariable introducedNumberTypeVariable
                     }
-                , introducedTypeVariables = FastSet.singleton introducedNumberTypeVariable
+                , introducedTypeVariables = FastDict.singleton introducedNumberTypeVariable ()
                 }
 
         Elm.Syntax.Expression.Hex intValue ->
@@ -4507,7 +4513,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionInteger { base = Base16, value = intValue }
                     , type_ = TypeVariable introducedNumberTypeVariable
                     }
-                , introducedTypeVariables = FastSet.singleton introducedNumberTypeVariable
+                , introducedTypeVariables = FastDict.singleton introducedNumberTypeVariable ()
                 }
 
         Elm.Syntax.Expression.Floatable floatValue ->
@@ -4518,7 +4524,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionFloat floatValue
                     , type_ = typeBasicsFloat
                     }
-                , introducedTypeVariables = FastSet.empty
+                , introducedTypeVariables = FastDict.empty
                 }
 
         Elm.Syntax.Expression.Literal stringValue ->
@@ -4529,7 +4535,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionString stringValue
                     , type_ = typeStringString
                     }
-                , introducedTypeVariables = FastSet.empty
+                , introducedTypeVariables = FastDict.empty
                 }
 
         Elm.Syntax.Expression.CharLiteral charValue ->
@@ -4540,7 +4546,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , value = ExpressionChar charValue
                     , type_ = typeCharChar
                     }
-                , introducedTypeVariables = FastSet.empty
+                , introducedTypeVariables = FastDict.empty
                 }
 
         Elm.Syntax.Expression.PrefixOperator operator ->
@@ -4629,8 +4635,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     }
                 , substitutions = variableSubstitutionsNone
                 , introducedTypeVariables =
-                    FastSet.singleton introducedRecordTypeVariable
-                        |> FastSet.insert introducedFieldValueTypeVariable
+                    FastDict.singleton introducedRecordTypeVariable ()
+                        |> FastDict.insert introducedFieldValueTypeVariable ()
                 }
 
         Elm.Syntax.Expression.ParenthesizedExpression inParens ->
@@ -4666,7 +4672,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     , substitutions = negatedInferred.substitutions
                     , introducedTypeVariables =
                         negatedInferred.introducedTypeVariables
-                            |> FastSet.insert introducedNumberTypeVariable
+                            |> FastDict.insert introducedNumberTypeVariable ()
                     }
                         |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                             context.declarationTypes
@@ -4718,8 +4724,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             , substitutions = accessedRecordInferred.substitutions
                             , introducedTypeVariables =
                                 accessedRecordInferred.introducedTypeVariables
-                                    |> FastSet.insert introducedRecordTypeVariable
-                                    |> FastSet.insert introducedFieldValueTypeVariable
+                                    |> FastDict.insert introducedRecordTypeVariable ()
+                                    |> FastDict.insert introducedFieldValueTypeVariable ()
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                     context.declarationTypes
@@ -4770,7 +4776,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (\fullSubstitutions ->
                                                     { substitutions = fullSubstitutions
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             conditionSubstituted.introducedTypeVariables
                                                             onTrueOnFalseSubstituted.introducedTypeVariables
                                                     , node =
@@ -4798,7 +4804,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         ({ substitutions = onFalseOnTrueInferredSubstitutions
                                          , introducedTypeVariables =
                                             onTrueInferred.introducedTypeVariables
-                                                |> FastSet.union onFalseInferred.introducedTypeVariables
+                                                |> FastDict.union onFalseInferred.introducedTypeVariables
                                          }
                                             |> typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
                                                 { declarationTypes = context.declarationTypes
@@ -4862,7 +4868,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             , value = ExpressionUnit
                             , type_ = typeUnit
                             }
-                        , introducedTypeVariables = FastSet.empty
+                        , introducedTypeVariables = FastDict.empty
                         }
 
                 [ inParens ] ->
@@ -4904,7 +4910,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 )
                                         }
                                     , introducedTypeVariables =
-                                        FastSet.union
+                                        FastDict.union
                                             part0Inferred.introducedTypeVariables
                                             part1Inferred.introducedTypeVariables
                                     }
@@ -4952,8 +4958,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         }
                                     , introducedTypeVariables =
                                         part0Inferred.introducedTypeVariables
-                                            |> FastSet.union part1Inferred.introducedTypeVariables
-                                            |> FastSet.union part2Inferred.introducedTypeVariables
+                                            |> FastDict.union part1Inferred.introducedTypeVariables
+                                            |> FastDict.union part2Inferred.introducedTypeVariables
                                     }
                                 )
                                 (variableSubstitutionsMerge3 context.declarationTypes
@@ -5000,7 +5006,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     (TypeVariable introducedElementTypeVariable)
                             }
                         , introducedTypeVariables =
-                            FastSet.singleton introducedElementTypeVariable
+                            FastDict.singleton introducedElementTypeVariable ()
                         }
 
                 head :: tail ->
@@ -5021,7 +5027,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 , type_ = typeListList headInferred.node.type_
                                                 }
                                             , introducedTypeVariables =
-                                                FastSet.union
+                                                FastDict.union
                                                     headInferred.introducedTypeVariables
                                                     tailElementsInferred.introducedTypeVariables
                                             }
@@ -5061,7 +5067,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             :: soFar.nodes
                                                     , substitutions = substitutionsWithElement
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             soFar.introducedTypeVariables
                                                             elementInferred.introducedTypeVariables
                                                     }
@@ -5119,11 +5125,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 }
                                             , introducedTypeVariables =
                                                 calledInferred.introducedTypeVariables
-                                                    |> FastSet.union
+                                                    |> FastDict.union
                                                         argument0Inferred.introducedTypeVariables
-                                                    |> FastSet.union
+                                                    |> FastDict.union
                                                         argument1UpInferred.introducedTypeVariables
-                                                    |> FastSet.insert introducedResultTypeVariable
+                                                    |> FastDict.insert introducedResultTypeVariable ()
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     context.declarationTypes
@@ -5180,7 +5186,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     { indexFromEnd = soFar.indexFromEnd + 1
                                                     , substitutions = substitutionsWithArgument
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             soFar.introducedTypeVariables
                                                             argumentInferred.introducedTypeVariables
                                                     , nodes =
@@ -5250,7 +5256,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     :: soFar.nodes
                                             , substitutions = substitutionsWithField
                                             , introducedTypeVariables =
-                                                FastSet.union
+                                                FastDict.union
                                                     soFar.introducedTypeVariables
                                                     fieldValueInferred.introducedTypeVariables
                                             }
@@ -5309,8 +5315,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 }
                                             , introducedTypeVariables =
                                                 field0Inferred.introducedTypeVariables
-                                                    |> FastSet.union field1UpInferred.introducedTypeVariables
-                                                    |> FastSet.insert introducedRecordTypeVariable
+                                                    |> FastDict.union field1UpInferred.introducedTypeVariables
+                                                    |> FastDict.insert introducedRecordTypeVariable ()
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     context.declarationTypes
@@ -5384,7 +5390,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (\substitutionsWithField ->
                                                     { substitutions = substitutionsWithField
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             soFar.introducedTypeVariables
                                                             fieldValueInferred.introducedTypeVariables
                                                     , nodes =
@@ -5426,7 +5432,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             Result.andThen
                                 (\resultInferred ->
                                     let
-                                        parameterIntroducedTypeVariables : FastSet.Set TypeVariableFromContext
+                                        parameterIntroducedTypeVariables : FastSetFast TypeVariableFromContext
                                         parameterIntroducedTypeVariables =
                                             (parameter0Inferred :: parameter1UpInferred.nodes)
                                                 |> listMapToFastSetsAndUnify
@@ -5463,7 +5469,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 )
                                         }
                                     , introducedTypeVariables =
-                                        FastSet.union
+                                        FastDict.union
                                             parameterIntroducedTypeVariables
                                             resultInferred.introducedTypeVariables
                                     }
@@ -5552,8 +5558,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 }
                                             , introducedTypeVariables =
                                                 matchedInferred.introducedTypeVariables
-                                                    |> FastSet.union case0Inferred.introducedTypeVariables
-                                                    |> FastSet.union case1UpInferred.introducedTypeVariables
+                                                    |> FastDict.union case0Inferred.introducedTypeVariables
+                                                    |> FastDict.union case1UpInferred.introducedTypeVariables
                                             }
                                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                                     context.declarationTypes
@@ -5636,7 +5642,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 (\substitutionsSoFarAndCase ->
                                                     { indexFromEnd = soFar.indexFromEnd + 1
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             soFar.introducedTypeVariables
                                                             caseInferred.introducedTypeVariables
                                                     , substitutions = substitutionsSoFarAndCase
@@ -5803,8 +5809,8 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 (\fullSubstitutions ->
                                     { introducedTypeVariables =
                                         declaration0Inferred.introducedTypeVariables
-                                            |> FastSet.union declaration1UpInferred.introducedTypeVariables
-                                            |> FastSet.union resultInferred.introducedTypeVariables
+                                            |> FastDict.union declaration1UpInferred.introducedTypeVariables
+                                            |> FastDict.union resultInferred.introducedTypeVariables
                                     , substitutions = variableSubstitutionsNone
                                     , node =
                                         { range = fullRange
@@ -5857,7 +5863,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                         letDeclarationInferred.node
                                                             :: soFar.nodes
                                                     , introducedTypeVariables =
-                                                        FastSet.union soFar.introducedTypeVariables
+                                                        FastDict.union soFar.introducedTypeVariables
                                                             letDeclarationInferred.introducedTypeVariables
                                                     }
                                                 )
@@ -5920,12 +5926,12 @@ expressionListEmpty =
 
 substitutionsNoneIntroducedTypeVariablesEmptyNodesEmpty :
     { substitutions : VariableSubstitutions
-    , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+    , introducedTypeVariables : FastSetFast TypeVariableFromContext
     , nodes : List nodes_
     }
 substitutionsNoneIntroducedTypeVariablesEmptyNodesEmpty =
     { substitutions = variableSubstitutionsNone
-    , introducedTypeVariables = FastSet.empty
+    , introducedTypeVariables = FastDict.empty
     , nodes = []
     }
 
@@ -5952,13 +5958,13 @@ index0AndIntroducedDeclarationTypesEmptyIntroducedExpressionVariablesEmpty =
 indexFromEnd0AndNodesEmptyAndIntroducedTypeVariablesEmptySubstitutionsEmpty :
     { indexFromEnd : Int
     , nodes : List node_
-    , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+    , introducedTypeVariables : FastSetFast TypeVariableFromContext
     , substitutions : VariableSubstitutions
     }
 indexFromEnd0AndNodesEmptyAndIntroducedTypeVariablesEmptySubstitutionsEmpty =
     { indexFromEnd = 0
     , nodes = []
-    , introducedTypeVariables = FastSet.empty
+    , introducedTypeVariables = FastDict.empty
     , substitutions = variableSubstitutionsNone
     }
 
@@ -5991,7 +5997,7 @@ expressionCaseTypeInfer :
                         (Type TypeVariableFromContext)
                 }
             , substitutions : VariableSubstitutions
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 expressionCaseTypeInfer context ( casePattern, caseResult ) =
     Result.andThen
@@ -6000,7 +6006,7 @@ expressionCaseTypeInfer context ( casePattern, caseResult ) =
                 (\resultInferred ->
                     { substitutions = variableSubstitutionsNone
                     , introducedTypeVariables =
-                        FastSet.union
+                        FastDict.union
                             (patternInferred.type_
                                 |> typeContainedVariables
                             )
@@ -6075,7 +6081,7 @@ expressionReferenceTypeInfer :
                     , name : String
                     }
                     (Type TypeVariableFromContext)
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 expressionReferenceTypeInfer context expressionReference =
     let
@@ -6088,7 +6094,7 @@ expressionReferenceTypeInfer context expressionReference =
                         , name : String
                         }
                         (Type TypeVariableFromContext)
-                , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+                , introducedTypeVariables : FastSetFast TypeVariableFromContext
                 }
         useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration =
             case expressionReference.qualification of
@@ -6111,7 +6117,7 @@ expressionReferenceTypeInfer context expressionReference =
                                         }
                                     , type_ = locallyIntroducedExpressionVariableType
                                     }
-                                , introducedTypeVariables = FastSet.empty
+                                , introducedTypeVariables = FastDict.empty
                                 }
 
                         Nothing ->
@@ -6727,7 +6733,7 @@ letDeclarationTypeInfer :
                 { range : Elm.Syntax.Range.Range
                 , declaration : LetDeclaration (Type TypeVariableFromContext)
                 }
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
     case letDeclaration of
@@ -6740,7 +6746,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                                 (\substitutionsWithUnification ->
                                     { substitutions = substitutionsWithUnification
                                     , introducedTypeVariables =
-                                        FastSet.union
+                                        FastDict.union
                                             (patternInferred |> patternTypedNodeContainedTypeVariables)
                                             expressionInferred.introducedTypeVariables
                                     }
@@ -6819,7 +6825,7 @@ letFunctionOrValueDeclarationTypeInfer :
                 { range : Elm.Syntax.Range.Range
                 , declaration : LetDeclaration (Type TypeVariableFromContext)
                 }
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letValueOrFunction) =
     let
@@ -6862,7 +6868,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 parametersInferred.nodes
                                     |> listMapToFastSetsAndUnify
                                         patternTypedNodeContainedTypeVariables
-                                    |> FastSet.union resultInferred.introducedTypeVariables
+                                    |> FastDict.union resultInferred.introducedTypeVariables
                             }
                                 |> typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable
                                     { declarationTypes = context.declarationTypes
@@ -6947,7 +6953,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             Result.andThen
                                                 (\fullSubstitutions ->
                                                     let
-                                                        parametersInferredContainedTypeVariables : FastSet.Set TypeVariableFromContext
+                                                        parametersInferredContainedTypeVariables : FastSetFast TypeVariableFromContext
                                                         parametersInferredContainedTypeVariables =
                                                             parametersInferred.nodes
                                                                 |> listMapToFastSetsAndUnify
@@ -6957,7 +6963,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                     in
                                                     { substitutions = variableSubstitutionsNone
                                                     , introducedTypeVariables =
-                                                        FastSet.union
+                                                        FastDict.union
                                                             parametersInferredContainedTypeVariables
                                                             resultInferred.introducedTypeVariables
                                                     }
@@ -7124,7 +7130,7 @@ expressionInfixOperationTypeInfer :
                 TypedNode
                     (Expression (Type TypeVariableFromContext))
                     (Type TypeVariableFromContext)
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
@@ -7155,9 +7161,9 @@ expressionInfixOperationTypeInfer context infixOperation =
                                 }
                             , introducedTypeVariables =
                                 operatorAsFunctionType.introducedTypeVariables
-                                    |> FastSet.union leftInferred.introducedTypeVariables
-                                    |> FastSet.union rightInferred.introducedTypeVariables
-                                    |> FastSet.insert introducedResultTypeVariable
+                                    |> FastDict.union leftInferred.introducedTypeVariables
+                                    |> FastDict.union rightInferred.introducedTypeVariables
+                                    |> FastDict.insert introducedResultTypeVariable ()
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                     context.declarationTypes
@@ -7224,7 +7230,7 @@ operatorFunctionType :
             String
             { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
             , type_ : Type TypeVariableFromContext
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 operatorFunctionType context operator =
     case operator of
@@ -7248,8 +7254,8 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7292,8 +7298,8 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7344,9 +7350,9 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
-                        |> FastSet.insert cVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
+                        |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7409,9 +7415,9 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
-                        |> FastSet.insert cVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
+                        |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7457,7 +7463,7 @@ operatorFunctionType context operator =
                     TypeVariable appendableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton appendableVariable
+                { introducedTypeVariables = FastDict.singleton appendableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7485,7 +7491,7 @@ operatorFunctionType context operator =
                     TypeVariable equatableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton equatableVariable
+                { introducedTypeVariables = FastDict.singleton equatableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7513,7 +7519,7 @@ operatorFunctionType context operator =
                     TypeVariable equatableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton equatableVariable
+                { introducedTypeVariables = FastDict.singleton equatableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7541,7 +7547,7 @@ operatorFunctionType context operator =
                     TypeVariable aVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton aVariable
+                { introducedTypeVariables = FastDict.singleton aVariable ()
                 , moduleOrigin = moduleNameList
                 , type_ =
                     TypeNotVariable
@@ -7569,7 +7575,7 @@ operatorFunctionType context operator =
                     TypeVariable numberVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton numberVariable
+                { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7597,7 +7603,7 @@ operatorFunctionType context operator =
                     TypeVariable numberVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton numberVariable
+                { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7625,7 +7631,7 @@ operatorFunctionType context operator =
                     TypeVariable numberVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton numberVariable
+                { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7656,7 +7662,7 @@ operatorFunctionType context operator =
                     TypeVariable numberVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton numberVariable
+                { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7684,7 +7690,7 @@ operatorFunctionType context operator =
                     TypeVariable comparableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton comparableVariable
+                { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7712,7 +7718,7 @@ operatorFunctionType context operator =
                     TypeVariable comparableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton comparableVariable
+                { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7740,7 +7746,7 @@ operatorFunctionType context operator =
                     TypeVariable comparableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton comparableVariable
+                { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7768,7 +7774,7 @@ operatorFunctionType context operator =
                     TypeVariable comparableVariable
             in
             Ok
-                { introducedTypeVariables = FastSet.singleton comparableVariable
+                { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
                 , type_ =
                     TypeNotVariable
@@ -7831,10 +7837,10 @@ operatorFunctionType context operator =
                             TypeVariable ignoreVariable
                     in
                     { introducedTypeVariables =
-                        FastSet.singleton varContextVariable
-                            |> FastSet.insert problemVariable
-                            |> FastSet.insert keepVariable
-                            |> FastSet.insert ignoreVariable
+                        FastDict.singleton varContextVariable ()
+                            |> FastDict.insert problemVariable ()
+                            |> FastDict.insert keepVariable ()
+                            |> FastDict.insert ignoreVariable ()
                     , moduleOrigin = moduleNameParserAdvanced
                     , type_ =
                         TypeNotVariable
@@ -7870,8 +7876,8 @@ operatorFunctionType context operator =
                             TypeVariable ignoreVariable
                     in
                     { introducedTypeVariables =
-                        FastSet.singleton keepVariable
-                            |> FastSet.insert ignoreVariable
+                        FastDict.singleton keepVariable ()
+                            |> FastDict.insert ignoreVariable ()
                     , moduleOrigin = moduleNameParser
                     , type_ =
                         TypeNotVariable
@@ -7926,10 +7932,10 @@ operatorFunctionType context operator =
                             TypeVariable bVariable
                     in
                     { introducedTypeVariables =
-                        FastSet.singleton varContextVariable
-                            |> FastSet.insert problemVariable
-                            |> FastSet.insert aVariable
-                            |> FastSet.insert bVariable
+                        FastDict.singleton varContextVariable ()
+                            |> FastDict.insert problemVariable ()
+                            |> FastDict.insert aVariable ()
+                            |> FastDict.insert bVariable ()
                     , moduleOrigin = moduleNameParserAdvanced
                     , type_ =
                         TypeNotVariable
@@ -7975,8 +7981,8 @@ operatorFunctionType context operator =
                             TypeVariable bVariable
                     in
                     { introducedTypeVariables =
-                        FastSet.singleton aVariable
-                            |> FastSet.insert bVariable
+                        FastDict.singleton aVariable ()
+                            |> FastDict.insert bVariable ()
                     , moduleOrigin = moduleNameParser
                     , type_ =
                         TypeNotVariable
@@ -8030,9 +8036,9 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
-                        |> FastSet.insert cVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
+                        |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameUrlParser
                 , type_ =
                     TypeNotVariable
@@ -8077,9 +8083,9 @@ operatorFunctionType context operator =
             in
             Ok
                 { introducedTypeVariables =
-                    FastSet.singleton aVariable
-                        |> FastSet.insert bVariable
-                        |> FastSet.insert queryVariable
+                    FastDict.singleton aVariable ()
+                        |> FastDict.insert bVariable ()
+                        |> FastDict.insert queryVariable ()
                 , moduleOrigin = moduleNameUrlParser
                 , type_ =
                     TypeNotVariable
@@ -8119,13 +8125,13 @@ operatorFunctionType context operator =
 okIdivOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSet.Set variable
+        { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , type_ : Type variable
         }
 okIdivOperatorInfo =
     Ok
-        { introducedTypeVariables = FastSet.empty
+        { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
         , type_ =
             TypeNotVariable
@@ -8146,13 +8152,13 @@ okIdivOperatorInfo =
 okFdivOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSet.Set variable
+        { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , type_ : Type variable
         }
 okFdivOperatorInfo =
     Ok
-        { introducedTypeVariables = FastSet.empty
+        { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
         , type_ =
             TypeNotVariable
@@ -8173,13 +8179,13 @@ okFdivOperatorInfo =
 okOrOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSet.Set variable
+        { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , type_ : Type variable
         }
 okOrOperatorInfo =
     Ok
-        { introducedTypeVariables = FastSet.empty
+        { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
         , type_ =
             TypeNotVariable
@@ -8200,13 +8206,13 @@ okOrOperatorInfo =
 okAndOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSet.Set variable
+        { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , type_ : Type variable
         }
 okAndOperatorInfo =
     Ok
-        { introducedTypeVariables = FastSet.empty
+        { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
         , type_ =
             TypeNotVariable
@@ -8649,7 +8655,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                             (\fullSubstitutionsInDeclaration ->
                                                 { substitutions = variableSubstitutionsNone
                                                 , introducedTypeVariables =
-                                                    FastSet.union
+                                                    FastDict.union
                                                         resultInferred.introducedTypeVariables
                                                         (parametersInferred.nodes
                                                             |> listMapToFastSetsAndUnify
@@ -8953,8 +8959,8 @@ variableSubstitutionsFrom2EquivalentVariables variableToReplace replacementVaria
     else
         { variableToType = FastDict.empty
         , equivalentVariables =
-            [ FastSet.singleton variableToReplace
-                |> FastSet.insert replacementVariable
+            [ FastDict.singleton variableToReplace ()
+                |> FastDict.insert replacementVariable ()
             ]
         }
 
@@ -9013,14 +9019,14 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
 
 valueOrFunctionDeclarationInfoContainedTypeVariables :
     ValueOrFunctionDeclarationInfo (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
-    FastSet.union
+    FastDict.union
         (declarationValueOrFunction.parameters
             |> listMapToFastSetsAndUnify
                 patternTypedNodeContainedTypeVariables
         )
-        (FastSet.union
+        (FastDict.union
             (declarationValueOrFunction.type_
                 |> typeContainedVariables
             )
@@ -9032,9 +9038,9 @@ valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction 
 
 patternTypedNodeContainedTypeVariables :
     TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 patternTypedNodeContainedTypeVariables patternTypedNode =
-    FastSet.union
+    FastDict.union
         (patternTypedNode.type_
             |> typeContainedVariables
         )
@@ -9045,33 +9051,33 @@ patternTypedNodeContainedTypeVariables patternTypedNode =
 
 patternContainedTypeVariables :
     Pattern (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 patternContainedTypeVariables pattern =
     case pattern of
         PatternIgnored ->
-            FastSet.empty
+            FastDict.empty
 
         PatternUnit ->
-            FastSet.empty
+            FastDict.empty
 
         PatternChar _ ->
-            FastSet.empty
+            FastDict.empty
 
         PatternString _ ->
-            FastSet.empty
+            FastDict.empty
 
         PatternInt _ ->
-            FastSet.empty
+            FastDict.empty
 
         PatternVariable _ ->
-            FastSet.empty
+            FastDict.empty
 
         PatternParenthesized inParens ->
             patternTypedNodeContainedTypeVariables
                 inParens
 
         PatternAs patternAs ->
-            FastSet.union
+            FastDict.union
                 (patternAs.variable.type_
                     |> typeContainedVariables
                 )
@@ -9080,7 +9086,7 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternTuple parts ->
-            FastSet.union
+            FastDict.union
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9089,11 +9095,11 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternTriple parts ->
-            FastSet.union
+            FastDict.union
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (parts.part1
                         |> patternTypedNodeContainedTypeVariables
                     )
@@ -9103,7 +9109,7 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternListCons patternListCons ->
-            FastSet.union
+            FastDict.union
                 (patternListCons.head
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9136,16 +9142,16 @@ patternContainedTypeVariables pattern =
                     )
 
 
-listMapToFastSetsAndUnify : (a -> FastSet.Set comparable) -> List a -> FastSet.Set comparable
+listMapToFastSetsAndUnify : (a -> FastSetFast comparable) -> List a -> FastSetFast comparable
 listMapToFastSetsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
-                FastSet.union
+                FastDict.union
                     (element |> elementToSet)
                     soFar
             )
-            FastSet.empty
+            FastDict.empty
 
 
 listMapToFastDictsAndUnify :
@@ -9165,9 +9171,9 @@ listMapToFastDictsAndUnify elementToSet elements =
 
 expressionTypedNodeContainedTypeVariables :
     TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 expressionTypedNodeContainedTypeVariables expressionTypedNode =
-    FastSet.union
+    FastDict.union
         (expressionTypedNode.type_
             |> typeContainedVariables
         )
@@ -9178,32 +9184,32 @@ expressionTypedNodeContainedTypeVariables expressionTypedNode =
 
 expressionContainedTypeVariables :
     Expression (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 expressionContainedTypeVariables expression =
     case expression of
         ExpressionUnit ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionInteger _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionFloat _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionString _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionChar _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionReference _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionOperatorFunction _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionRecordAccessFunction _ ->
-            FastSet.empty
+            FastDict.empty
 
         ExpressionNegation negated ->
             expressionTypedNodeContainedTypeVariables
@@ -9218,7 +9224,7 @@ expressionContainedTypeVariables expression =
                 expressionRecordAccess.record
 
         ExpressionInfixOperation expressionInfixOperation ->
-            FastSet.union
+            FastDict.union
                 (expressionInfixOperation.left
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -9227,7 +9233,7 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionTuple parts ->
-            FastSet.union
+            FastDict.union
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -9236,11 +9242,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionTriple parts ->
-            FastSet.union
+            FastDict.union
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (parts.part1
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -9250,11 +9256,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionIfThenElse expressionIfThenElse ->
-            FastSet.union
+            FastDict.union
                 (expressionIfThenElse.condition
                     |> expressionTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -9280,11 +9286,11 @@ expressionContainedTypeVariables expression =
                     )
 
         ExpressionCall expressionCall ->
-            FastSet.union
+            FastDict.union
                 (expressionCall.called
                     |> expressionTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionCall.argument0
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -9298,11 +9304,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionLambda expressionLambda ->
-            FastSet.union
+            FastDict.union
                 (expressionLambda.parameter0
                     |> patternTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionLambda.parameter1Up
                         |> listMapToFastSetsAndUnify
                             (\parameter ->
@@ -9316,11 +9322,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionRecordUpdate expressionRecordUpdate ->
-            FastSet.union
+            FastDict.union
                 (expressionRecordUpdate.recordVariable.type_
                     |> typeContainedVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionRecordUpdate.field0.value
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -9334,11 +9340,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionCaseOf expressionCaseOf ->
-            FastSet.union
+            FastDict.union
                 (expressionCaseOf.matchedExpression
                     |> expressionTypedNodeContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionCaseOf.case0
                         |> expressionCaseOfCaseContainedTypeVariables
                     )
@@ -9349,11 +9355,11 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionLetIn expressionLetIn ->
-            FastSet.union
+            FastDict.union
                 (expressionLetIn.declaration0.declaration
                     |> letDeclarationContainedTypeVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (expressionLetIn.declaration1Up
                         |> listMapToFastSetsAndUnify
                             (\letDeclaration ->
@@ -9369,11 +9375,11 @@ expressionContainedTypeVariables expression =
 
 letDeclarationContainedTypeVariables :
     LetDeclaration (Type comparableTypeVariable)
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
-            FastSet.union
+            FastDict.union
                 (letDestructuring.pattern
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9382,11 +9388,11 @@ letDeclarationContainedTypeVariables letDeclaration =
                 )
 
         LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
-            FastSet.union
+            FastDict.union
                 (letValueOrFunctionDeclaration.type_
                     |> typeContainedVariables
                 )
-                (FastSet.union
+                (FastDict.union
                     (letValueOrFunctionDeclaration.parameters
                         |> listMapToFastSetsAndUnify
                             (\parameter ->
@@ -9404,9 +9410,9 @@ expressionCaseOfCaseContainedTypeVariables :
     { pattern : TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
     , result : TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
     }
-    -> FastSet.Set comparableTypeVariable
+    -> FastSetFast comparableTypeVariable
 expressionCaseOfCaseContainedTypeVariables syntaxCase =
-    FastSet.union
+    FastDict.union
         (syntaxCase.pattern
             |> patternTypedNodeContainedTypeVariables
         )
@@ -9416,7 +9422,7 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 
 
 createEquivalentVariablesToCondensedVariableLookup :
-    List (FastSet.Set TypeVariableFromContext)
+    List (FastSetFast TypeVariableFromContext)
     -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
 createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
     equivalentVariables
@@ -9426,8 +9432,8 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
                 Result.map
                     (\unifiedVariable ->
                         equivalentVariableSet
-                            |> FastSet.foldl
-                                (\variable soFarInSet ->
+                            |> FastDict.foldl
+                                (\variable () soFarInSet ->
                                     soFarInSet
                                         |> FastDict.insert variable unifiedVariable
                                 )
@@ -9527,7 +9533,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                         variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
                         variableToCondensedIfNecessary variable =
-                            if equivalentVariableSet0 |> FastSet.member variable then
+                            if equivalentVariableSet0 |> FastDict.member variable then
                                 condensedVariable
 
                             else
@@ -9595,14 +9601,14 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                 |> FastDict.foldl
                                     (\partiallyInferredDeclarationId info partialTypeVariableAmongEquivalentVariablesSoFar ->
                                         let
-                                            partiallyInferredDeclarationTypeContainedVariables : FastSet.Set TypeVariableFromContext
+                                            partiallyInferredDeclarationTypeContainedVariables : FastSetFast TypeVariableFromContext
                                             partiallyInferredDeclarationTypeContainedVariables =
                                                 info.partiallyInferredDeclarationType
                                                     |> typeContainedVariables
                                         in
                                         if
                                             partiallyInferredDeclarationTypeContainedVariables
-                                                |> FastSet.member condensedVariable
+                                                |> FastDict.member condensedVariable
                                         then
                                             -- if we don't check whether the condensed type
                                             -- is _actually_ more strict, we could end up in an endless loop
@@ -9618,20 +9624,20 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                             of
                                                 Just infoBeforeSubstitution ->
                                                     let
-                                                        partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables : FastSet.Set TypeVariableFromContext
+                                                        partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables : FastSetFast TypeVariableFromContext
                                                         partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables =
                                                             infoBeforeSubstitution.partiallyInferredDeclarationType
                                                                 |> typeContainedVariables
                                                     in
                                                     if
                                                         (partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
-                                                            |> FastSet.size
+                                                            |> FastDict.size
                                                         )
                                                             == (partiallyInferredDeclarationTypeContainedVariables
-                                                                    |> FastSet.size
+                                                                    |> FastDict.size
                                                                )
                                                             && ((partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
-                                                                    |> fastSetToListHighestToLowestAndMap
+                                                                    |> fastSetFastToListHighestToLowestAndMap
                                                                         (\( _, variableBeforeSubstitution ) ->
                                                                             variableBeforeSubstitution
                                                                                 |> typeVariableConstraint
@@ -9640,7 +9646,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                     |> List.sort
                                                                 )
                                                                     == (partiallyInferredDeclarationTypeContainedVariables
-                                                                            |> fastSetToListHighestToLowestAndMap
+                                                                            |> fastSetFastToListHighestToLowestAndMap
                                                                                 (\( _, variableBeforeSubstitution ) ->
                                                                                     variableBeforeSubstitution
                                                                                         |> typeVariableConstraint
@@ -9666,12 +9672,8 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                         variableCondenseLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
                         variableCondenseLookup =
                             equivalentVariableSet0
-                                |> FastSet.foldl
-                                    (\variable soFarInSet ->
-                                        soFarInSet
-                                            |> FastDict.insert variable condensedVariable
-                                    )
-                                    FastDict.empty
+                                |> FastDict.map
+                                    (\_ () -> condensedVariable)
 
                         newSubstitutionsOrError : Result String VariableSubstitutions
                         newSubstitutionsOrError =
@@ -9945,11 +9947,11 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                 valueAndFunctionDeclarationsSubstituted.declarations
 
 
-fastSetToListHighestToLowestAndMap : (comparable -> listElement) -> FastSet.Set comparable -> List listElement
-fastSetToListHighestToLowestAndMap setElementToListElement fastSet =
+fastSetFastToListHighestToLowestAndMap : (comparable -> listElement) -> FastSetFast comparable -> List listElement
+fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
     fastSet
-        |> FastSet.foldl
-            (\setElement soFar ->
+        |> FastDict.foldl
+            (\setElement () soFar ->
                 (setElement |> setElementToListElement) :: soFar
             )
             []
@@ -10133,7 +10135,7 @@ declarationValueOrFunctionInfoSubstituteVariableByNotVariable :
             , substitutions : VariableSubstitutions
             }
 declarationValueOrFunctionInfoSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
-    if replacement.type_ |> typeNotVariableContainedVariables |> FastSet.member replacement.variable then
+    if replacement.type_ |> typeNotVariableContainedVariables |> FastDict.member replacement.variable then
         if replacement.type_ |> typeNotVariableIsEquivalentToTypeVariable declarationTypes then
             -- is ok when type_ is an identity type alias
             Ok
@@ -11536,7 +11538,7 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables :
             TypedNode
                 (Expression (Type TypeVariableFromContext))
                 (Type TypeVariableFromContext)
-        , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+        , introducedTypeVariables : FastSetFast TypeVariableFromContext
         }
     ->
         Result
@@ -11546,7 +11548,7 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables :
                 TypedNode
                     (Expression (Type TypeVariableFromContext))
                     (Type TypeVariableFromContext)
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declarationTypes substitutionsToAddOrApply expressionTypeInferResult =
     let
@@ -11555,12 +11557,12 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declar
                 |> FastDict.partition
                     (\variableToReplace _ ->
                         expressionTypeInferResult.introducedTypeVariables
-                            |> FastSet.member variableToReplace
+                            |> FastDict.member variableToReplace
                     )
 
         ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
             substitutionsToAddOrApply.equivalentVariables
-                |> List.partition
+                |> listPartitionToAnyOrder
                     (\equivalentVariableSet ->
                         expressionTypeInferResult.introducedTypeVariables
                             |> fastSetIsSupersetOf equivalentVariableSet
@@ -11584,12 +11586,17 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declar
             , node = nodeSubstituted
             , introducedTypeVariables =
                 expressionTypeInferResult.introducedTypeVariables
-                    |> FastSet.map
-                        (\variable ->
-                            variableToCondensedLookup
-                                |> FastDict.get variable
-                                |> Maybe.withDefault variable
+                    |> FastDict.foldl
+                        (\variable () soFar ->
+                            soFar
+                                |> FastDict.insert
+                                    (variableToCondensedLookup
+                                        |> FastDict.get variable
+                                        |> Maybe.withDefault variable
+                                    )
+                                    ()
                         )
+                        FastDict.empty
             }
         )
         (expressionTypeInferResult.node
@@ -11622,14 +11629,14 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable :
     -> VariableSubstitutions
     ->
         { substitutions : VariableSubstitutions
-        , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+        , introducedTypeVariables : FastSetFast TypeVariableFromContext
         }
     ->
         Result
             String
             { substitutions : VariableSubstitutions
             , node : nodeAfterApplyingSubstitutions
-            , introducedTypeVariables : FastSet.Set TypeVariableFromContext
+            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitutionsToAddOrApply expressionTypeInferResult =
     let
@@ -11638,12 +11645,12 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
                 |> FastDict.partition
                     (\variableToReplace _ ->
                         expressionTypeInferResult.introducedTypeVariables
-                            |> FastSet.member variableToReplace
+                            |> FastDict.member variableToReplace
                     )
 
         ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
             substitutionsToAddOrApply.equivalentVariables
-                |> List.partition
+                |> listPartitionToAnyOrder
                     (\equivalentVariableSet ->
                         expressionTypeInferResult.introducedTypeVariables
                             |> fastSetIsSupersetOf equivalentVariableSet
@@ -11667,12 +11674,17 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
             , node = nodeSubstituted
             , introducedTypeVariables =
                 expressionTypeInferResult.introducedTypeVariables
-                    |> FastSet.map
-                        (\variable ->
-                            variableToCondensedLookup
-                                |> FastDict.get variable
-                                |> Maybe.withDefault variable
+                    |> FastDict.foldl
+                        (\variable () soFar ->
+                            soFar
+                                |> FastDict.insert
+                                    (variableToCondensedLookup
+                                        |> FastDict.get variable
+                                        |> Maybe.withDefault variable
+                                    )
+                                    ()
                         )
+                        FastDict.empty
             }
         )
         (context.nodeApplyVariableSubstitutions substitutionsToApply)
@@ -11692,10 +11704,29 @@ typeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariable context substitut
         )
 
 
-fastSetIsSupersetOf : FastSet.Set comparable -> FastSet.Set comparable -> Bool
+listPartitionToAnyOrder : (a -> Bool) -> List a -> ( List a, List a )
+listPartitionToAnyOrder isLeft list =
+    List.foldl
+        (\element ( trues, falses ) ->
+            if isLeft element then
+                ( element :: trues, falses )
+
+            else
+                ( trues, element :: falses )
+        )
+        tupleListEmptyListEmpty
+        list
+
+
+tupleListEmptyListEmpty : ( List a_, List b_ )
+tupleListEmptyListEmpty =
+    ( [], [] )
+
+
+fastSetIsSupersetOf : FastSetFast comparable -> FastSetFast comparable -> Bool
 fastSetIsSupersetOf sub super =
     -- not sure there's a faster alternative since FastSet does not offer restructure
-    super == FastSet.union sub super
+    super == FastDict.union sub super
 
 
 variableSubstitutionsApplyVariableSubstitutions :
@@ -11743,7 +11774,7 @@ variableSubstitutionsApplyVariableSubstitutions declarationTypes substitutionsTo
                     Ok substitutionsToApplySubstitutionsTo
 
                 Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
-                    if typeToSubstituteByNext |> typeNotVariableContainedVariables |> FastSet.member variableToSubstituteNext then
+                    if typeToSubstituteByNext |> typeNotVariableContainedVariables |> FastDict.member variableToSubstituteNext then
                         Err
                             ("self-referential type "
                                 ++ (variableToSubstituteNext |> typeVariableFromContextToInfoString)
@@ -11792,7 +11823,15 @@ variableSubstitutionsMapTypeVariables typeVariableChange variableSubstitutions =
         variableSubstitutions.equivalentVariables
             |> List.map
                 (\equivalentVariablesSet ->
-                    equivalentVariablesSet |> FastSet.map typeVariableChange
+                    equivalentVariablesSet
+                        |> FastDict.foldl
+                            (\variable () soFar ->
+                                soFar
+                                    |> FastDict.insert
+                                        (variable |> typeVariableChange)
+                                        ()
+                            )
+                            FastDict.empty
                 )
     , variableToType =
         variableSubstitutions.variableToType
@@ -12565,9 +12604,9 @@ patternMapTypes typeChange pattern =
                 }
 
 
-equivalentVariablesCreateCondensedVariable : FastSet.Set TypeVariableFromContext -> Result String TypeVariableFromContext
+equivalentVariablesCreateCondensedVariable : FastSetFast TypeVariableFromContext -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    case set |> FastSet.toList of
+    case set |> FastDict.keys of
         [] ->
             Err "implementation bug: equivalent variables set is empty"
 
@@ -13288,7 +13327,7 @@ moduleTypesEmpty =
 
 
 typeVariablesFromContextToDisambiguationLookup :
-    FastSet.Set TypeVariableFromContext
+    FastSetFast TypeVariableFromContext
     -> FastDict.Dict TypeVariableFromContext String
 typeVariablesFromContextToDisambiguationLookup variables =
     typeVariablesFromContextToDisambiguationLookupInto FastDict.empty variables
@@ -13296,14 +13335,14 @@ typeVariablesFromContextToDisambiguationLookup variables =
 
 typeVariablesFromContextToDisambiguationLookupInto :
     FastDict.Dict TypeVariableFromContext String
-    -> FastSet.Set TypeVariableFromContext
+    -> FastSetFast TypeVariableFromContext
     -> FastDict.Dict TypeVariableFromContext String
 typeVariablesFromContextToDisambiguationLookupInto soFar variables =
-    case variables |> FastSet.popMin of
+    case variables |> FastDict.popMin of
         Nothing ->
             soFar
 
-        Just ( variable, remainingVariables ) ->
+        Just ( ( variable, () ), remainingVariables ) ->
             let
                 ( _, name ) =
                     variable
