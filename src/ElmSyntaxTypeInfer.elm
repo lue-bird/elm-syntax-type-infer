@@ -2558,7 +2558,7 @@ equivalentVariableSetMerge a b =
 
 fastSetShareElements : FastSetFast comparable -> FastSetFast comparable -> Bool
 fastSetShareElements a b =
-    FastDict.intersect a b /= FastDict.empty
+    a |> fastSetFastAny (\aKey -> b |> FastDict.member aKey)
 
 
 listMapAndFirstJustAndRemainingAnyOrder :
@@ -11786,8 +11786,11 @@ tupleListEmptyListEmpty =
 
 fastSetFastIsSupersetOf : FastSetFast comparable -> FastSetFast comparable -> Bool
 fastSetFastIsSupersetOf sub super =
-    -- not sure there's a faster alternative since FastSet does not offer restructure
-    super == FastDict.union sub super
+    sub
+        |> fastSetFastAll
+            (\subElement ->
+                super |> FastDict.member subElement
+            )
 
 
 variableSubstitutionsApplyVariableSubstitutions :
@@ -13434,6 +13437,28 @@ fastDictAny valueIsFound dict =
                 valueIsFound state.value
                     || state.left ()
                     || state.right ()
+            )
+
+
+fastSetFastAny : (key -> Bool) -> FastDict.Dict key value_ -> Bool
+fastSetFastAny valueIsFound dict =
+    dict
+        |> FastDict.restructure False
+            (\state ->
+                valueIsFound state.key
+                    || state.left ()
+                    || state.right ()
+            )
+
+
+fastSetFastAll : (key -> Bool) -> FastDict.Dict key value_ -> Bool
+fastSetFastAll valueIsFound dict =
+    dict
+        |> FastDict.restructure True
+            (\state ->
+                valueIsFound state.key
+                    && state.left ()
+                    && state.right ()
             )
 
 
