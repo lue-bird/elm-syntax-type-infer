@@ -6221,7 +6221,7 @@ expressionReferenceTypeInfer :
             }
 expressionReferenceTypeInfer context expressionReference =
     let
-        useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration :
+        useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration :
             Maybe
                 { node :
                     TypedNode
@@ -6232,7 +6232,7 @@ expressionReferenceTypeInfer context expressionReference =
                         (Type TypeVariableFromContext)
                 , introducedTypeVariables : FastSetFast TypeVariableFromContext
                 }
-        useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration =
+        useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration =
             case expressionReference.qualification of
                 _ :: _ ->
                     Nothing
@@ -6292,103 +6292,54 @@ expressionReferenceTypeInfer context expressionReference =
                                             locallyIntroducedDeclarationTypeWithContext |> typeContainedVariables
                                         }
     in
-    case useOfLocallyIntroducedExpressionVariablesOrPartiallyInferredDeclaration of
+    case useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration of
         Just inferred ->
             Ok inferred
 
         Nothing ->
-            let
-                moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-                moduleOrigin =
-                    context.moduleOriginLookup.references
-                        |> FastDict.get ( expressionReference.qualification, expressionReference.name )
-                        |> Maybe.withDefault []
-            in
-            case context.declarationTypes |> FastDict.get moduleOrigin of
+            case
+                context.moduleOriginLookup.references
+                    |> FastDict.get ( expressionReference.qualification, expressionReference.name )
+            of
                 Nothing ->
                     Err
                         ("("
                             ++ (expressionReference.fullRange |> rangeToInfoString)
                             ++ ") "
-                            ++ "no declaration types found for the reference "
+                            ++ " could not determine the module where the reference "
                             ++ qualifiedToString
                                 { qualification = expressionReference.qualification
                                 , name = expressionReference.name
                                 }
-                            ++ ". I looked for some in the module "
-                            ++ (moduleOrigin |> moduleNameToString)
+                            ++ " was originally declared in. I'm likely missing import information or don't know of some locally declared things."
                         )
 
-                Just originModuleDeclarationTypes ->
-                    case
-                        originModuleDeclarationTypes.signatures
-                            |> FastDict.get expressionReference.name
-                    of
-                        Just signatureType ->
-                            let
-                                signatureTypeWithContext : Type TypeVariableFromContext
-                                signatureTypeWithContext =
-                                    signatureType
-                                        |> typeMapVariables
-                                            (\variableName -> ( context.path, variableName ))
-                            in
-                            Ok
-                                { node =
-                                    { range = expressionReference.fullRange
-                                    , value =
+                Just moduleOrigin ->
+                    case context.declarationTypes |> FastDict.get moduleOrigin of
+                        Nothing ->
+                            Err
+                                ("("
+                                    ++ (expressionReference.fullRange |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "no declaration types found for the reference "
+                                    ++ qualifiedToString
                                         { qualification = expressionReference.qualification
-                                        , moduleOrigin = moduleOrigin
                                         , name = expressionReference.name
                                         }
-                                    , type_ = signatureTypeWithContext
-                                    }
-                                , introducedTypeVariables =
-                                    signatureTypeWithContext |> typeContainedVariables
-                                }
+                                    ++ ". I looked for some in the module "
+                                    ++ (moduleOrigin |> moduleNameToString)
+                                )
 
-                        Nothing ->
+                        Just originModuleDeclarationTypes ->
                             case
-                                originModuleDeclarationTypes.choiceTypes
-                                    |> fastDictMapAndSmallestJust
-                                        (\choiceTypeName choiceTypeInfo ->
-                                            choiceTypeInfo.variants
-                                                |> FastDict.get expressionReference.name
-                                                |> Maybe.map
-                                                    (\variantValues ->
-                                                        { variantValues = variantValues
-                                                        , choiceTypeName = choiceTypeName
-                                                        , choiceTypeParameters = choiceTypeInfo.parameters
-                                                        }
-                                                    )
-                                        )
+                                originModuleDeclarationTypes.signatures
+                                    |> FastDict.get expressionReference.name
                             of
-                                Just variant ->
+                                Just signatureType ->
                                     let
-                                        resultType : Type String
-                                        resultType =
-                                            TypeNotVariable
-                                                (TypeConstruct
-                                                    { moduleOrigin = moduleOrigin
-                                                    , name = variant.choiceTypeName
-                                                    , arguments =
-                                                        variant.choiceTypeParameters
-                                                            |> List.map TypeVariable
-                                                    }
-                                                )
-
-                                        fullType : Type TypeVariableFromContext
-                                        fullType =
-                                            variant.variantValues
-                                                |> List.foldr
-                                                    (\argument output ->
-                                                        TypeNotVariable
-                                                            (TypeFunction
-                                                                { input = argument
-                                                                , output = output
-                                                                }
-                                                            )
-                                                    )
-                                                    resultType
+                                        signatureTypeWithContext : Type TypeVariableFromContext
+                                        signatureTypeWithContext =
+                                            signatureType
                                                 |> typeMapVariables
                                                     (\variableName -> ( context.path, variableName ))
                                     in
@@ -6400,89 +6351,150 @@ expressionReferenceTypeInfer context expressionReference =
                                                 , moduleOrigin = moduleOrigin
                                                 , name = expressionReference.name
                                                 }
-                                            , type_ = fullType
+                                            , type_ = signatureTypeWithContext
                                             }
                                         , introducedTypeVariables =
-                                            fullType |> typeContainedVariables
+                                            signatureTypeWithContext |> typeContainedVariables
                                         }
 
                                 Nothing ->
-                                    case originModuleDeclarationTypes.typeAliases |> FastDict.get expressionReference.name of
-                                        Just originTypeAliasDeclaration ->
-                                            case ( originTypeAliasDeclaration.recordFieldOrder, originTypeAliasDeclaration.type_ ) of
-                                                ( Just fieldOrder, TypeNotVariable (TypeRecord fields) ) ->
-                                                    let
-                                                        type_ : Type TypeVariableFromContext
-                                                        type_ =
-                                                            fieldOrder
-                                                                |> List.foldr
-                                                                    (\fieldName outputTypeSoFar ->
-                                                                        case fields |> FastDict.get fieldName of
-                                                                            Nothing ->
-                                                                                outputTypeSoFar
-
-                                                                            Just fieldValueType ->
-                                                                                TypeNotVariable
-                                                                                    (TypeFunction
-                                                                                        { input =
-                                                                                            fieldValueType
-                                                                                                |> typeMapVariables
-                                                                                                    (\name ->
-                                                                                                        ( context.path, name )
-                                                                                                    )
-                                                                                        , output = outputTypeSoFar
-                                                                                        }
-                                                                                    )
-                                                                    )
-                                                                    (TypeNotVariable
-                                                                        (TypeConstruct
-                                                                            { moduleOrigin = moduleOrigin
-                                                                            , name = expressionReference.name
-                                                                            , arguments =
-                                                                                originTypeAliasDeclaration.parameters
-                                                                                    |> List.map
-                                                                                        (\parameterName ->
-                                                                                            TypeVariable ( context.path, parameterName )
-                                                                                        )
-                                                                            }
-                                                                        )
-                                                                    )
-                                                    in
-                                                    Ok
-                                                        { node =
-                                                            { range = expressionReference.fullRange
-                                                            , value =
-                                                                { qualification = expressionReference.qualification
-                                                                , moduleOrigin = moduleOrigin
-                                                                , name = expressionReference.name
+                                    case
+                                        originModuleDeclarationTypes.choiceTypes
+                                            |> fastDictMapAndSmallestJust
+                                                (\choiceTypeName choiceTypeInfo ->
+                                                    choiceTypeInfo.variants
+                                                        |> FastDict.get expressionReference.name
+                                                        |> Maybe.map
+                                                            (\variantValues ->
+                                                                { variantValues = variantValues
+                                                                , choiceTypeName = choiceTypeName
+                                                                , choiceTypeParameters = choiceTypeInfo.parameters
                                                                 }
-                                                            , type_ = type_
+                                                            )
+                                                )
+                                    of
+                                        Just variant ->
+                                            let
+                                                resultType : Type String
+                                                resultType =
+                                                    TypeNotVariable
+                                                        (TypeConstruct
+                                                            { moduleOrigin = moduleOrigin
+                                                            , name = variant.choiceTypeName
+                                                            , arguments =
+                                                                variant.choiceTypeParameters
+                                                                    |> List.map TypeVariable
                                                             }
-                                                        , introducedTypeVariables =
-                                                            type_ |> typeContainedVariables
-                                                        }
+                                                        )
 
-                                                _ ->
+                                                fullType : Type TypeVariableFromContext
+                                                fullType =
+                                                    variant.variantValues
+                                                        |> List.foldr
+                                                            (\argument output ->
+                                                                TypeNotVariable
+                                                                    (TypeFunction
+                                                                        { input = argument
+                                                                        , output = output
+                                                                        }
+                                                                    )
+                                                            )
+                                                            resultType
+                                                        |> typeMapVariables
+                                                            (\variableName -> ( context.path, variableName ))
+                                            in
+                                            Ok
+                                                { node =
+                                                    { range = expressionReference.fullRange
+                                                    , value =
+                                                        { qualification = expressionReference.qualification
+                                                        , moduleOrigin = moduleOrigin
+                                                        , name = expressionReference.name
+                                                        }
+                                                    , type_ = fullType
+                                                    }
+                                                , introducedTypeVariables =
+                                                    fullType |> typeContainedVariables
+                                                }
+
+                                        Nothing ->
+                                            case originModuleDeclarationTypes.typeAliases |> FastDict.get expressionReference.name of
+                                                Nothing ->
                                                     Err
                                                         ("("
                                                             ++ (expressionReference.fullRange |> rangeToInfoString)
                                                             ++ ") "
-                                                            ++ "no value/function/port/variant/record type alias constructor was found in the origin module of the reference "
+                                                            ++ "no value/function/port/variant/record type alias constructor found in the origin module of the reference "
                                                             ++ qualifiedToString
-                                                                { qualification = moduleOrigin
-                                                                , name = expressionReference.name
-                                                                }
+                                                                { qualification = moduleOrigin, name = expressionReference.name }
                                                         )
 
-                                        Nothing ->
-                                            Err
-                                                ("("
-                                                    ++ (expressionReference.fullRange |> rangeToInfoString)
-                                                    ++ ") "
-                                                    ++ "no value/function/port/variant/record type alias constructor found in the origin module of the reference "
-                                                    ++ qualifiedToString
-                                                        { qualification = moduleOrigin, name = expressionReference.name }
-                                                )
+                                                Just originTypeAliasDeclaration ->
+                                                    case ( originTypeAliasDeclaration.recordFieldOrder, originTypeAliasDeclaration.type_ ) of
+                                                        ( Just fieldOrder, TypeNotVariable (TypeRecord fields) ) ->
+                                                            let
+                                                                type_ : Type TypeVariableFromContext
+                                                                type_ =
+                                                                    fieldOrder
+                                                                        |> List.foldr
+                                                                            (\fieldName outputTypeSoFar ->
+                                                                                case fields |> FastDict.get fieldName of
+                                                                                    Nothing ->
+                                                                                        outputTypeSoFar
+
+                                                                                    Just fieldValueType ->
+                                                                                        TypeNotVariable
+                                                                                            (TypeFunction
+                                                                                                { input =
+                                                                                                    fieldValueType
+                                                                                                        |> typeMapVariables
+                                                                                                            (\name ->
+                                                                                                                ( context.path, name )
+                                                                                                            )
+                                                                                                , output = outputTypeSoFar
+                                                                                                }
+                                                                                            )
+                                                                            )
+                                                                            (TypeNotVariable
+                                                                                (TypeConstruct
+                                                                                    { moduleOrigin = moduleOrigin
+                                                                                    , name = expressionReference.name
+                                                                                    , arguments =
+                                                                                        originTypeAliasDeclaration.parameters
+                                                                                            |> List.map
+                                                                                                (\parameterName ->
+                                                                                                    TypeVariable ( context.path, parameterName )
+                                                                                                )
+                                                                                    }
+                                                                                )
+                                                                            )
+                                                            in
+                                                            Ok
+                                                                { node =
+                                                                    { range = expressionReference.fullRange
+                                                                    , value =
+                                                                        { qualification = expressionReference.qualification
+                                                                        , moduleOrigin = moduleOrigin
+                                                                        , name = expressionReference.name
+                                                                        }
+                                                                    , type_ = type_
+                                                                    }
+                                                                , introducedTypeVariables =
+                                                                    type_ |> typeContainedVariables
+                                                                }
+
+                                                        _ ->
+                                                            Err
+                                                                ("("
+                                                                    ++ (expressionReference.fullRange |> rangeToInfoString)
+                                                                    ++ ") "
+                                                                    ++ "I found a type alias with the same name as the reference "
+                                                                    ++ qualifiedToString
+                                                                        { qualification = moduleOrigin
+                                                                        , name = expressionReference.name
+                                                                        }
+                                                                    ++ ", so I thought you are constructing a record. However, I was unable to determine which arguments correspond to which fields"
+                                                                )
 
 
 type alias RangeAsComparable =
