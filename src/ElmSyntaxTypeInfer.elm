@@ -343,7 +343,6 @@ typeMapVariables :
     -> Type variable
     -> Type changedVariable
 typeMapVariables variableMap type_ =
-    -- IGNORE TCO
     case type_ of
         TypeVariable variable ->
             TypeVariable (variable |> variableMap)
@@ -353,6 +352,69 @@ typeMapVariables variableMap type_ =
                 (typeNotVariable
                     |> typeNotVariableMapVariables variableMap
                 )
+
+
+typeNotVariableMapVariables :
+    (variable -> variableMapped)
+    -> TypeNotVariable variable
+    -> TypeNotVariable variableMapped
+typeNotVariableMapVariables variableMap typeNotVariable =
+    case typeNotVariable of
+        TypeUnit ->
+            TypeUnit
+
+        TypeFunction typeFunction ->
+            TypeFunction
+                { input = typeFunction.input |> typeMapVariables variableMap
+                , output = typeFunction.output |> typeMapVariables variableMap
+                }
+
+        TypeTuple typeTuple ->
+            TypeTuple
+                { part0 = typeTuple.part0 |> typeMapVariables variableMap
+                , part1 = typeTuple.part1 |> typeMapVariables variableMap
+                }
+
+        TypeTriple typeTriple ->
+            TypeTriple
+                { part0 = typeTriple.part0 |> typeMapVariables variableMap
+                , part1 = typeTriple.part1 |> typeMapVariables variableMap
+                , part2 = typeTriple.part2 |> typeMapVariables variableMap
+                }
+
+        TypeConstruct typeConstruct ->
+            TypeConstruct
+                { moduleOrigin = typeConstruct.moduleOrigin
+                , name = typeConstruct.name
+                , arguments =
+                    typeConstruct.arguments
+                        |> List.map
+                            (\argument ->
+                                argument |> typeMapVariables variableMap
+                            )
+                }
+
+        TypeRecord typeRecordFields ->
+            TypeRecord
+                (typeRecordFields
+                    |> FastDict.map
+                        (\_ fieldValue ->
+                            fieldValue |> typeMapVariables variableMap
+                        )
+                )
+
+        TypeRecordExtension typeRecordExtension ->
+            TypeRecordExtension
+                { recordVariable =
+                    typeRecordExtension.recordVariable
+                        |> variableMap
+                , fields =
+                    typeRecordExtension.fields
+                        |> FastDict.map
+                            (\_ fieldValue ->
+                                fieldValue |> typeMapVariables variableMap
+                            )
+                }
 
 
 type alias FastSetFast a =
@@ -479,69 +541,6 @@ typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
                                 value |> typeContainsVariable variableToCheckFor
                             )
                    )
-
-
-typeNotVariableMapVariables :
-    (variable -> variableMapped)
-    -> TypeNotVariable variable
-    -> TypeNotVariable variableMapped
-typeNotVariableMapVariables variableMap typeNotVariable =
-    case typeNotVariable of
-        TypeUnit ->
-            TypeUnit
-
-        TypeFunction typeFunction ->
-            TypeFunction
-                { input = typeFunction.input |> typeMapVariables variableMap
-                , output = typeFunction.output |> typeMapVariables variableMap
-                }
-
-        TypeTuple typeTuple ->
-            TypeTuple
-                { part0 = typeTuple.part0 |> typeMapVariables variableMap
-                , part1 = typeTuple.part1 |> typeMapVariables variableMap
-                }
-
-        TypeTriple typeTriple ->
-            TypeTriple
-                { part0 = typeTriple.part0 |> typeMapVariables variableMap
-                , part1 = typeTriple.part1 |> typeMapVariables variableMap
-                , part2 = typeTriple.part2 |> typeMapVariables variableMap
-                }
-
-        TypeConstruct typeConstruct ->
-            TypeConstruct
-                { moduleOrigin = typeConstruct.moduleOrigin
-                , name = typeConstruct.name
-                , arguments =
-                    typeConstruct.arguments
-                        |> List.map
-                            (\argument ->
-                                argument |> typeMapVariables variableMap
-                            )
-                }
-
-        TypeRecord typeRecordFields ->
-            TypeRecord
-                (typeRecordFields
-                    |> FastDict.map
-                        (\_ fieldValue ->
-                            fieldValue |> typeMapVariables variableMap
-                        )
-                )
-
-        TypeRecordExtension typeRecordExtension ->
-            TypeRecordExtension
-                { recordVariable =
-                    typeRecordExtension.recordVariable
-                        |> variableMap
-                , fields =
-                    typeRecordExtension.fields
-                        |> FastDict.map
-                            (\_ fieldValue ->
-                                fieldValue |> typeMapVariables variableMap
-                            )
-                }
 
 
 {-| How to map names and symbols used in a module to their origin module.
@@ -2321,7 +2320,10 @@ typeConstructFullyExpandIfAlias declarationTypes typeConstructToExpand =
                         typeConstructToExpand.arguments
                         |> listFoldlWhileOkFrom
                             (originAliasDeclaration.type_
-                                |> typeMapVariables (\aliasVariable -> ( typeVariableContextEmpty, aliasVariable ))
+                                |> typeMapVariables
+                                    (\aliasVariable ->
+                                        ( typeVariableContextEmpty, aliasVariable )
+                                    )
                             )
                             (\substitution typeSoFar ->
                                 typeSoFar
@@ -6375,7 +6377,7 @@ expressionReferenceTypeInfer context expressionReference =
                                     of
                                         Just variant ->
                                             let
-                                                resultType : Type String
+                                                resultType : Type TypeVariableFromContext
                                                 resultType =
                                                     TypeNotVariable
                                                         (TypeConstruct
@@ -6383,7 +6385,10 @@ expressionReferenceTypeInfer context expressionReference =
                                                             , name = variant.choiceTypeName
                                                             , arguments =
                                                                 variant.choiceTypeParameters
-                                                                    |> List.map TypeVariable
+                                                                    |> List.map
+                                                                        (\parameter ->
+                                                                            TypeVariable ( context.path, parameter )
+                                                                        )
                                                             }
                                                         )
 
@@ -6394,14 +6399,15 @@ expressionReferenceTypeInfer context expressionReference =
                                                             (\argument output ->
                                                                 TypeNotVariable
                                                                     (TypeFunction
-                                                                        { input = argument
+                                                                        { input =
+                                                                            argument
+                                                                                |> typeMapVariables
+                                                                                    (\variableName -> ( context.path, variableName ))
                                                                         , output = output
                                                                         }
                                                                     )
                                                             )
                                                             resultType
-                                                        |> typeMapVariables
-                                                            (\variableName -> ( context.path, variableName ))
                                             in
                                             Ok
                                                 { node =
