@@ -422,6 +422,65 @@ typeNotVariableContainedVariables typeNotVariable =
                     (FastDict.singleton typeRecordExtension.recordVariable ())
 
 
+typeContainsVariable :
+    comparableTypeVariable
+    -> Type comparableTypeVariable
+    -> Bool
+typeContainsVariable variableToCheckFor type_ =
+    case type_ of
+        TypeVariable variable ->
+            variableToCheckFor == variable
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariableContainsVariable variableToCheckFor typeNotVariable
+
+
+typeNotVariableContainsVariable :
+    comparableTypeVariable
+    -> TypeNotVariable comparableTypeVariable
+    -> Bool
+typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
+    case typeNotVariable of
+        TypeUnit ->
+            False
+
+        TypeFunction typeFunction ->
+            (typeFunction.input |> typeContainsVariable variableToCheckFor)
+                || (typeFunction.output |> typeContainsVariable variableToCheckFor)
+
+        TypeTuple typeTuple ->
+            (typeTuple.part0 |> typeContainsVariable variableToCheckFor)
+                || (typeTuple.part1 |> typeContainsVariable variableToCheckFor)
+
+        TypeTriple typeTriple ->
+            (typeTriple.part0 |> typeContainsVariable variableToCheckFor)
+                || (typeTriple.part1 |> typeContainsVariable variableToCheckFor)
+                || (typeTriple.part2 |> typeContainsVariable variableToCheckFor)
+
+        TypeConstruct typeConstruct ->
+            typeConstruct.arguments
+                |> List.any
+                    (\argument ->
+                        argument |> typeContainsVariable variableToCheckFor
+                    )
+
+        TypeRecord typeRecordFields ->
+            typeRecordFields
+                |> fastDictAny
+                    (\value ->
+                        value |> typeContainsVariable variableToCheckFor
+                    )
+
+        TypeRecordExtension typeRecordExtension ->
+            (typeRecordExtension.recordVariable == variableToCheckFor)
+                || (typeRecordExtension.fields
+                        |> fastDictAny
+                            (\value ->
+                                value |> typeContainsVariable variableToCheckFor
+                            )
+                   )
+
+
 typeNotVariableMapVariables :
     (variable -> variableMapped)
     -> TypeNotVariable variable
@@ -10008,7 +10067,10 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                 valueAndFunctionDeclarationsSubstituted.declarations
 
 
-fastSetFastToListHighestToLowestAndMap : (comparable -> listElement) -> FastSetFast comparable -> List listElement
+fastSetFastToListHighestToLowestAndMap :
+    (comparable -> listElement)
+    -> FastSetFast comparable
+    -> List listElement
 fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
     fastSet
         |> FastDict.foldl
@@ -11838,7 +11900,7 @@ variableSubstitutionsApplyVariableSubstitutions declarationTypes substitutionsTo
                     Ok substitutionsToApplySubstitutionsTo
 
                 Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
-                    if typeToSubstituteByNext |> typeNotVariableContainedVariables |> FastDict.member variableToSubstituteNext then
+                    if typeToSubstituteByNext |> typeNotVariableContainsVariable variableToSubstituteNext then
                         Err
                             ("self-referential type "
                                 ++ (variableToSubstituteNext |> typeVariableFromContextToInfoString)
