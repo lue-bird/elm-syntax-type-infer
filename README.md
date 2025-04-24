@@ -65,12 +65,11 @@ exampleModuleOriginLookup =
 Optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - idea: optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
-- somehow avoid excessive Result.mapError in list substitutions combine
+- add variants and record type aliases to TypesAvailable....signatures
 - when applying substitutions, check whether iteration via pop or toList etc is fastest and check for empty early specifically
-- optimize equivalentVariableSetMerge, introduce typeMapVariableAndCollectResultingVariables
+- optimize equivalentVariableSetMerge
 - direct lookup { signatures : FastDict.Dict (qualification,String) { moduleOrigin : ModuleName, type_ : Type }
 , variants : ...
 , typeConstructs : ...
 , ...
  }
- 

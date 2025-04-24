@@ -424,6 +424,204 @@ type alias FastSetFast a =
     FastDict.Dict a ()
 
 
+typeMapVariablesAndCollectResultingVariables :
+    (variable -> comparableChangedVariable)
+    -> Type variable
+    ->
+        { type_ : Type comparableChangedVariable
+        , containedVariables : FastSetFast comparableChangedVariable
+        }
+typeMapVariablesAndCollectResultingVariables variableMap type_ =
+    case type_ of
+        TypeVariable variable ->
+            let
+                variableMapped : comparableChangedVariable
+                variableMapped =
+                    variable |> variableMap
+            in
+            { type_ = TypeVariable variableMapped
+            , containedVariables = FastDict.singleton variableMapped ()
+            }
+
+        TypeNotVariable typeNotVariable ->
+            let
+                typeNotVariableMapped :
+                    { type_ : TypeNotVariable comparableChangedVariable
+                    , containedVariables : FastSetFast comparableChangedVariable
+                    }
+                typeNotVariableMapped =
+                    typeNotVariable
+                        |> typeNotVariableMapVariablesAndCollectResultingVariables variableMap
+            in
+            { type_ = TypeNotVariable typeNotVariableMapped.type_
+            , containedVariables = typeNotVariableMapped.containedVariables
+            }
+
+
+typeNotVariableMapVariablesAndCollectResultingVariables :
+    (variable -> comparableChangedVariable)
+    -> TypeNotVariable variable
+    ->
+        { type_ : TypeNotVariable comparableChangedVariable
+        , containedVariables : FastSetFast comparableChangedVariable
+        }
+typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVariable =
+    case typeNotVariable of
+        TypeUnit ->
+            { type_ = TypeUnit
+            , containedVariables = FastDict.empty
+            }
+
+        TypeFunction typeFunction ->
+            let
+                inputMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                inputMapped =
+                    typeFunction.input |> typeMapVariablesAndCollectResultingVariables variableMap
+
+                outputMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                outputMapped =
+                    typeFunction.output |> typeMapVariablesAndCollectResultingVariables variableMap
+            in
+            { type_ =
+                TypeFunction
+                    { input = inputMapped.type_
+                    , output = outputMapped.type_
+                    }
+            , containedVariables =
+                FastDict.union
+                    inputMapped.containedVariables
+                    outputMapped.containedVariables
+            }
+
+        TypeTuple typeTuple ->
+            let
+                part0Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part0Mapped =
+                    typeTuple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
+
+                part1Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part1Mapped =
+                    typeTuple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
+            in
+            { type_ =
+                TypeTuple
+                    { part0 = part0Mapped.type_
+                    , part1 = part1Mapped.type_
+                    }
+            , containedVariables =
+                FastDict.union
+                    part0Mapped.containedVariables
+                    part1Mapped.containedVariables
+            }
+
+        TypeTriple typeTriple ->
+            let
+                part0Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part0Mapped =
+                    typeTriple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
+
+                part1Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part1Mapped =
+                    typeTriple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
+
+                part2Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part2Mapped =
+                    typeTriple.part2 |> typeMapVariablesAndCollectResultingVariables variableMap
+            in
+            { type_ =
+                TypeTriple
+                    { part0 = part0Mapped.type_
+                    , part1 = part1Mapped.type_
+                    , part2 = part2Mapped.type_
+                    }
+            , containedVariables =
+                part0Mapped.containedVariables
+                    |> FastDict.union part1Mapped.containedVariables
+                    |> FastDict.union part2Mapped.containedVariables
+            }
+
+        TypeConstruct typeConstruct ->
+            let
+                argumentsMapped : { types : List (Type comparableChangedVariable), containedVariables : FastSetFast comparableChangedVariable }
+                argumentsMapped =
+                    typeConstruct.arguments
+                        |> List.foldr
+                            (\argument soFar ->
+                                let
+                                    argumentMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                                    argumentMapped =
+                                        argument |> typeMapVariablesAndCollectResultingVariables variableMap
+                                in
+                                { types = argumentMapped.type_ :: soFar.types
+                                , containedVariables =
+                                    FastDict.union
+                                        soFar.containedVariables
+                                        argumentMapped.containedVariables
+                                }
+                            )
+                            { types = [], containedVariables = FastDict.empty }
+            in
+            { type_ =
+                TypeConstruct
+                    { moduleOrigin = typeConstruct.moduleOrigin
+                    , name = typeConstruct.name
+                    , arguments = argumentsMapped.types
+                    }
+            , containedVariables = argumentsMapped.containedVariables
+            }
+
+        TypeRecord typeRecordFields ->
+            let
+                fieldsMapped : FastDict.Dict String (Type comparableChangedVariable)
+                fieldsMapped =
+                    typeRecordFields
+                        |> FastDict.map
+                            (\_ fieldValue ->
+                                fieldValue |> typeMapVariables variableMap
+                            )
+            in
+            { type_ = TypeRecord fieldsMapped
+            , containedVariables =
+                fieldsMapped
+                    |> FastDict.foldl
+                        (\_ value soFar ->
+                            FastDict.union soFar
+                                (value |> typeContainedVariables)
+                        )
+                        FastDict.empty
+            }
+
+        TypeRecordExtension typeRecordExtension ->
+            let
+                recordVariableMapped : comparableChangedVariable
+                recordVariableMapped =
+                    typeRecordExtension.recordVariable
+                        |> variableMap
+
+                fieldsMapped : FastDict.Dict String (Type comparableChangedVariable)
+                fieldsMapped =
+                    typeRecordExtension.fields
+                        |> FastDict.map
+                            (\_ fieldValue ->
+                                fieldValue |> typeMapVariables variableMap
+                            )
+            in
+            { type_ =
+                TypeRecordExtension
+                    { recordVariable = recordVariableMapped
+                    , fields = fieldsMapped
+                    }
+            , containedVariables =
+                fieldsMapped
+                    |> FastDict.foldl
+                        (\_ value soFar ->
+                            FastDict.union soFar
+                                (value |> typeContainedVariables)
+                        )
+                        (FastDict.singleton recordVariableMapped ())
+            }
+
+
 typeContainedVariables :
     Type comparableTypeVariable
     -> FastSetFast comparableTypeVariable
@@ -6268,10 +6466,13 @@ expressionReferenceTypeInfer context expressionReference =
 
                                 Just locallyIntroducedDeclarationType ->
                                     let
-                                        locallyIntroducedDeclarationTypeWithContext : Type TypeVariableFromContext
+                                        locallyIntroducedDeclarationTypeWithContext :
+                                            { type_ : Type TypeVariableFromContext
+                                            , containedVariables : FastSetFast TypeVariableFromContext
+                                            }
                                         locallyIntroducedDeclarationTypeWithContext =
                                             locallyIntroducedDeclarationType
-                                                |> typeMapVariables
+                                                |> typeMapVariablesAndCollectResultingVariables
                                                     (\( partiallyInferredTypeVariableContext, partiallyInferredTypeVariableName ) ->
                                                         ( typeVariableContextsAppend
                                                             context.path
@@ -6288,10 +6489,10 @@ expressionReferenceTypeInfer context expressionReference =
                                                 , moduleOrigin = []
                                                 , name = expressionReference.name
                                                 }
-                                            , type_ = locallyIntroducedDeclarationTypeWithContext
+                                            , type_ = locallyIntroducedDeclarationTypeWithContext.type_
                                             }
                                         , introducedTypeVariables =
-                                            locallyIntroducedDeclarationTypeWithContext |> typeContainedVariables
+                                            locallyIntroducedDeclarationTypeWithContext.containedVariables
                                         }
     in
     case useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration of
@@ -6339,10 +6540,13 @@ expressionReferenceTypeInfer context expressionReference =
                             of
                                 Just signatureType ->
                                     let
-                                        signatureTypeWithContext : Type TypeVariableFromContext
+                                        signatureTypeWithContext :
+                                            { type_ : Type TypeVariableFromContext
+                                            , containedVariables : FastSetFast TypeVariableFromContext
+                                            }
                                         signatureTypeWithContext =
                                             signatureType
-                                                |> typeMapVariables
+                                                |> typeMapVariablesAndCollectResultingVariables
                                                     (\variableName -> ( context.path, variableName ))
                                     in
                                     Ok
@@ -6353,10 +6557,10 @@ expressionReferenceTypeInfer context expressionReference =
                                                 , moduleOrigin = moduleOrigin
                                                 , name = expressionReference.name
                                                 }
-                                            , type_ = signatureTypeWithContext
+                                            , type_ = signatureTypeWithContext.type_
                                             }
                                         , introducedTypeVariables =
-                                            signatureTypeWithContext |> typeContainedVariables
+                                            signatureTypeWithContext.containedVariables
                                         }
 
                                 Nothing ->
@@ -6392,22 +6596,41 @@ expressionReferenceTypeInfer context expressionReference =
                                                             }
                                                         )
 
-                                                fullType : Type TypeVariableFromContext
+                                                fullType : { type_ : Type TypeVariableFromContext, containedVariables : FastSetFast TypeVariableFromContext }
                                                 fullType =
                                                     variant.variantValues
                                                         |> List.foldr
                                                             (\argument output ->
-                                                                TypeNotVariable
-                                                                    (TypeFunction
-                                                                        { input =
-                                                                            argument
-                                                                                |> typeMapVariables
-                                                                                    (\variableName -> ( context.path, variableName ))
-                                                                        , output = output
-                                                                        }
-                                                                    )
+                                                                let
+                                                                    inputTypeInContext : { type_ : Type TypeVariableFromContext, containedVariables : FastSetFast TypeVariableFromContext }
+                                                                    inputTypeInContext =
+                                                                        argument
+                                                                            |> typeMapVariablesAndCollectResultingVariables
+                                                                                (\variableName -> ( context.path, variableName ))
+                                                                in
+                                                                { type_ =
+                                                                    TypeNotVariable
+                                                                        (TypeFunction
+                                                                            { input = inputTypeInContext.type_
+                                                                            , output = output.type_
+                                                                            }
+                                                                        )
+                                                                , containedVariables =
+                                                                    FastDict.union
+                                                                        output.containedVariables
+                                                                        inputTypeInContext.containedVariables
+                                                                }
                                                             )
-                                                            resultType
+                                                            { type_ = resultType
+                                                            , containedVariables =
+                                                                variant.choiceTypeParameters
+                                                                    |> List.foldl
+                                                                        (\parameter soFar ->
+                                                                            soFar
+                                                                                |> FastDict.insert ( context.path, parameter ) ()
+                                                                        )
+                                                                        FastDict.empty
+                                                            }
                                             in
                                             Ok
                                                 { node =
@@ -6417,10 +6640,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                         , moduleOrigin = moduleOrigin
                                                         , name = expressionReference.name
                                                         }
-                                                    , type_ = fullType
+                                                    , type_ = fullType.type_
                                                     }
-                                                , introducedTypeVariables =
-                                                    fullType |> typeContainedVariables
+                                                , introducedTypeVariables = fullType.containedVariables
                                                 }
 
                                         Nothing ->
