@@ -10644,7 +10644,6 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
         declarationValueOrFunctionSoFar.result
             |> expressionTypedNodeMapTypeVariables variableChange
     , type_ =
-        -- TODO instead reconstruct the function
         declarationValueOrFunctionSoFar.type_
             |> typeMapVariables variableChange
     }
