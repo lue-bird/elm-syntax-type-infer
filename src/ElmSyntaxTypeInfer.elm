@@ -2672,14 +2672,10 @@ variableSubstitutionsMerge3 :
     -> VariableSubstitutions
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge3 declarationTypes a b c =
-    variableSubstitutionsMerge
-        declarationTypes
-        a
-        b
+    variableSubstitutionsMerge declarationTypes a b
         |> Result.andThen
             (\abSubstitutions ->
-                variableSubstitutionsMerge
-                    declarationTypes
+                variableSubstitutionsMerge declarationTypes
                     abSubstitutions
                     c
             )
@@ -10400,14 +10396,15 @@ variableToTypeSubstitutionsSubstituteVariableByNotVariable declarationTypes vari
             (\remainingVariable remainingReplacementTypeNotVariable soFar ->
                 Result.andThen
                     (\replacementTypeSubstituted ->
-                        variableSubstitutionsMerge3 declarationTypes
-                            replacementTypeSubstituted.substitutions
-                            { equivalentVariables = []
-                            , variableToType =
-                                FastDict.singleton remainingVariable
-                                    replacementTypeSubstituted.type_
-                            }
+                        variableSubstitutionsMerge declarationTypes
                             soFar
+                            { equivalentVariables =
+                                replacementTypeSubstituted.substitutions.equivalentVariables
+                            , variableToType =
+                                replacementTypeSubstituted.substitutions.variableToType
+                                    |> FastDict.insert remainingVariable
+                                        replacementTypeSubstituted.type_
+                            }
                     )
                     (remainingReplacementTypeNotVariable
                         |> typeNotVariableSubstituteVariableByNotVariable
