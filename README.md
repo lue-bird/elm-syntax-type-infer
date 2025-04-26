@@ -61,6 +61,7 @@ exampleModuleOriginLookup =
 - right now, this can't handle medium to large files at an acceptable speed.
   Last measurement: for 10k lines, expect 0.8-2s  (report if you have other numbers)
 - more tests
+- always resolve identity types early to avoid recursive substitutions
 
 Optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
