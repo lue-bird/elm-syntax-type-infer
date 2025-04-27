@@ -8753,48 +8753,35 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
             , ignoreOperatorIsExposedFromParserAdvanced =
                 typesAndOriginLookup.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
             , typeConstructs =
-                typesAndOriginLookup.moduleOriginLookup.typeConstructs
-                    |> FastDict.union
-                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
-                            |> fastDictMapToFastDict
-                                (\typeAliasName _ ->
-                                    { key = ( [], typeAliasName ), value = [] }
-                                )
+                typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                    |> FastDict.foldl
+                        (\choiceTypeName _ soFar ->
+                            soFar
+                                |> FastDict.insert ( [], choiceTypeName )
+                                    []
                         )
-                    |> FastDict.union
-                        (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                        (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
                             |> FastDict.foldl
-                                (\choiceTypeName _ soFar ->
+                                (\typeAliasName _ soFar ->
                                     soFar
-                                        |> FastDict.insert ( [], choiceTypeName ) []
+                                        |> FastDict.insert ( [], typeAliasName )
+                                            []
                                 )
-                                FastDict.empty
+                                typesAndOriginLookup.moduleOriginLookup.typeConstructs
                         )
             , references =
-                typesAndOriginLookup.moduleOriginLookup.references
-                    |> FastDict.union
-                        (syntaxValueAndFunctionDeclarations
-                            |> listMapToFastDict
-                                (\valueOrFunctionDeclaration ->
-                                    { key =
-                                        ( []
-                                        , valueOrFunctionDeclaration.declaration
-                                            |> Elm.Syntax.Node.value
-                                            |> .name
-                                            |> Elm.Syntax.Node.value
-                                        )
-                                    , value = []
-                                    }
-                                )
+                typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
+                    |> FastDict.foldl
+                        (\_ info soFar ->
+                            info.variants
+                                |> FastDict.foldl
+                                    (\variantName _ soFarWithVariantNames ->
+                                        soFarWithVariantNames
+                                            |> FastDict.insert ( [], variantName )
+                                                []
+                                    )
+                                    soFar
                         )
-                    |> FastDict.union
-                        (typesAndOriginLookup.otherModuleDeclaredTypes.signatures
-                            |> fastDictMapToFastDict
-                                (\signatureName _ ->
-                                    { key = ( [], signatureName ), value = [] }
-                                )
-                        )
-                    |> FastDict.union
                         (typesAndOriginLookup.otherModuleDeclaredTypes.typeAliases
                             |> FastDict.foldl
                                 (\typeAliasName info soFar ->
@@ -8805,22 +8792,29 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         Just _ ->
                                             soFar |> FastDict.insert ( [], typeAliasName ) []
                                 )
-                                FastDict.empty
-                        )
-                    |> FastDict.union
-                        (typesAndOriginLookup.otherModuleDeclaredTypes.choiceTypes
-                            |> FastDict.foldl
-                                (\_ info soFar ->
-                                    soFar
-                                        |> FastDict.union
-                                            (info.variants
-                                                |> fastDictMapToFastDict
-                                                    (\variantName _ ->
-                                                        { key = ( [], variantName ), value = [] }
-                                                    )
-                                            )
+                                (typesAndOriginLookup.otherModuleDeclaredTypes.signatures
+                                    |> FastDict.foldl
+                                        (\signatureName _ soFar ->
+                                            soFar
+                                                |> FastDict.insert ( [], signatureName )
+                                                    []
+                                        )
+                                        (syntaxValueAndFunctionDeclarations
+                                            |> List.foldl
+                                                (\valueOrFunctionDeclaration soFar ->
+                                                    soFar
+                                                        |> FastDict.insert
+                                                            ( []
+                                                            , valueOrFunctionDeclaration.declaration
+                                                                |> Elm.Syntax.Node.value
+                                                                |> .name
+                                                                |> Elm.Syntax.Node.value
+                                                            )
+                                                            []
+                                                )
+                                                typesAndOriginLookup.moduleOriginLookup.references
+                                        )
                                 )
-                                FastDict.empty
                         )
             }
 
