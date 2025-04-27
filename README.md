@@ -1,6 +1,13 @@
 Add type information to the nodes
 of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) tree.
 
+> ⚠️ You should not rely on this for anything serious right now!
+> It might still have bugs (e.g. recursive substitutions of identity type aliases) and it's also slow: for 10k lines, expect 0.2-2s depending on the amount of un-annotated declarations (report if you have other numbers)
+>
+> The purpose of publishing this early is for easy use in personal experiments
+> and for especially interested folks to check API, documentation etc.
+
+
 ```elm
 import Elm.Syntax.Node
 import Elm.Syntax.Expression
@@ -55,22 +62,3 @@ exampleModuleOriginLookup =
         |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
             ElmSyntaxTypeInfer.elmCoreTypes
 ```
-
-## TODO
-
-- right now, this can't handle medium to large files at an acceptable speed.
-  Last measurement: for 10k lines, expect 0.2-2s depending on the amount of un-annotated declarations (report if you have other numbers)
-- more tests
-- always resolve identity types early to avoid recursive substitutions
-
-Optimization ideas
-- go through typeUnify and add e.g. typeUnifyWithFunction
-- idea: optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
-- add variants and record type aliases to TypesAvailable....signatures
-- when applying substitutions, check whether iteration via pop or toList etc is fastest and check for empty early specifically
-- optimize equivalentVariableSetMerge
-- direct lookup { signatures : FastDict.Dict (qualification,String) { moduleOrigin : ModuleName, type_ : Type }
-, variants : ...
-, typeConstructs : ...
-, ...
- }
