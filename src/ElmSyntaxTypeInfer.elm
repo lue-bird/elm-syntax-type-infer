@@ -8835,24 +8835,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                     |> .name
                                     |> Elm.Syntax.Node.value
                         in
-                        case
-                            syntaxValueOrFunctionDeclaration.signature
-                                |> Maybe.andThen
-                                    (\(Elm.Syntax.Node.Node _ signature) ->
-                                        signature.typeAnnotation
-                                            |> Elm.Syntax.Node.value
-                                            |> syntaxToType moduleOriginLookup
-                                            |> Result.toMaybe
-                                    )
-                        of
-                            Just type_ ->
-                                { partiallyInferredDeclarationTypes =
-                                    soFar.partiallyInferredDeclarationTypes
-                                , annotated =
-                                    soFar.annotated
-                                        |> FastDict.insert name type_
-                                }
-
+                        case syntaxValueOrFunctionDeclaration.signature of
                             Nothing ->
                                 { annotated = soFar.annotated
                                 , partiallyInferredDeclarationTypes =
@@ -8864,6 +8847,24 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 )
                                             )
                                 }
+
+                            Just (Elm.Syntax.Node.Node _ signature) ->
+                                case
+                                    signature.typeAnnotation
+                                        |> Elm.Syntax.Node.value
+                                        |> syntaxToType moduleOriginLookup
+                                of
+                                    Err _ ->
+                                        -- error will be reported later
+                                        soFar
+
+                                    Ok type_ ->
+                                        { partiallyInferredDeclarationTypes =
+                                            soFar.partiallyInferredDeclarationTypes
+                                        , annotated =
+                                            soFar.annotated
+                                                |> FastDict.insert name type_
+                                        }
                     )
                     partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty
 
