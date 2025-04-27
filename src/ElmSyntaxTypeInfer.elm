@@ -805,20 +805,17 @@ importsToModuleOriginLookup modulesTypes imports =
             importsNormal
                 |> List.any
                     (\syntaxImport ->
-                        (case syntaxImport.moduleName of
+                        case syntaxImport.moduleName of
                             [ "Parser", "Advanced" ] ->
-                                True
-
-                            _ ->
-                                False
-                        )
-                            && (syntaxImport.referenceExposes
+                                syntaxImport.referenceExposes
                                     |> List.any
                                         (\syntaxExpose ->
                                             (syntaxExpose == operator)
                                                 || (syntaxExpose == ("(" ++ operator ++ ")"))
                                         )
-                               )
+
+                            _ ->
+                                False
                     )
     in
     { references =
