@@ -818,40 +818,53 @@ importsToModuleOriginLookup modulesTypes imports =
                                 False
                     )
     in
-    { references =
-        importsNormal
-            |> List.foldl
-                (\syntaxImport soFar ->
-                    case modulesTypes |> FastDict.get syntaxImport.moduleName of
-                        Nothing ->
-                            soFar
+    importsNormal
+        |> List.foldl
+            (\syntaxImport soFar ->
+                case modulesTypes |> FastDict.get syntaxImport.moduleName of
+                    Nothing ->
+                        soFar
 
-                        Just moduleTypes ->
-                            let
-                                exposedFromImportedModuleItself : List String
-                                exposedFromImportedModuleItself =
-                                    moduleTypes.choiceTypes
-                                        |> FastDict.foldl
-                                            (\_ choiceType variantNamesSoFar ->
-                                                choiceType.variants
-                                                    |> FastDict.foldl
-                                                        (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
-                                                            variantName :: soFarAndVariantNamesOfCurrentChoiceType
-                                                        )
-                                                        variantNamesSoFar
-                                            )
-                                            (moduleTypes.signatures |> FastDict.keys)
+                    Just moduleTypes ->
+                        let
+                            moduleAliasOrFullName : Elm.Syntax.ModuleName.ModuleName
+                            moduleAliasOrFullName =
+                                case syntaxImport.alias of
+                                    Nothing ->
+                                        syntaxImport.moduleName
 
-                                moduleAliasOrFullName : Elm.Syntax.ModuleName.ModuleName
-                                moduleAliasOrFullName =
-                                    case syntaxImport.alias of
-                                        Nothing ->
-                                            syntaxImport.moduleName
+                                    Just importAlias ->
+                                        [ importAlias ]
 
-                                        Just importAlias ->
-                                            [ importAlias ]
-                            in
-                            soFar
+                            exposedTypeConstructsFromImportedModuleItself : List String
+                            exposedTypeConstructsFromImportedModuleItself =
+                                moduleTypes.choiceTypes
+                                    |> FastDict.foldl
+                                        (\choiceTypeName _ variantNamesSoFar ->
+                                            choiceTypeName :: variantNamesSoFar
+                                        )
+                                        (moduleTypes.typeAliases |> FastDict.keys)
+
+                            exposedReferencesFromImportedModuleItself : List String
+                            exposedReferencesFromImportedModuleItself =
+                                moduleTypes.choiceTypes
+                                    |> FastDict.foldl
+                                        (\_ choiceType variantNamesSoFar ->
+                                            choiceType.variants
+                                                |> FastDict.foldl
+                                                    (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
+                                                        variantName :: soFarAndVariantNamesOfCurrentChoiceType
+                                                    )
+                                                    variantNamesSoFar
+                                        )
+                                        (moduleTypes.signatures |> FastDict.keys)
+                        in
+                        { keepOperatorIsExposedFromParserAdvanced =
+                            soFar.keepOperatorIsExposedFromParserAdvanced
+                        , ignoreOperatorIsExposedFromParserAdvanced =
+                            soFar.ignoreOperatorIsExposedFromParserAdvanced
+                        , references =
+                            soFar.references
                                 |> FastDict.union
                                     (syntaxImport.referenceExposes
                                         |> listMapToFastDict
@@ -862,7 +875,7 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                     )
                                 |> FastDict.union
-                                    (exposedFromImportedModuleItself
+                                    (exposedReferencesFromImportedModuleItself
                                         |> listMapToFastDict
                                             (\exposeFromImportedModule ->
                                                 { key = ( moduleAliasOrFullName, exposeFromImportedModule )
@@ -870,37 +883,8 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 }
                                             )
                                     )
-                )
-                FastDict.empty
-    , typeConstructs =
-        importsNormal
-            |> List.foldl
-                (\syntaxImport soFar ->
-                    case modulesTypes |> FastDict.get syntaxImport.moduleName of
-                        Nothing ->
-                            soFar
-
-                        Just moduleTypes ->
-                            let
-                                exposedFromImportedModuleItself : List String
-                                exposedFromImportedModuleItself =
-                                    moduleTypes.choiceTypes
-                                        |> FastDict.foldl
-                                            (\choiceTypeName _ variantNamesSoFar ->
-                                                choiceTypeName :: variantNamesSoFar
-                                            )
-                                            (moduleTypes.typeAliases |> FastDict.keys)
-
-                                moduleAliasOrFullName : Elm.Syntax.ModuleName.ModuleName
-                                moduleAliasOrFullName =
-                                    case syntaxImport.alias of
-                                        Nothing ->
-                                            syntaxImport.moduleName
-
-                                        Just importAlias ->
-                                            [ importAlias ]
-                            in
-                            soFar
+                        , typeConstructs =
+                            soFar.typeConstructs
                                 |> FastDict.union
                                     (syntaxImport.typeExposes
                                         |> listMapToFastDict
@@ -911,7 +895,7 @@ importsToModuleOriginLookup modulesTypes imports =
                                             )
                                     )
                                 |> FastDict.union
-                                    (exposedFromImportedModuleItself
+                                    (exposedTypeConstructsFromImportedModuleItself
                                         |> listMapToFastDict
                                             (\exposeFromImportedModule ->
                                                 { key = ( moduleAliasOrFullName, exposeFromImportedModule )
@@ -919,13 +903,15 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 }
                                             )
                                     )
-                )
-                FastDict.empty
-    , keepOperatorIsExposedFromParserAdvanced =
-        operatorIsExposedFromParserAdvanced "|."
-    , ignoreOperatorIsExposedFromParserAdvanced =
-        operatorIsExposedFromParserAdvanced "|="
-    }
+                        }
+            )
+            { references = FastDict.empty
+            , typeConstructs = FastDict.empty
+            , keepOperatorIsExposedFromParserAdvanced =
+                operatorIsExposedFromParserAdvanced "|."
+            , ignoreOperatorIsExposedFromParserAdvanced =
+                operatorIsExposedFromParserAdvanced "|="
+            }
 
 
 importToNormal :
