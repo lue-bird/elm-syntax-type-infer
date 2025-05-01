@@ -10414,6 +10414,17 @@ variableToTypeSubstitutionsCondenseVariables declarationTypes variableToCondense
         |> fastDictFoldlWhileOkFrom
             variableSubstitutionsNone
             (\uncondensedVariable replacementType soFar ->
+                let
+                    replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
+                    replacementTypeUsingCondensedVariables =
+                        replacementType
+                            |> typeNotVariableMapVariables
+                                (\variable ->
+                                    variableToCondensedLookup
+                                        |> FastDict.get variable
+                                        |> Maybe.withDefault variable
+                                )
+                in
                 case variableToCondensedLookup |> FastDict.get uncondensedVariable of
                     Nothing ->
                         Ok
@@ -10421,28 +10432,10 @@ variableToTypeSubstitutionsCondenseVariables declarationTypes variableToCondense
                             , variableToType =
                                 soFar.variableToType
                                     |> FastDict.insert uncondensedVariable
-                                        (replacementType
-                                            |> typeNotVariableMapVariables
-                                                (\variable ->
-                                                    variableToCondensedLookup
-                                                        |> FastDict.get variable
-                                                        |> Maybe.withDefault variable
-                                                )
-                                        )
+                                        replacementTypeUsingCondensedVariables
                             }
 
                     Just condensedVariable ->
-                        let
-                            replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
-                            replacementTypeUsingCondensedVariables =
-                                replacementType
-                                    |> typeNotVariableMapVariables
-                                        (\variable ->
-                                            variableToCondensedLookup
-                                                |> FastDict.get variable
-                                                |> Maybe.withDefault variable
-                                        )
-                        in
                         case soFar.variableToType |> FastDict.get condensedVariable of
                             Nothing ->
                                 Ok
@@ -10456,13 +10449,32 @@ variableToTypeSubstitutionsCondenseVariables declarationTypes variableToCondense
                             Just existingReplacementTypeForCondensedVariable ->
                                 Result.andThen
                                     (\replacementTypeForCondensedVariable ->
-                                        variableSubstitutionsMerge3 declarationTypes
-                                            soFar
-                                            replacementTypeForCondensedVariable.substitutions
-                                            (variableSubstitutionsFromVariableToType
-                                                condensedVariable
-                                                replacementTypeForCondensedVariable.type_
-                                            )
+                                        case replacementTypeForCondensedVariable.type_ of
+                                            TypeVariable replacementTypeVariableForCondensedVariable ->
+                                                Ok
+                                                    { equivalentVariables =
+                                                        equivalentVariablesMergeWithSetOf2
+                                                            condensedVariable
+                                                            replacementTypeVariableForCondensedVariable
+                                                            soFar.equivalentVariables
+                                                    , variableToType = soFar.variableToType
+                                                    }
+
+                                            TypeNotVariable replacementTypeNotVariableForCondensedVariable ->
+                                                Result.map
+                                                    (\substitutionsSoFarAndFromUnifying ->
+                                                        { variableToType =
+                                                            substitutionsSoFarAndFromUnifying.variableToType
+                                                                |> FastDict.insert condensedVariable
+                                                                    replacementTypeNotVariableForCondensedVariable
+                                                        , equivalentVariables =
+                                                            substitutionsSoFarAndFromUnifying.equivalentVariables
+                                                        }
+                                                    )
+                                                    (variableSubstitutionsMerge declarationTypes
+                                                        soFar
+                                                        replacementTypeForCondensedVariable.substitutions
+                                                    )
                                     )
                                     (typeNotVariableUnify declarationTypes
                                         existingReplacementTypeForCondensedVariable
