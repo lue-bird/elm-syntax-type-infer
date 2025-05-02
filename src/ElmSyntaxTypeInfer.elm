@@ -2722,13 +2722,17 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                 :: soFar
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            if
-                (equivalentVariablesSet0 |> FastDict.member aEquivalentVariable)
-                    || (equivalentVariablesSet0 |> FastDict.member bEquivalentVariable)
-            then
+            if equivalentVariablesSet0 |> FastDict.member aEquivalentVariable then
+                (equivalentVariablesSet0
+                    |> FastDict.insert bEquivalentVariable ()
+                )
+                    :: listAppendFastButInReverseOrder
+                        soFar
+                        equivalentVariablesSet1Up
+
+            else if equivalentVariablesSet0 |> FastDict.member bEquivalentVariable then
                 (equivalentVariablesSet0
                     |> FastDict.insert aEquivalentVariable ()
-                    |> FastDict.insert bEquivalentVariable ()
                 )
                     :: listAppendFastButInReverseOrder
                         soFar
