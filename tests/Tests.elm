@@ -3453,6 +3453,160 @@ suite =
                             )
                         )
             )
+        , Test.test "inner types are consistent in listFloatIdentity : List Float -> List Float ; listFloatIdentity listFloat = List.map (\\a -> a) listFloat"
+            (\() ->
+                { documentation = Nothing
+                , signature =
+                    Just
+                        (Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "listFloatIdentity"
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "List" ))
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "Float" ))
+                                                        []
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "List" ))
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "Float" ))
+                                                        []
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                    )
+                            }
+                        )
+                , declaration =
+                    Elm.Syntax.Node.empty
+                        { name = Elm.Syntax.Node.empty "listFloatIdentity"
+                        , arguments =
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "listFloat")
+                            ]
+                        , expression =
+                            Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Application
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
+                                    , Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.LambdaExpression
+                                            { args =
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Pattern.VarPattern "a")
+                                                ]
+                                            , expression =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                            }
+                                        )
+                                    , Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue []
+                                            "listFloat"
+                                        )
+                                    ]
+                                )
+                        }
+                }
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "listFloatIdentity"
+                                { range = Elm.Syntax.Range.empty
+                                , type_ = typeList typeFloat
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionCall
+                                        { called =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                        { input =
+                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                    { input = typeFloat, output = typeFloat }
+                                                                )
+                                                        , output =
+                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                    { input = typeList typeFloat
+                                                                    , output = typeList typeFloat
+                                                                    }
+                                                                )
+                                                        }
+                                                    )
+                                            , value =
+                                                ElmSyntaxTypeInfer.ExpressionReference
+                                                    { moduleOrigin = [ "List" ]
+                                                    , qualification = [ "List" ]
+                                                    , name = "map"
+                                                    }
+                                            }
+                                        , argument0 =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                        { input = typeFloat, output = typeFloat }
+                                                    )
+                                            , value =
+                                                ElmSyntaxTypeInfer.ExpressionLambda
+                                                    { parameter0 =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = typeFloat
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.PatternVariable "a"
+                                                        }
+                                                    , parameter1Up = []
+                                                    , result =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = typeFloat
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionReference
+                                                                { moduleOrigin = []
+                                                                , qualification = []
+                                                                , name = "a"
+                                                                }
+                                                        }
+                                                    }
+                                            }
+                                        , argument1Up =
+                                            [ { range = Elm.Syntax.Range.empty
+                                              , type_ = typeList typeFloat
+                                              , value =
+                                                    ElmSyntaxTypeInfer.ExpressionReference
+                                                        { moduleOrigin = []
+                                                        , qualification = []
+                                                        , name = "listFloat"
+                                                        }
+                                              }
+                                            ]
+                                        }
+                                }
+                            )
+                        )
+            )
         ]
 
 
