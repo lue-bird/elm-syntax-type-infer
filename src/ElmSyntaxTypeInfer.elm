@@ -9697,13 +9697,16 @@ expressionContainedTypeVariables expression =
             expressionCaseOf.matchedExpression
                 |> expressionTypedNodeContainedTypeVariables
                 |> FastDict.union
-                    (expressionCaseOf.case0
-                        |> expressionCaseOfCaseContainedTypeVariables
-                    )
-                |> FastDict.union
                     (expressionCaseOf.case1Up
-                        |> listMapToFastSetFastsAndUnify
-                            expressionCaseOfCaseContainedTypeVariables
+                        |> List.foldl
+                            (\case_ soFar ->
+                                FastDict.union
+                                    soFar
+                                    (case_ |> expressionCaseOfCaseContainedTypeVariables)
+                            )
+                            (expressionCaseOf.case0
+                                |> expressionCaseOfCaseContainedTypeVariables
+                            )
                     )
 
         ExpressionLetIn expressionLetIn ->
