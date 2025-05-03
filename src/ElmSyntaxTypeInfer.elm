@@ -9619,9 +9619,8 @@ expressionContainedTypeVariables expression =
                     )
 
         ExpressionIfThenElse expressionIfThenElse ->
-            (expressionIfThenElse.condition
+            expressionIfThenElse.condition
                 |> expressionTypedNodeContainedTypeVariables
-            )
                 |> FastDict.union
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
@@ -9710,15 +9709,17 @@ expressionContainedTypeVariables expression =
                     )
 
         ExpressionLetIn expressionLetIn ->
-            expressionLetIn.declaration0.declaration
-                |> letDeclarationContainedTypeVariables
-                |> FastDict.union
-                    (expressionLetIn.declaration1Up
-                        |> listMapToFastSetFastsAndUnify
-                            (\letDeclaration ->
-                                letDeclaration.declaration
-                                    |> letDeclarationContainedTypeVariables
+            expressionLetIn.declaration1Up
+                |> List.foldl
+                    (\letDeclaration soFar ->
+                        FastDict.union
+                            soFar
+                            (letDeclaration.declaration
+                                |> letDeclarationContainedTypeVariables
                             )
+                    )
+                    (expressionLetIn.declaration0.declaration
+                        |> letDeclarationContainedTypeVariables
                     )
                 |> FastDict.union
                     (expressionLetIn.result
