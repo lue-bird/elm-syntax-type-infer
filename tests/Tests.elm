@@ -56,15 +56,9 @@ suite =
                         )
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeVariable
-                                            "number"
-                                        ]
-                                    }
+                            (typeList
+                                (ElmSyntaxTypeInfer.TypeVariable
+                                    "number"
                                 )
                             )
                         )
@@ -103,11 +97,7 @@ suite =
                         )
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "String" ], name = "String", arguments = [] }
-                                )
-                            )
+                            typeString
                         )
             )
         , Test.test "unify integer and float in list"
@@ -119,22 +109,7 @@ suite =
                         (Elm.Syntax.Expression.Floatable 2.2)
                     ]
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "List" ]
-                                , name = "List"
-                                , arguments =
-                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
-                                    ]
-                                }
-                            )
-                        )
+                        (typeList typeFloat)
             )
         , Test.test "record accessor functions unified: [ .a, .b ]"
             (\() ->
@@ -145,34 +120,28 @@ suite =
                         (Elm.Syntax.Expression.RecordAccessFunction ".b")
                     ]
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { arguments =
-                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeFunction
-                                            { input =
-                                                ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                        { fields =
-                                                            FastDict.fromList
-                                                                [ ( "b"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable "b"
-                                                                  )
-                                                                , ( "a"
-                                                                  , ElmSyntaxTypeInfer.TypeVariable "b"
-                                                                  )
-                                                                ]
-                                                        , recordVariable = "record"
-                                                        }
-                                                    )
-                                            , output =
-                                                ElmSyntaxTypeInfer.TypeVariable "b"
-                                            }
-                                        )
-                                    ]
-                                , moduleOrigin = [ "List" ]
-                                , name = "List"
-                                }
+                        (typeList
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                { fields =
+                                                    FastDict.fromList
+                                                        [ ( "b"
+                                                          , ElmSyntaxTypeInfer.TypeVariable "b"
+                                                          )
+                                                        , ( "a"
+                                                          , ElmSyntaxTypeInfer.TypeVariable "b"
+                                                          )
+                                                        ]
+                                                , recordVariable = "record"
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable "b"
+                                    }
+                                )
                             )
                         )
             )
@@ -188,14 +157,7 @@ suite =
                         (Elm.Syntax.Expression.Floatable 2.2)
                     )
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "(independent) integers and float in triple ( 1, 2.2, 3 )"
             (\() ->
@@ -212,14 +174,7 @@ suite =
                             (ElmSyntaxTypeInfer.TypeTriple
                                 { part0 =
                                     ElmSyntaxTypeInfer.TypeVariable "number"
-                                , part1 =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
+                                , part1 = typeFloat
                                 , part2 =
                                     ElmSyntaxTypeInfer.TypeVariable "number1"
                                 }
@@ -235,14 +190,7 @@ suite =
                         (Elm.Syntax.Expression.Floatable 2.2)
                     ]
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "identity called with integer (from implicit import)"
             (\() ->
@@ -264,14 +212,7 @@ suite =
                         (Elm.Syntax.Expression.Floatable 2.2)
                     ]
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "Basics.identity <| float (qualified from implicit import)"
             (\() ->
@@ -285,14 +226,7 @@ suite =
                         (Elm.Syntax.Expression.Floatable 2.2)
                     )
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "float |> Basics.identity (qualified from implicit import)"
             (\() ->
@@ -306,14 +240,7 @@ suite =
                         (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
                     )
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "List.map called with Basics.identity (qualified from implicit import)"
             (\() ->
@@ -327,25 +254,9 @@ suite =
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable "a"
-                                                ]
-                                            }
-                                        )
+                                    typeList (ElmSyntaxTypeInfer.TypeVariable "a")
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable "a"
-                                                ]
-                                            }
-                                        )
+                                    typeList (ElmSyntaxTypeInfer.TypeVariable "a")
                                 }
                             )
                         )
@@ -373,14 +284,7 @@ suite =
                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                     }
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "case 2.2 of (a) -> a"
             (\() ->
@@ -401,14 +305,7 @@ suite =
                             (Elm.Syntax.Expression.Floatable 2.2)
                     }
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "ignored argument pattern variable \\(a) -> [ 1, 2.2 ]"
             (\() ->
@@ -436,22 +333,7 @@ suite =
                             (ElmSyntaxTypeInfer.TypeFunction
                                 { input =
                                     ElmSyntaxTypeInfer.TypeVariable "a"
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeConstruct
-                                                        { arguments = []
-                                                        , moduleOrigin = [ "Basics" ]
-                                                        , name = "Float"
-                                                        }
-                                                    )
-                                                ]
-                                            }
-                                        )
+                                , output = typeList typeFloat
                                 }
                             )
                         )
@@ -480,30 +362,8 @@ suite =
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { arguments = []
-                                            , moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeConstruct
-                                                        { arguments = []
-                                                        , moduleOrigin = [ "Basics" ]
-                                                        , name = "Float"
-                                                        }
-                                                    )
-                                                ]
-                                            }
-                                        )
+                                { input = typeFloat
+                                , output = typeList typeFloat
                                 }
                             )
                         )
@@ -726,16 +586,7 @@ suite =
                     ]
                     |> expressionToInferredType
                     |> Expect.equal
-                        (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Basics" ]
-                                    , name = "Float"
-                                    , arguments = []
-                                    }
-                                )
-                            )
-                        )
+                        (Ok typeFloat)
             )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
@@ -764,15 +615,8 @@ suite =
                                 { input =
                                     ElmSyntaxTypeInfer.TypeVariable "number"
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeVariable "number"
-                                                ]
-                                            }
-                                        )
+                                    typeList
+                                        (ElmSyntaxTypeInfer.TypeVariable "number")
                                 }
                             )
                         )
@@ -887,51 +731,29 @@ suite =
                                                           , ElmSyntaxTypeInfer.TypeNotVariable
                                                                 ElmSyntaxTypeInfer.TypeUnit
                                                           )
-                                                        , ( "b"
-                                                          , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                (ElmSyntaxTypeInfer.TypeConstruct
-                                                                    { arguments = []
-                                                                    , moduleOrigin = [ "Basics" ]
-                                                                    , name = "Float"
-                                                                    }
-                                                                )
-                                                          )
+                                                        , ( "b", typeFloat )
                                                         ]
                                                 }
                                             )
                                     , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "List" ]
-                                                , name = "List"
-                                                , arguments =
-                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                            { recordVariable = "rec"
-                                                            , fields =
-                                                                FastDict.fromList
-                                                                    [ ( "a"
-                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                            ElmSyntaxTypeInfer.TypeUnit
-                                                                      )
-                                                                    , ( "c"
-                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                            ElmSyntaxTypeInfer.TypeUnit
-                                                                      )
-                                                                    , ( "b"
-                                                                      , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                                                { arguments = []
-                                                                                , moduleOrigin = [ "Basics" ]
-                                                                                , name = "Float"
-                                                                                }
-                                                                            )
-                                                                      )
-                                                                    ]
-                                                            }
-                                                        )
-                                                    ]
-                                                }
+                                        typeList
+                                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                                (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                    { recordVariable = "rec"
+                                                    , fields =
+                                                        FastDict.fromList
+                                                            [ ( "a"
+                                                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    ElmSyntaxTypeInfer.TypeUnit
+                                                              )
+                                                            , ( "c"
+                                                              , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    ElmSyntaxTypeInfer.TypeUnit
+                                                              )
+                                                            , ( "b", typeFloat )
+                                                            ]
+                                                    }
+                                                )
                                             )
                                     }
                                 )
@@ -954,15 +776,7 @@ suite =
                                   , ElmSyntaxTypeInfer.TypeNotVariable
                                         ElmSyntaxTypeInfer.TypeUnit
                                   )
-                                , ( "b"
-                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { arguments = []
-                                            , moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            }
-                                        )
-                                  )
+                                , ( "b", typeFloat )
                                 ]
                         }
                     )
@@ -1023,14 +837,7 @@ suite =
                                             (ElmSyntaxTypeInfer.TypeFunction
                                                 { input = recordExtensionTypeInExample
                                                 , output =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "List" ]
-                                                            , name = "List"
-                                                            , arguments =
-                                                                [ recordExtensionTypeInExample ]
-                                                            }
-                                                        )
+                                                    typeList recordExtensionTypeInExample
                                                 }
                                             )
                                     }
@@ -1086,45 +893,23 @@ suite =
                                                   , ElmSyntaxTypeInfer.TypeNotVariable
                                                         ElmSyntaxTypeInfer.TypeUnit
                                                   )
-                                                , ( "b"
-                                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { arguments = []
-                                                            , moduleOrigin = [ "Basics" ]
-                                                            , name = "Float"
-                                                            }
-                                                        )
-                                                  )
+                                                , ( "b", typeFloat )
                                                 ]
                                             )
                                         )
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "List" ]
-                                            , name = "List"
-                                            , arguments =
-                                                [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeRecord
-                                                        (FastDict.fromList
-                                                            [ ( "c"
-                                                              , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                    ElmSyntaxTypeInfer.TypeUnit
-                                                              )
-                                                            , ( "b"
-                                                              , ElmSyntaxTypeInfer.TypeNotVariable
-                                                                    (ElmSyntaxTypeInfer.TypeConstruct
-                                                                        { arguments = []
-                                                                        , moduleOrigin = [ "Basics" ]
-                                                                        , name = "Float"
-                                                                        }
-                                                                    )
-                                                              )
-                                                            ]
-                                                        )
-                                                    )
-                                                ]
-                                            }
+                                    typeList
+                                        (ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeRecord
+                                                (FastDict.fromList
+                                                    [ ( "c"
+                                                      , ElmSyntaxTypeInfer.TypeNotVariable
+                                                            ElmSyntaxTypeInfer.TypeUnit
+                                                      )
+                                                    , ( "b", typeFloat )
+                                                    ]
+                                                )
+                                            )
                                         )
                                 }
                             )
@@ -1150,14 +935,7 @@ suite =
                         ]
                     }
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { arguments = []
-                                , moduleOrigin = [ "Basics" ]
-                                , name = "Int"
-                                }
-                            )
-                        )
+                        typeInt
             )
         , Test.test "should fail: case [] of [ 1 ] -> 1; n -> n"
             (\() ->
@@ -1284,15 +1062,8 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeVariable "element"
-                                        ]
-                                    }
-                                )
+                            (typeList
+                                (ElmSyntaxTypeInfer.TypeVariable "element")
                             )
                         )
             )
@@ -1326,22 +1097,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Int"
-                                                , arguments = []
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeList typeInt)
                         )
             )
         , Test.test "case [] of [ first, 1 ] -> [ first ]; n -> n"
@@ -1376,22 +1132,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Int"
-                                                , arguments = []
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeList typeInt)
                         )
             )
         , Test.test "same generic pattern in pattern: case ( 1.1, \"\" ) of ( _, _ ) -> ()"
@@ -1468,22 +1209,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Int"
-                                                , arguments = []
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeList typeInt)
                         )
             )
         , Test.test "case [] of first :: _ -> [ 2.2 ]; n -> n"
@@ -1519,22 +1245,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Float"
-                                                , arguments = []
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeList typeFloat)
                         )
             )
         , Test.test "infer matched via variant patterns: \\order -> case order of Basics.LT -> -1 ; EQ -> 0 ; GT -> 1"
@@ -1650,38 +1361,8 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Maybe" ]
-                                                , name = "Maybe"
-                                                , arguments =
-                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "Basics" ]
-                                                            , name = "Int"
-                                                            , arguments = []
-                                                            }
-                                                        )
-                                                    ]
-                                                }
-                                            )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Maybe" ]
-                                                , name = "Maybe"
-                                                , arguments =
-                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "Basics" ]
-                                                            , name = "Int"
-                                                            , arguments = []
-                                                            }
-                                                        )
-                                                    ]
-                                                }
-                                            )
+                                    { input = typeMaybe typeInt
+                                    , output = typeMaybe typeInt
                                     }
                                 )
                             )
@@ -1724,14 +1405,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "String" ]
-                                    , name = "String"
-                                    , arguments = []
-                                    }
-                                )
-                            )
+                            typeString
                         )
             )
         , Test.test "extract tuple parts in destructuring of call: let ( x, y ) = Tuple.pair \"\" 1.1 in x"
@@ -1769,14 +1443,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "String" ]
-                                    , name = "String"
-                                    , arguments = []
-                                    }
-                                )
-                            )
+                            typeString
                         )
             )
         , Test.test "determine lambda parameter type by unification with pattern in let destructuring: \\a -> let () = a in a"
@@ -1839,14 +1506,7 @@ suite =
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
-                                                { part0 =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { arguments = []
-                                                            , moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            }
-                                                        )
+                                                { part0 = typeString
                                                 , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
                                                 }
                                             )
@@ -1875,14 +1535,7 @@ suite =
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
-                                                { part0 =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { arguments = []
-                                                            , moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            }
-                                                        )
+                                                { part0 = typeString
                                                 , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
                                                 }
                                             )
@@ -1911,14 +1564,7 @@ suite =
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
-                                                { part0 =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { arguments = []
-                                                            , moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            }
-                                                        )
+                                                { part0 = typeString
                                                 , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
                                                 }
                                             )
@@ -1949,22 +1595,7 @@ suite =
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Maybe" ]
-                                    , name = "Maybe"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Float"
-                                                , arguments = []
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeMaybe typeFloat)
                         )
             )
         , Test.test "exposed member and annotated let declaration with the same name: let e : String ; e = \"\" ; in e"
@@ -2015,14 +1646,7 @@ suite =
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "String" ]
-                                    , name = "String"
-                                    , arguments = []
-                                    }
-                                )
-                            )
+                            typeString
                         )
             )
         , Test.test "exposed member and un-annotated let declaration with the same name: let e = \"\" ; in e"
@@ -2062,14 +1686,7 @@ suite =
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "String" ]
-                                    , name = "String"
-                                    , arguments = []
-                                    }
-                                )
-                            )
+                            typeString
                         )
             )
         , let
@@ -2362,14 +1979,7 @@ suite =
                                                 , arguments = []
                                                 }
                                             )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "String" ]
-                                                , name = "String"
-                                                , arguments = []
-                                                }
-                                            )
+                                    , output = typeString
                                     }
                                 )
                             )
@@ -2446,22 +2056,8 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { arguments = []
-                                                , moduleOrigin = [ "String" ]
-                                                , name = "String"
-                                                }
-                                            )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { arguments = []
-                                                , moduleOrigin = [ "String" ]
-                                                , name = "String"
-                                                }
-                                            )
+                                    { input = typeString
+                                    , output = typeString
                                     }
                                 )
                             )
@@ -2497,22 +2093,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "List" ]
-                                    , name = "List"
-                                    , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { arguments = []
-                                                , moduleOrigin = [ "String" ]
-                                                , name = "String"
-                                                }
-                                            )
-                                        ]
-                                    }
-                                )
-                            )
+                            (typeList typeString)
                         )
             )
         , Test.test "fully applied appendable prefix operation with non-unifiable list types: (++) [ \"\" ] [ 0 ]"
@@ -2661,13 +2242,7 @@ suite =
                                                 { moduleOrigin = []
                                                 , name = "Just"
                                                 , arguments =
-                                                    [ ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            , arguments = []
-                                                            }
-                                                        )
+                                                    [ typeString
                                                     ]
                                                 }
                                             )
@@ -2884,33 +2459,12 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Int"
-                                                , arguments = []
-                                                }
-                                            )
+                                    { input = typeInt
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeFunction
-                                                { input =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "Basics" ]
-                                                            , name = "Int"
-                                                            , arguments = []
-                                                            }
-                                                        )
-                                                , output =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "Basics" ]
-                                                            , name = "Int"
-                                                            , arguments = []
-                                                            }
-                                                        )
+                                                { input = typeInt
+                                                , output = typeInt
                                                 }
                                             )
                                     }
@@ -3010,33 +2564,12 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Int"
-                                                , arguments = []
-                                                }
-                                            )
+                                    { input = typeInt
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeFunction
-                                                { input =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            , arguments = []
-                                                            }
-                                                        )
-                                                , output =
-                                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                                            { moduleOrigin = [ "String" ]
-                                                            , name = "String"
-                                                            , arguments = []
-                                                            }
-                                                        )
+                                                { input = typeString
+                                                , output = typeString
                                                 }
                                             )
                                     }
@@ -3071,14 +2604,7 @@ suite =
                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                     }
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "single annotated let value declaration: let a : Float ; a = 2.2 in a"
             (\() ->
@@ -3119,14 +2645,7 @@ suite =
                     |> expressionToInferredType
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Basics" ]
-                                    , name = "Float"
-                                    , arguments = []
-                                    }
-                                )
-                            )
+                            typeFloat
                         )
             )
         , Test.test "single annotated let function declaration with multiple arguments, called: let a : Float -> String -> () ; a x y = () in a 1.1 \"\""
@@ -3261,22 +2780,8 @@ suite =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Float"
-                                                , arguments = []
-                                                }
-                                            )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Float"
-                                                , arguments = []
-                                                }
-                                            )
+                                    { input = typeFloat
+                                    , output = typeFloat
                                     }
                                 )
                             )
@@ -3323,22 +2828,8 @@ suite =
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
+                                { input = typeFloat
+                                , output = typeFloat
                                 }
                             )
                         )
@@ -3389,22 +2880,8 @@ suite =
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
+                                { input = typeFloat
+                                , output = typeFloat
                                 }
                             )
                         )
@@ -3612,22 +3089,8 @@ suite =
                     |> expressionExpectInferredType
                         (ElmSyntaxTypeInfer.TypeNotVariable
                             (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Float"
-                                            , arguments = []
-                                            }
-                                        )
+                                { input = typeFloat
+                                , output = typeFloat
                                 }
                             )
                         )
@@ -3713,14 +3176,7 @@ suite =
                             (Elm.Syntax.Expression.FunctionOrValue [] "b")
                     }
                     |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeConstruct
-                                { moduleOrigin = [ "Basics" ]
-                                , name = "Float"
-                                , arguments = []
-                                }
-                            )
-                        )
+                        typeFloat
             )
         , Test.test "transitive un-annotated top level declarations: a = 2.2; b = a"
             (\() ->
@@ -3781,24 +3237,8 @@ suite =
                         )
                     |> Expect.equal
                         (Ok
-                            [ ( "a"
-                              , ElmSyntaxTypeInfer.TypeNotVariable
-                                    (ElmSyntaxTypeInfer.TypeConstruct
-                                        { moduleOrigin = [ "Basics" ]
-                                        , name = "Float"
-                                        , arguments = []
-                                        }
-                                    )
-                              )
-                            , ( "b"
-                              , ElmSyntaxTypeInfer.TypeNotVariable
-                                    (ElmSyntaxTypeInfer.TypeConstruct
-                                        { moduleOrigin = [ "Basics" ]
-                                        , name = "Float"
-                                        , arguments = []
-                                        }
-                                    )
-                              )
+                            [ ( "a", typeFloat )
+                            , ( "b", typeFloat )
                             ]
                         )
             )
@@ -3900,6 +3340,61 @@ suite =
                     |> Expect.err
             )
         ]
+
+
+typeList : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
+typeList element =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "List" ]
+            , name = "List"
+            , arguments = [ element ]
+            }
+        )
+
+
+typeMaybe : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
+typeMaybe value =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "Maybe" ]
+            , name = "Maybe"
+            , arguments = [ value ]
+            }
+        )
+
+
+typeFloat : ElmSyntaxTypeInfer.Type variable_
+typeFloat =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "Basics" ]
+            , name = "Float"
+            , arguments = []
+            }
+        )
+
+
+typeInt : ElmSyntaxTypeInfer.Type variable_
+typeInt =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "Basics" ]
+            , name = "Int"
+            , arguments = []
+            }
+        )
+
+
+typeString : ElmSyntaxTypeInfer.Type variable_
+typeString =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = [ "String" ]
+            , name = "String"
+            , arguments = []
+            }
+        )
 
 
 expressionExpectInferredType :
