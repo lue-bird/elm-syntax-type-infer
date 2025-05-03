@@ -9679,15 +9679,17 @@ expressionContainedTypeVariables expression =
             expressionRecordUpdate.recordVariable.type_
                 |> typeContainedVariables
                 |> FastDict.union
-                    (expressionRecordUpdate.field0.value
-                        |> expressionTypedNodeContainedTypeVariables
-                    )
-                |> FastDict.union
                     (expressionRecordUpdate.field1Up
-                        |> listMapToFastSetFastsAndUnify
-                            (\field ->
-                                field.value
-                                    |> expressionTypedNodeContainedTypeVariables
+                        |> List.foldl
+                            (\field soFar ->
+                                FastDict.union
+                                    soFar
+                                    (field.value
+                                        |> expressionTypedNodeContainedTypeVariables
+                                    )
+                            )
+                            (expressionRecordUpdate.field0.value
+                                |> expressionTypedNodeContainedTypeVariables
                             )
                     )
 
