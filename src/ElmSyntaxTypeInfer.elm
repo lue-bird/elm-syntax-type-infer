@@ -9658,15 +9658,17 @@ expressionContainedTypeVariables expression =
                     )
 
         ExpressionLambda expressionLambda ->
-            expressionLambda.parameter0
-                |> patternTypedNodeContainedTypeVariables
-                |> FastDict.union
-                    (expressionLambda.parameter1Up
-                        |> listMapToFastSetFastsAndUnify
-                            (\parameter ->
-                                parameter
-                                    |> patternTypedNodeContainedTypeVariables
+            expressionLambda.parameter1Up
+                |> List.foldl
+                    (\parameter soFar ->
+                        FastDict.union
+                            soFar
+                            (parameter
+                                |> patternTypedNodeContainedTypeVariables
                             )
+                    )
+                    (expressionLambda.parameter0
+                        |> patternTypedNodeContainedTypeVariables
                     )
                 |> FastDict.union
                     (expressionLambda.result
