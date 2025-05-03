@@ -1489,6 +1489,47 @@ suite =
                             )
                         )
             )
+        , Test.test "let destructured pattern variable used in another destructuring: let (a) = 2.2 ; (b) = a in b"
+            (\() ->
+                Elm.Syntax.Expression.LetExpression
+                    { declarations =
+                        [ Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetDestructuring
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.ParenthesizedPattern
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "a")
+                                        )
+                                    )
+                                )
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Floatable 2.2)
+                                )
+                            )
+                        , Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.LetDestructuring
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Pattern.ParenthesizedPattern
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Pattern.VarPattern "b")
+                                        )
+                                    )
+                                )
+                                (Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                )
+                            )
+                        ]
+                    , expression =
+                        Elm.Syntax.Node.empty
+                            (Elm.Syntax.Expression.FunctionOrValue [] "b")
+                    }
+                    |> expressionToInferredType
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
+            )
         , Test.test "curried call: Tuple.pair \"\""
             (\() ->
                 Elm.Syntax.Expression.Application
