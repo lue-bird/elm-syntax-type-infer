@@ -62,3 +62,6 @@ exampleModuleOriginLookup =
         |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
             ElmSyntaxTypeInfer.elmCoreTypes
 ```
+
+If you're looking for how to use type inference across a whole project and its dependencies,
+looking at [`elm-syntax-to-fsharp`](https://github.com/lue-bird/elm-syntax-to-fsharp) might help.
