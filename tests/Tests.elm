@@ -2391,6 +2391,154 @@ suite =
                             )
                         )
             )
+        , Test.test "local type alias unified with imported choice type: type alias L = Dict.Dict String String ; l : L ; l = Dict.empty"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "l"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.FunctionOrValue [ "Dict" ] "empty")
+                            }
+                  , signature =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                { name = Elm.Syntax.Node.empty "l"
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [], "L" ))
+                                            []
+                                        )
+                                }
+                            )
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingDict
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "L"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [ "Dict" ], "Dict" ))
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            ]
+                                        )
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingDict
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = []
+                                    , name = "L"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "local type alias unified with variant value: type alias L = Dict.Dict String String ; type Wrap = Wrap L ; l = Wrap Dict.empty"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "l"
+                            , arguments = []
+                            , expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "Wrap")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [ "Dict" ] "empty")
+                                        ]
+                                    )
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookupImportingDict
+                        , otherModuleDeclaredTypes =
+                            [ Elm.Syntax.Declaration.AliasDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "L"
+                                , generics = []
+                                , typeAnnotation =
+                                    Elm.Syntax.Node.empty
+                                        (Elm.Syntax.TypeAnnotation.Typed
+                                            (Elm.Syntax.Node.empty ( [ "Dict" ], "Dict" ))
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            ]
+                                        )
+                                }
+                            , Elm.Syntax.Declaration.CustomTypeDeclaration
+                                { documentation = Nothing
+                                , name = Elm.Syntax.Node.empty "Wrap"
+                                , generics = []
+                                , constructors =
+                                    [ Elm.Syntax.Node.empty
+                                        { name = Elm.Syntax.Node.empty "Wrap"
+                                        , arguments =
+                                            [ Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "L" ))
+                                                    []
+                                                )
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookupImportingDict
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = []
+                                    , name = "Wrap"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "recursive, too strictly annotated function: addAbs : Int -> Int -> Int ; addAbs toAdd base = if toAdd <= 0 then base else 1 + addAbs (toAdd - 1) base"
             (\() ->
                 [ { declaration =
@@ -3758,6 +3906,18 @@ toSingleInferredDeclaration declarationsInferred =
 
         Just ( _, declarationTyped ) ->
             Ok declarationTyped.type_
+
+
+exampleModuleOriginLookupImportingDict : ElmSyntaxTypeInfer.ModuleOriginLookup
+exampleModuleOriginLookupImportingDict =
+    [ Elm.Syntax.Node.empty
+        { moduleName = Elm.Syntax.Node.empty [ "Dict" ]
+        , moduleAlias = Nothing
+        , exposingList = Nothing
+        }
+    ]
+        |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+            ElmSyntaxTypeInfer.elmCoreTypes
 
 
 exampleModuleOriginLookupImportingProcess : ElmSyntaxTypeInfer.ModuleOriginLookup
