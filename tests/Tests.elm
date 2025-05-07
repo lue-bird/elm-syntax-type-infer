@@ -1524,10 +1524,95 @@ suite =
                         Elm.Syntax.Node.empty
                             (Elm.Syntax.Expression.FunctionOrValue [] "b")
                     }
-                    |> expressionToInferredType
+                    |> expressionWrapInExampleDeclaration
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
                     |> Expect.equal
                         (Ok
-                            typeFloat
+                            (FastDict.singleton "majorVersions"
+                                { parameters = []
+                                , result =
+                                    { range = Elm.Syntax.Range.empty
+                                    , type_ = typeFloat
+                                    , value =
+                                        ElmSyntaxTypeInfer.ExpressionLetIn
+                                            { declaration0 =
+                                                { range = Elm.Syntax.Range.empty
+                                                , declaration =
+                                                    ElmSyntaxTypeInfer.LetDestructuring
+                                                        { pattern =
+                                                            { range = Elm.Syntax.Range.empty
+                                                            , type_ = typeFloat
+                                                            , value =
+                                                                ElmSyntaxTypeInfer.PatternParenthesized
+                                                                    { range = Elm.Syntax.Range.empty
+                                                                    , type_ = typeFloat
+                                                                    , value =
+                                                                        ElmSyntaxTypeInfer.PatternVariable "a"
+                                                                    }
+                                                            }
+                                                        , expression =
+                                                            { range = Elm.Syntax.Range.empty
+                                                            , type_ = typeFloat
+                                                            , value =
+                                                                ElmSyntaxTypeInfer.ExpressionFloat 2.2
+                                                            }
+                                                        }
+                                                }
+                                            , declaration1Up =
+                                                [ { range = Elm.Syntax.Range.empty
+                                                  , declaration =
+                                                        ElmSyntaxTypeInfer.LetDestructuring
+                                                            { pattern =
+                                                                { range = Elm.Syntax.Range.empty
+                                                                , type_ = typeFloat
+                                                                , value =
+                                                                    ElmSyntaxTypeInfer.PatternParenthesized
+                                                                        { range = Elm.Syntax.Range.empty
+                                                                        , type_ = typeFloat
+                                                                        , value =
+                                                                            ElmSyntaxTypeInfer.PatternVariable "b"
+                                                                        }
+                                                                }
+                                                            , expression =
+                                                                { range = Elm.Syntax.Range.empty
+                                                                , type_ = typeFloat
+                                                                , value =
+                                                                    ElmSyntaxTypeInfer.ExpressionReference
+                                                                        { moduleOrigin = []
+                                                                        , qualification = []
+                                                                        , name = "a"
+                                                                        }
+                                                                }
+                                                            }
+                                                  }
+                                                ]
+                                            , result =
+                                                { range = Elm.Syntax.Range.empty
+                                                , type_ = typeFloat
+                                                , value =
+                                                    ElmSyntaxTypeInfer.ExpressionReference
+                                                        { moduleOrigin = []
+                                                        , qualification = []
+                                                        , name = "b"
+                                                        }
+                                                }
+                                            }
+                                    }
+                                , type_ = typeFloat
+                                , nameRange = Elm.Syntax.Range.empty
+                                , documentation = Nothing
+                                , signature = Nothing
+                                }
+                            )
                         )
             )
         , Test.test "curried call: Tuple.pair \"\""
