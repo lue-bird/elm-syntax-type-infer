@@ -10836,8 +10836,8 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
 
         ExpressionInfixOperation expressionInfixOperation ->
-            resultAndThen4
-                (\typeSubstituted operatorTypeSubstituted leftSubstituted rightSubstituted ->
+            resultAndThen3
+                (\typeSubstituted leftSubstituted rightSubstituted ->
                     Result.map
                         (\fullSubstitutions ->
                             { substitutions = fullSubstitutions
@@ -10848,7 +10848,19 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                         { operator =
                                             { symbol = expressionInfixOperation.operator.symbol
                                             , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
-                                            , type_ = operatorTypeSubstituted.type_
+                                            , type_ =
+                                                TypeNotVariable
+                                                    (TypeFunction
+                                                        { input = leftSubstituted.node.type_
+                                                        , output =
+                                                            TypeNotVariable
+                                                                (TypeFunction
+                                                                    { input = rightSubstituted.node.type_
+                                                                    , output = typeSubstituted.type_
+                                                                    }
+                                                                )
+                                                        }
+                                                    )
                                             }
                                         , left = leftSubstituted.node
                                         , right = rightSubstituted.node
@@ -10857,16 +10869,11 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                 }
                             }
                         )
-                        (variableSubstitutionsMerge4 declarationTypes
-                            operatorTypeSubstituted.substitutions
+                        (variableSubstitutionsMerge3 declarationTypes
                             leftSubstituted.substitutions
                             rightSubstituted.substitutions
                             typeSubstituted.substitutions
                         )
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable declarationTypes
-                        replacement
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable declarationTypes
