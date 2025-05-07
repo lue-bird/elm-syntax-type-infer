@@ -3881,6 +3881,209 @@ suite =
                             )
                         )
             )
+        , Test.test "inner types are consistent in unindent : List String -> List String ; unindent lines = List.map (\\line -> String.dropLeft 4 line) lines"
+            (\() ->
+                { documentation = Nothing
+                , signature =
+                    Just
+                        (Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "unindent"
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "List" ))
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "String" ))
+                                                        []
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Typed
+                                                (Elm.Syntax.Node.empty ( [], "List" ))
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "String" ))
+                                                        []
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                    )
+                            }
+                        )
+                , declaration =
+                    Elm.Syntax.Node.empty
+                        { name = Elm.Syntax.Node.empty "unindent"
+                        , arguments =
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "lines")
+                            ]
+                        , expression =
+                            Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.Application
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
+                                    , Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.LambdaExpression
+                                            { args =
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Pattern.VarPattern "line")
+                                                ]
+                                            , expression =
+                                                Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.Expression.Application
+                                                        [ Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.FunctionOrValue [ "String" ] "dropLeft")
+                                                        , Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.Integer 4)
+                                                        , Elm.Syntax.Node.empty
+                                                            (Elm.Syntax.Expression.FunctionOrValue [] "line")
+                                                        ]
+                                                    )
+                                            }
+                                        )
+                                    , Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Expression.FunctionOrValue []
+                                            "lines"
+                                        )
+                                    ]
+                                )
+                        }
+                }
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "unindent"
+                                { range = Elm.Syntax.Range.empty
+                                , type_ = typeList typeString
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionCall
+                                        { called =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                        { input =
+                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                    { input = typeString
+                                                                    , output = typeString
+                                                                    }
+                                                                )
+                                                        , output =
+                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                    { input = typeList typeString
+                                                                    , output = typeList typeString
+                                                                    }
+                                                                )
+                                                        }
+                                                    )
+                                            , value =
+                                                ElmSyntaxTypeInfer.ExpressionReference
+                                                    { moduleOrigin = [ "List" ]
+                                                    , qualification = [ "List" ]
+                                                    , name = "map"
+                                                    }
+                                            }
+                                        , argument0 =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                        { input = typeString, output = typeString }
+                                                    )
+                                            , value =
+                                                ElmSyntaxTypeInfer.ExpressionLambda
+                                                    { parameter0 =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = typeString
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.PatternVariable "line"
+                                                        }
+                                                    , parameter1Up = []
+                                                    , result =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = typeString
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionCall
+                                                                { called =
+                                                                    { range = Elm.Syntax.Range.empty
+                                                                    , type_ =
+                                                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                                                { input = typeInt
+                                                                                , output =
+                                                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                                                            { input = typeString
+                                                                                            , output = typeString
+                                                                                            }
+                                                                                        )
+                                                                                }
+                                                                            )
+                                                                    , value =
+                                                                        ElmSyntaxTypeInfer.ExpressionReference
+                                                                            { moduleOrigin = [ "String" ]
+                                                                            , qualification = [ "String" ]
+                                                                            , name = "dropLeft"
+                                                                            }
+                                                                    }
+                                                                , argument0 =
+                                                                    { range = Elm.Syntax.Range.empty
+                                                                    , type_ = typeInt
+                                                                    , value =
+                                                                        ElmSyntaxTypeInfer.ExpressionInteger
+                                                                            { base = ElmSyntaxTypeInfer.Base10
+                                                                            , value = 4
+                                                                            }
+                                                                    }
+                                                                , argument1Up =
+                                                                    [ { range = Elm.Syntax.Range.empty
+                                                                      , type_ = typeString
+                                                                      , value =
+                                                                            ElmSyntaxTypeInfer.ExpressionReference
+                                                                                { moduleOrigin = []
+                                                                                , qualification = []
+                                                                                , name = "line"
+                                                                                }
+                                                                      }
+                                                                    ]
+                                                                }
+                                                        }
+                                                    }
+                                            }
+                                        , argument1Up =
+                                            [ { range = Elm.Syntax.Range.empty
+                                              , type_ = typeList typeString
+                                              , value =
+                                                    ElmSyntaxTypeInfer.ExpressionReference
+                                                        { moduleOrigin = []
+                                                        , qualification = []
+                                                        , name = "lines"
+                                                        }
+                                              }
+                                            ]
+                                        }
+                                }
+                            )
+                        )
+            )
         ]
 
 
