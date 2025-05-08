@@ -4905,7 +4905,19 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 { symbol = operator
                                 , moduleOrigin = operatorInferred.moduleOrigin
                                 }
-                        , type_ = operatorInferred.type_
+                        , type_ =
+                            TypeNotVariable
+                                (TypeFunction
+                                    { input = operatorInferred.leftType
+                                    , output =
+                                        TypeNotVariable
+                                            (TypeFunction
+                                                { input = operatorInferred.rightType
+                                                , output = operatorInferred.resultType
+                                                }
+                                            )
+                                    }
+                                )
                         }
                     , substitutions = variableSubstitutionsNone
                     , introducedTypeVariables =
@@ -7500,60 +7512,63 @@ expressionInfixOperationTypeInfer :
 expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
         (\operatorAsFunctionType leftInferred rightInferred ->
-            let
-                introducedResultTypeVariable : TypeVariableFromContext
-                introducedResultTypeVariable =
-                    ( context.path, "operationResult" )
-            in
-            Result.andThen
-                (\unifiedType ->
+            resultAndThen2
+                (\unifiedLeftType unifiedRightType ->
                     Result.andThen
-                        (\leftRightSubstitutions ->
-                            { substitutions = leftRightSubstitutions
+                        (\leftRightAndUnificationSubstitutions ->
+                            { substitutions = variableSubstitutionsNone
                             , node =
                                 { range = infixOperation.fullRange
                                 , value =
                                     ExpressionInfixOperation
                                         { operator =
-                                            { type_ = operatorAsFunctionType.type_
+                                            { type_ =
+                                                TypeNotVariable
+                                                    (TypeFunction
+                                                        { input = leftInferred.node.type_
+                                                        , output =
+                                                            TypeNotVariable
+                                                                (TypeFunction
+                                                                    { input = rightInferred.node.type_
+                                                                    , output = operatorAsFunctionType.resultType
+                                                                    }
+                                                                )
+                                                        }
+                                                    )
                                             , moduleOrigin = operatorAsFunctionType.moduleOrigin
                                             , symbol = infixOperation.operator
                                             }
                                         , left = leftInferred.node
                                         , right = rightInferred.node
                                         }
-                                , type_ = TypeVariable introducedResultTypeVariable
+                                , type_ = operatorAsFunctionType.resultType
                                 }
                             , introducedTypeVariables =
                                 operatorAsFunctionType.introducedTypeVariables
                                     |> FastDict.union leftInferred.introducedTypeVariables
                                     |> FastDict.union rightInferred.introducedTypeVariables
-                                    |> FastDict.insert introducedResultTypeVariable ()
                             }
                                 |> expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables
                                     context.declarationTypes
-                                    unifiedType.substitutions
+                                    (leftRightAndUnificationSubstitutions
+                                        |> Debug.log "substitutions"
+                                    )
+                                |> Debug.log "after applying substitutions"
                         )
-                        (variableSubstitutionsMerge context.declarationTypes
+                        (variableSubstitutionsMerge4 context.declarationTypes
                             leftInferred.substitutions
                             rightInferred.substitutions
+                            unifiedLeftType.substitutions
+                            unifiedRightType.substitutions
                         )
                 )
                 (typeUnify context.declarationTypes
-                    operatorAsFunctionType.type_
-                    (TypeNotVariable
-                        (TypeFunction
-                            { input = leftInferred.node.type_
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = rightInferred.node.type_
-                                        , output = TypeVariable introducedResultTypeVariable
-                                        }
-                                    )
-                            }
-                        )
-                    )
+                    operatorAsFunctionType.leftType
+                    leftInferred.node.type_
+                )
+                (typeUnify context.declarationTypes
+                    operatorAsFunctionType.rightType
+                    rightInferred.node.type_
                 )
                 |> Result.mapError
                     (\error ->
@@ -7594,7 +7609,9 @@ operatorFunctionType :
         Result
             String
             { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-            , type_ : Type TypeVariableFromContext
+            , leftType : Type TypeVariableFromContext
+            , rightType : Type TypeVariableFromContext
+            , resultType : Type TypeVariableFromContext
             , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 operatorFunctionType context operator =
@@ -7622,25 +7639,15 @@ operatorFunctionType context operator =
                     FastDict.singleton aVariable ()
                         |> FastDict.insert bVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
+                , leftType = a
+                , rightType =
                     TypeNotVariable
                         (TypeFunction
                             { input = a
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = a
-                                                    , output = b
-                                                    }
-                                                )
-                                        , output = b
-                                        }
-                                    )
+                            , output = b
                             }
                         )
+                , resultType = b
                 }
 
         "<|" ->
@@ -7666,25 +7673,15 @@ operatorFunctionType context operator =
                     FastDict.singleton aVariable ()
                         |> FastDict.insert bVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
+                , leftType =
                     TypeNotVariable
                         (TypeFunction
-                            { input =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = a
-                                        , output = b
-                                        }
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = a
-                                        , output = b
-                                        }
-                                    )
+                            { input = a
+                            , output = b
                             }
                         )
+                , rightType = a
+                , resultType = b
                 }
 
         ">>" ->
@@ -7719,35 +7716,25 @@ operatorFunctionType context operator =
                         |> FastDict.insert bVariable ()
                         |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
+                , leftType =
                     TypeNotVariable
                         (TypeFunction
-                            { input =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = a
-                                        , output = b
-                                        }
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = b
-                                                    , output = c
-                                                    }
-                                                )
-                                        , output =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = a
-                                                    , output = c
-                                                    }
-                                                )
-                                        }
-                                    )
+                            { input = a
+                            , output = b
+                            }
+                        )
+                , rightType =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = b
+                            , output = c
+                            }
+                        )
+                , resultType =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = a
+                            , output = c
                             }
                         )
                 }
@@ -7784,35 +7771,25 @@ operatorFunctionType context operator =
                         |> FastDict.insert bVariable ()
                         |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
+                , leftType =
                     TypeNotVariable
                         (TypeFunction
-                            { input =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = b
-                                        , output = c
-                                        }
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = a
-                                                    , output = b
-                                                    }
-                                                )
-                                        , output =
-                                            TypeNotVariable
-                                                (TypeFunction
-                                                    { input = a
-                                                    , output = c
-                                                    }
-                                                )
-                                        }
-                                    )
+                            { input = b
+                            , output = c
+                            }
+                        )
+                , rightType =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = a
+                            , output = b
+                            }
+                        )
+                , resultType =
+                    TypeNotVariable
+                        (TypeFunction
+                            { input = a
+                            , output = c
                             }
                         )
                 }
@@ -7830,19 +7807,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton appendableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = appendable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = appendable
-                                        , output = appendable
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = appendable
+                , rightType = appendable
+                , resultType = appendable
                 }
 
         "==" ->
@@ -7858,19 +7825,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton equatableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = equatable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = equatable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = equatable
+                , rightType = equatable
+                , resultType = typeBasicsBool
                 }
 
         "/=" ->
@@ -7886,19 +7843,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton equatableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = equatable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = equatable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = equatable
+                , rightType = equatable
+                , resultType = typeBasicsBool
                 }
 
         "::" ->
@@ -7914,19 +7861,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton aVariable ()
                 , moduleOrigin = moduleNameList
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = a
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeListList a
-                                        , output = typeListList a
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = a
+                , rightType = typeListList a
+                , resultType = typeListList a
                 }
 
         "*" ->
@@ -7942,19 +7879,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = number
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = number
-                                        , output = number
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = number
+                , rightType = number
+                , resultType = number
                 }
 
         "+" ->
@@ -7970,19 +7897,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = number
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = number
-                                        , output = number
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = number
+                , rightType = number
+                , resultType = number
                 }
 
         "-" ->
@@ -7998,19 +7915,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = number
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = number
-                                        , output = number
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = number
+                , rightType = number
+                , resultType = number
                 }
 
         "/" ->
@@ -8029,19 +7936,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton numberVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = number
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = number
-                                        , output = number
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = number
+                , rightType = number
+                , resultType = number
                 }
 
         "<=" ->
@@ -8057,19 +7954,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = comparable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = comparable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = comparable
+                , rightType = comparable
+                , resultType = typeBasicsBool
                 }
 
         ">=" ->
@@ -8085,19 +7972,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = comparable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = comparable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = comparable
+                , rightType = comparable
+                , resultType = typeBasicsBool
                 }
 
         ">" ->
@@ -8113,19 +7990,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = comparable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = comparable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = comparable
+                , rightType = comparable
+                , resultType = typeBasicsBool
                 }
 
         "<" ->
@@ -8141,19 +8008,9 @@ operatorFunctionType context operator =
             Ok
                 { introducedTypeVariables = FastDict.singleton comparableVariable ()
                 , moduleOrigin = moduleNameBasics
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = comparable
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = comparable
-                                        , output = typeBasicsBool
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = comparable
+                , rightType = comparable
+                , resultType = typeBasicsBool
                 }
 
         "//" ->
@@ -8207,19 +8064,9 @@ operatorFunctionType context operator =
                             |> FastDict.insert keepVariable ()
                             |> FastDict.insert ignoreVariable ()
                     , moduleOrigin = moduleNameParserAdvanced
-                    , type_ =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeParserAdvancedParser varContext problem keep
-                                , output =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = typeParserAdvancedParser varContext problem ignore
-                                            , output = typeParserAdvancedParser varContext problem keep
-                                            }
-                                        )
-                                }
-                            )
+                    , leftType = typeParserAdvancedParser varContext problem keep
+                    , rightType = typeParserAdvancedParser varContext problem ignore
+                    , resultType = typeParserAdvancedParser varContext problem keep
                     }
 
                  else
@@ -8244,19 +8091,9 @@ operatorFunctionType context operator =
                         FastDict.singleton keepVariable ()
                             |> FastDict.insert ignoreVariable ()
                     , moduleOrigin = moduleNameParser
-                    , type_ =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeParserParser keep
-                                , output =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = typeParserParser ignore
-                                            , output = typeParserParser keep
-                                            }
-                                        )
-                                }
-                            )
+                    , leftType = typeParserParser keep
+                    , rightType = typeParserParser ignore
+                    , resultType = typeParserParser keep
                     }
                 )
 
@@ -8302,29 +8139,19 @@ operatorFunctionType context operator =
                             |> FastDict.insert aVariable ()
                             |> FastDict.insert bVariable ()
                     , moduleOrigin = moduleNameParserAdvanced
-                    , type_ =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input =
-                                    typeParserAdvancedParser
-                                        varContext
-                                        problem
-                                        (TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = b
-                                                }
-                                            )
-                                        )
-                                , output =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = typeParserAdvancedParser varContext problem a
-                                            , output = typeParserAdvancedParser varContext problem b
-                                            }
-                                        )
-                                }
+                    , leftType =
+                        typeParserAdvancedParser
+                            varContext
+                            problem
+                            (TypeNotVariable
+                                (TypeFunction
+                                    { input = a
+                                    , output = b
+                                    }
+                                )
                             )
+                    , rightType = typeParserAdvancedParser varContext problem a
+                    , resultType = typeParserAdvancedParser varContext problem b
                     }
 
                  else
@@ -8349,27 +8176,17 @@ operatorFunctionType context operator =
                         FastDict.singleton aVariable ()
                             |> FastDict.insert bVariable ()
                     , moduleOrigin = moduleNameParser
-                    , type_ =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input =
-                                    typeParserParser
-                                        (TypeNotVariable
-                                            (TypeFunction
-                                                { input = a
-                                                , output = b
-                                                }
-                                            )
-                                        )
-                                , output =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = typeParserParser a
-                                            , output = typeParserParser b
-                                            }
-                                        )
-                                }
+                    , leftType =
+                        typeParserParser
+                            (TypeNotVariable
+                                (TypeFunction
+                                    { input = a
+                                    , output = b
+                                    }
+                                )
                             )
+                    , rightType = typeParserParser a
+                    , resultType = typeParserParser b
                     }
                 )
 
@@ -8405,19 +8222,9 @@ operatorFunctionType context operator =
                         |> FastDict.insert bVariable ()
                         |> FastDict.insert cVariable ()
                 , moduleOrigin = moduleNameUrlParser
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input = typeUrlParserParser a b
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeUrlParserParser b c
-                                        , output = typeUrlParserParser a c
-                                        }
-                                    )
-                            }
-                        )
+                , leftType = typeUrlParserParser a b
+                , rightType = typeUrlParserParser b c
+                , resultType = typeUrlParserParser a c
                 }
 
         "<?>" ->
@@ -8452,28 +8259,18 @@ operatorFunctionType context operator =
                         |> FastDict.insert bVariable ()
                         |> FastDict.insert queryVariable ()
                 , moduleOrigin = moduleNameUrlParser
-                , type_ =
-                    TypeNotVariable
-                        (TypeFunction
-                            { input =
-                                typeUrlParserParser
-                                    a
-                                    (TypeNotVariable
-                                        (TypeFunction
-                                            { input = query
-                                            , output = b
-                                            }
-                                        )
-                                    )
-                            , output =
-                                TypeNotVariable
-                                    (TypeFunction
-                                        { input = typeUrlParserQueryParser query
-                                        , output = typeUrlParserParser a b
-                                        }
-                                    )
-                            }
+                , leftType =
+                    typeUrlParserParser
+                        a
+                        (TypeNotVariable
+                            (TypeFunction
+                                { input = query
+                                , output = b
+                                }
+                            )
                         )
+                , rightType = typeUrlParserQueryParser query
+                , resultType = typeUrlParserParser a b
                 }
 
         unknownOperator ->
@@ -8492,25 +8289,17 @@ okIdivOperatorInfo :
         error_
         { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , type_ : Type variable
+        , leftType : Type variable
+        , rightType : Type variable
+        , resultType : Type variable
         }
 okIdivOperatorInfo =
     Ok
         { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
-        , type_ =
-            TypeNotVariable
-                (TypeFunction
-                    { input = typeBasicsInt
-                    , output =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeBasicsInt
-                                , output = typeBasicsInt
-                                }
-                            )
-                    }
-                )
+        , leftType = typeBasicsInt
+        , rightType = typeBasicsInt
+        , resultType = typeBasicsInt
         }
 
 
@@ -8519,25 +8308,17 @@ okFdivOperatorInfo :
         error_
         { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , type_ : Type variable
+        , leftType : Type variable
+        , rightType : Type variable
+        , resultType : Type variable
         }
 okFdivOperatorInfo =
     Ok
         { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
-        , type_ =
-            TypeNotVariable
-                (TypeFunction
-                    { input = typeBasicsFloat
-                    , output =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeBasicsFloat
-                                , output = typeBasicsFloat
-                                }
-                            )
-                    }
-                )
+        , leftType = typeBasicsFloat
+        , rightType = typeBasicsFloat
+        , resultType = typeBasicsFloat
         }
 
 
@@ -8546,25 +8327,17 @@ okOrOperatorInfo :
         error_
         { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , type_ : Type variable
+        , leftType : Type variable
+        , rightType : Type variable
+        , resultType : Type variable
         }
 okOrOperatorInfo =
     Ok
         { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
-        , type_ =
-            TypeNotVariable
-                (TypeFunction
-                    { input = typeBasicsBool
-                    , output =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeBasicsBool
-                                , output = typeBasicsBool
-                                }
-                            )
-                    }
-                )
+        , leftType = typeBasicsBool
+        , rightType = typeBasicsBool
+        , resultType = typeBasicsBool
         }
 
 
@@ -8573,25 +8346,17 @@ okAndOperatorInfo :
         error_
         { introducedTypeVariables : FastSetFast variable
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , type_ : Type variable
+        , leftType : Type variable
+        , rightType : Type variable
+        , resultType : Type variable
         }
 okAndOperatorInfo =
     Ok
         { introducedTypeVariables = FastDict.empty
         , moduleOrigin = moduleNameBasics
-        , type_ =
-            TypeNotVariable
-                (TypeFunction
-                    { input = typeBasicsBool
-                    , output =
-                        TypeNotVariable
-                            (TypeFunction
-                                { input = typeBasicsBool
-                                , output = typeBasicsBool
-                                }
-                            )
-                    }
-                )
+        , leftType = typeBasicsBool
+        , rightType = typeBasicsBool
+        , resultType = typeBasicsBool
         }
 
 
@@ -11937,8 +11702,17 @@ expressionTypeInferResultAddOrApplySubstitutionsOfIntroducedTypeVariables declar
             substitutionsToAddOrApply.variableToType
                 |> FastDict.partition
                     (\variableToReplace _ ->
-                        expressionTypeInferResult.introducedTypeVariables
+                        (expressionTypeInferResult.introducedTypeVariables
                             |> FastDict.member variableToReplace
+                        )
+                            && Basics.not
+                                (equivalentVariableSubstitutionsToAdd
+                                    |> List.any
+                                        (\equivalentVariableSetToAdd ->
+                                            equivalentVariableSetToAdd
+                                                |> FastDict.member variableToReplace
+                                        )
+                                )
                     )
 
         ( equivalentVariableSubstitutionsToApply, equivalentVariableSubstitutionsToAdd ) =
