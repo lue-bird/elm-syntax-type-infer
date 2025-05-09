@@ -5421,6 +5421,162 @@ suite =
                             )
                         )
             )
+        , Test.test "single un-annotated let declaration as call result: tupleFirstInt : ( Int, Int ) -> () ; tupleFirstInt tuple = let firstInt = Tuple.first tuple in ()"
+            (\() ->
+                { documentation = Nothing
+                , signature =
+                    Just
+                        (Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "tupleFirstInt"
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                        (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.TypeAnnotation.Tupled
+                                                [ Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                        []
+                                                    )
+                                                , Elm.Syntax.Node.empty
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.empty ( [], "Int" ))
+                                                        []
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                        (Elm.Syntax.Node.empty
+                                            Elm.Syntax.TypeAnnotation.Unit
+                                        )
+                                    )
+                            }
+                        )
+                , declaration =
+                    Elm.Syntax.Node.empty
+                        { name = Elm.Syntax.Node.empty "tupleFirstInt"
+                        , arguments =
+                            [ Elm.Syntax.Node.empty
+                                (Elm.Syntax.Pattern.VarPattern "tuple")
+                            ]
+                        , expression =
+                            Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.LetExpression
+                                    { declarations =
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.LetFunction
+                                                { documentation = Nothing
+                                                , signature = Nothing
+                                                , declaration =
+                                                    Elm.Syntax.Node.empty
+                                                        { name = Elm.Syntax.Node.empty "firstInt"
+                                                        , arguments = []
+                                                        , expression =
+                                                            Elm.Syntax.Node.empty
+                                                                (Elm.Syntax.Expression.Application
+                                                                    [ Elm.Syntax.Node.empty
+                                                                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "first")
+                                                                    , Elm.Syntax.Node.empty
+                                                                        (Elm.Syntax.Expression.FunctionOrValue [] "tuple")
+                                                                    ]
+                                                                )
+                                                        }
+                                                }
+                                            )
+                                        ]
+                                    , expression =
+                                        Elm.Syntax.Node.empty
+                                            Elm.Syntax.Expression.UnitExpr
+                                    }
+                                )
+                        }
+                }
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "tupleFirstInt"
+                                { range = Elm.Syntax.Range.empty
+                                , type_ =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionLetIn
+                                        { declaration0 =
+                                            { range = Elm.Syntax.Range.empty
+                                            , declaration =
+                                                ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
+                                                    { signature = Nothing
+                                                    , nameRange = Elm.Syntax.Range.empty
+                                                    , name = "firstInt"
+                                                    , parameters = []
+                                                    , result =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = typeInt
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionCall
+                                                                { called =
+                                                                    { range = Elm.Syntax.Range.empty
+                                                                    , type_ =
+                                                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                                                { input =
+                                                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                        (ElmSyntaxTypeInfer.TypeTuple
+                                                                                            { part0 = typeInt, part1 = typeInt }
+                                                                                        )
+                                                                                , output = typeInt
+                                                                                }
+                                                                            )
+                                                                    , value =
+                                                                        ElmSyntaxTypeInfer.ExpressionReference
+                                                                            { qualification = [ "Tuple" ]
+                                                                            , moduleOrigin = [ "Tuple" ]
+                                                                            , name = "first"
+                                                                            }
+                                                                    }
+                                                                , argument0 =
+                                                                    { range = Elm.Syntax.Range.empty
+                                                                    , type_ =
+                                                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                                                { part0 = typeInt, part1 = typeInt }
+                                                                            )
+                                                                    , value =
+                                                                        ElmSyntaxTypeInfer.ExpressionReference
+                                                                            { qualification = []
+                                                                            , moduleOrigin = []
+                                                                            , name = "tuple"
+                                                                            }
+                                                                    }
+                                                                , argument1Up = []
+                                                                }
+                                                        }
+                                                    , type_ = typeInt
+                                                    }
+                                            }
+                                        , declaration1Up = []
+                                        , result =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            , value = ElmSyntaxTypeInfer.ExpressionUnit
+                                            }
+                                        }
+                                }
+                            )
+                        )
+            )
         ]
 
 
