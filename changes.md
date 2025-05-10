@@ -1,12 +1,13 @@
-#### 1.0.4 (unreleased)
-- correctly infer un-annotated let value/function declarations
-
+#### 1.0.5 (unreleased)
 considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
-- idea: optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
+- optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
+
+#### 1.0.4
+- correctly infer un-annotated let value/function declarations
 
 #### 1.0.3
 - correctly infer when an inner type variable that's equivalent to an outer type variable is substituted to a not-fully-concrete non-variable type
