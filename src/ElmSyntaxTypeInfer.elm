@@ -9812,14 +9812,6 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                             partiallyInferredDeclarationTypeContainedVariables
                                                 |> FastDict.member condensedVariable
                                         then
-                                            -- if we don't check whether the condensed type
-                                            -- is _actually_ more strict, we could end up in an endless loop
-                                            -- if partially declared types cross-influence each other.
-                                            -- How do we check it's gotten more strict?
-                                            --   - each variable has at most one corresponding condensed variable
-                                            --     so if we have less condensed variables, the type is more limited
-                                            --   - also, if any condensed variable has more constraints,
-                                            --     the type is also more limited
                                             case
                                                 allPartiallyInferredDeclarationsAndUsesBeforeSubstitution
                                                     |> FastDict.get partiallyInferredDeclarationId
@@ -9831,32 +9823,13 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                             infoBeforeSubstitution.partiallyInferredDeclarationType
                                                                 |> typeContainedVariables
                                                     in
+                                                    -- if we don't check whether the condensed type
+                                                    -- is _actually_ more strict, we could end up in an endless loop
+                                                    -- if partially declared types cross-influence each other.
                                                     if
-                                                        (partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
-                                                            |> FastDict.size
-                                                        )
-                                                            == (partiallyInferredDeclarationTypeContainedVariables
-                                                                    |> FastDict.size
-                                                               )
-                                                            && ((partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
-                                                                    |> fastSetFastToListHighestToLowestAndMap
-                                                                        (\( _, variableBeforeSubstitution ) ->
-                                                                            variableBeforeSubstitution
-                                                                                |> typeVariableConstraint
-                                                                                |> maybeTypeVariableConstraintToString
-                                                                        )
-                                                                    |> List.sort
-                                                                )
-                                                                    == (partiallyInferredDeclarationTypeContainedVariables
-                                                                            |> fastSetFastToListHighestToLowestAndMap
-                                                                                (\( _, variableBeforeSubstitution ) ->
-                                                                                    variableBeforeSubstitution
-                                                                                        |> typeVariableConstraint
-                                                                                        |> maybeTypeVariableConstraintToString
-                                                                                )
-                                                                            |> List.sort
-                                                                       )
-                                                               )
+                                                        typesAreEquallyStrict
+                                                            partiallyInferredDeclarationBeforeSubstitutionTypeContainedVariables
+                                                            partiallyInferredDeclarationTypeContainedVariables
                                                     then
                                                         partialTypeVariableAmongEquivalentVariablesSoFar
 
@@ -12176,10 +12149,13 @@ expressionCondenseTypeVariables declarationTypes typeVariableChange expression =
                                                         usePathSegment =
                                                             use.range |> rangeToInfoString
 
-                                                        partialTypeNewInstance : Type TypeVariableFromContext
+                                                        partialTypeNewInstance :
+                                                            { type_ : Type TypeVariableFromContext
+                                                            , containedVariables : FastSetFast TypeVariableFromContext
+                                                            }
                                                         partialTypeNewInstance =
                                                             forLet.partiallyInferredDeclarationType
-                                                                |> typeMapVariables
+                                                                |> typeMapVariablesAndCollectResultingVariables
                                                                     (\( variableContext, variableName ) ->
                                                                         -- TODO can create accidental overlaps
                                                                         -- with variables in the existing use type
@@ -12193,23 +12169,32 @@ expressionCondenseTypeVariables declarationTypes typeVariableChange expression =
                                                                         )
                                                                     )
                                                     in
-                                                    Result.andThen
-                                                        (\useUnifiedWithNewLetTypeInstance ->
-                                                            variableSubstitutionsMerge declarationTypes
-                                                                soFarWithUses
-                                                                useUnifiedWithNewLetTypeInstance.substitutions
-                                                        )
-                                                        (typeUnify declarationTypes
-                                                            use.type_
-                                                            partialTypeNewInstance
-                                                        )
+                                                    -- optimization: skip substitutions when it doesn't get more strict
+                                                    if
+                                                        typesAreEquallyStrict
+                                                            (use.type_ |> typeContainedVariables)
+                                                            partialTypeNewInstance.containedVariables
+                                                    then
+                                                        Ok soFarWithUses
+
+                                                    else
+                                                        Result.andThen
+                                                            (\useUnifiedWithNewLetTypeInstance ->
+                                                                variableSubstitutionsMerge declarationTypes
+                                                                    soFarWithUses
+                                                                    useUnifiedWithNewLetTypeInstance.substitutions
+                                                            )
+                                                            (typeUnify declarationTypes
+                                                                use.type_
+                                                                partialTypeNewInstance.type_
+                                                            )
                                                 )
                                     )
                     in
                     Result.map
                         (\fullSubstitutions ->
                             { expression = ExpressionLetIn condensedLetIn
-                            , substitutions = condensedResult.substitutions
+                            , substitutions = fullSubstitutions
                             }
                         )
                         (Result.andThen
@@ -12325,28 +12310,10 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
                                 |> typeMapVariablesAndCollectResultingVariables
                                     typeVariableChange
 
+                        condensedTypeIsEquallyStrict : Bool
                         condensedTypeIsEquallyStrict =
-                            (uncondensedTypeContainedVariables |> FastDict.size)
-                                == (condensedType.containedVariables |> FastDict.size)
-                                && ((uncondensedTypeContainedVariables
-                                        |> fastSetFastToListHighestToLowestAndMap
-                                            (\( _, variableBeforeSubstitution ) ->
-                                                variableBeforeSubstitution
-                                                    |> typeVariableConstraint
-                                                    |> maybeTypeVariableConstraintToString
-                                            )
-                                        |> List.sort
-                                    )
-                                        == (condensedType.containedVariables
-                                                |> fastSetFastToListHighestToLowestAndMap
-                                                    (\( _, variableBeforeSubstitution ) ->
-                                                        variableBeforeSubstitution
-                                                            |> typeVariableConstraint
-                                                            |> maybeTypeVariableConstraintToString
-                                                    )
-                                                |> List.sort
-                                           )
-                                   )
+                            typesAreEquallyStrict uncondensedTypeContainedVariables
+                                condensedType.containedVariables
                     in
                     case letValueOrFunction.signature of
                         Nothing ->
@@ -12355,11 +12322,6 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
                                     -- if we don't check whether the condensed type
                                     -- is _actually_ more strict, we could end up in an endless loop
                                     -- if partially declared types cross-influence each other.
-                                    -- How do we check it's gotten more strict?
-                                    --   - each variable has at most one corresponding condensed variable
-                                    --     so if we have less condensed variables, the type is more limited
-                                    --   - also, if any condensed variable has more constraints,
-                                    --     the type is also more limited
                                     if condensedTypeIsEquallyStrict then
                                         Nothing
 
@@ -12428,6 +12390,41 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
                 (letValueOrFunction.result
                     |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
                 )
+
+
+{-| How do we check a type has gotten more strict?
+
+ - each variable has at most one corresponding condensed variable
+   so if we have less condensed variables, the type is more limited
+ - also, if any condensed variable has more constraints,
+   the type is also more limited
+-}
+typesAreEquallyStrict :
+    FastSetFast TypeVariableFromContext
+    -> FastSetFast TypeVariableFromContext
+    -> Bool
+typesAreEquallyStrict uncondensedTypeContainedVariables condensedTypeContainedVariables =
+    (uncondensedTypeContainedVariables |> FastDict.size)
+        == (condensedTypeContainedVariables |> FastDict.size)
+        && ((uncondensedTypeContainedVariables
+                |> fastSetFastToListHighestToLowestAndMap
+                    (\( _, variableBeforeSubstitution ) ->
+                        variableBeforeSubstitution
+                            |> typeVariableConstraint
+                            |> maybeTypeVariableConstraintToString
+                    )
+                |> List.sort
+            )
+                == (condensedTypeContainedVariables
+                        |> fastSetFastToListHighestToLowestAndMap
+                            (\( _, variableBeforeSubstitution ) ->
+                                variableBeforeSubstitution
+                                    |> typeVariableConstraint
+                                    |> maybeTypeVariableConstraintToString
+                            )
+                        |> List.sort
+                   )
+           )
 
 
 {-| Use for renaming but not for possibly adding constraints
