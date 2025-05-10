@@ -5577,6 +5577,101 @@ suite =
                             )
                         )
             )
+        , Test.test "single un-annotated let declaration with constrained variable type as call result: let n = 2 in ()"
+            (\() ->
+                { documentation = Nothing
+                , signature =
+                    Just
+                        (Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "waste"
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    Elm.Syntax.TypeAnnotation.Unit
+                            }
+                        )
+                , declaration =
+                    Elm.Syntax.Node.empty
+                        { name = Elm.Syntax.Node.empty "waste"
+                        , arguments = []
+                        , expression =
+                            Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.LetExpression
+                                    { declarations =
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.LetFunction
+                                                { documentation = Nothing
+                                                , signature = Nothing
+                                                , declaration =
+                                                    Elm.Syntax.Node.empty
+                                                        { name = Elm.Syntax.Node.empty "n"
+                                                        , arguments = []
+                                                        , expression =
+                                                            Elm.Syntax.Node.empty
+                                                                (Elm.Syntax.Expression.Integer 2)
+                                                        }
+                                                }
+                                            )
+                                        ]
+                                    , expression =
+                                        Elm.Syntax.Node.empty
+                                            Elm.Syntax.Expression.UnitExpr
+                                    }
+                                )
+                        }
+                }
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "waste"
+                                { range = Elm.Syntax.Range.empty
+                                , type_ =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionLetIn
+                                        { declaration0 =
+                                            { range = Elm.Syntax.Range.empty
+                                            , declaration =
+                                                ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
+                                                    { signature = Nothing
+                                                    , nameRange = Elm.Syntax.Range.empty
+                                                    , name = "n"
+                                                    , parameters = []
+                                                    , result =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionInteger
+                                                                { base = ElmSyntaxTypeInfer.Base10
+                                                                , value = 2
+                                                                }
+                                                        }
+                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    }
+                                            }
+                                        , declaration1Up = []
+                                        , result =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            , value = ElmSyntaxTypeInfer.ExpressionUnit
+                                            }
+                                        }
+                                }
+                            )
+                        )
+            )
         ]
 
 

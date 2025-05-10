@@ -1,8 +1,9 @@
-#### 1.0.4
-TODO
-- Whenever a let type is updated (contained type variable is mapped to equivalent variable with more constraints), update it's uses
-- Try splitting Reference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
-- Try splitting TypeConstruct into TypeChoiceConstruct and TypeAliasConstruct
+#### 1.0.4 (unreleased)
+- correctly infer un-annotated let value/function declarations
+
+considering
+- split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
+
 optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - idea: optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)

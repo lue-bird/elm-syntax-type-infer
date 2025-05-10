@@ -7023,61 +7023,103 @@ expressionTypedNodeUsesOfPartiallyInferredDeclarations context expressionTypedNo
                 )
 
         ExpressionLetIn letIn ->
-            let
-                contextWithIntroducedPartiallyInferredDeclarations :
-                    { partiallyInferredDeclarations :
-                        FastDict.Dict
-                            String
-                            { nameRange : Elm.Syntax.Range.Range
-                            , type_ : Type TypeVariableFromContext
-                            }
+            expressionLetInUsesOfPartiallyInferredDeclarations context
+                letIn
+
+
+expressionLetInUsesOfPartiallyInferredDeclarations :
+    { partiallyInferredDeclarations :
+        FastDict.Dict
+            String
+            { nameRange : Elm.Syntax.Range.Range
+            , type_ : Type TypeVariableFromContext
+            }
+    }
+    ->
+        { declaration0 :
+            { range : Elm.Syntax.Range.Range
+            , declaration : LetDeclaration (Type TypeVariableFromContext)
+            }
+        , declaration1Up :
+            List
+                { range : Elm.Syntax.Range.Range
+                , declaration : LetDeclaration (Type TypeVariableFromContext)
+                }
+        , result :
+            TypedNode
+                (Expression (Type TypeVariableFromContext))
+                (Type TypeVariableFromContext)
+        }
+    ->
+        FastDict.Dict
+            ( -- partially inferred declaration name range
+              RangeAsComparable
+            , -- name
+              String
+            )
+            { partiallyInferredDeclarationType : Type TypeVariableFromContext
+            , uses :
+                List
+                    { type_ : Type TypeVariableFromContext
+                    , range : Elm.Syntax.Range.Range
                     }
-                contextWithIntroducedPartiallyInferredDeclarations =
-                    { partiallyInferredDeclarations =
-                        (letIn.declaration0 :: letIn.declaration1Up)
-                            |> List.foldl
-                                (\letDeclaration soFar ->
-                                    case letDeclaration.declaration of
-                                        LetDestructuring _ ->
+            }
+expressionLetInUsesOfPartiallyInferredDeclarations context letIn =
+    let
+        contextWithIntroducedPartiallyInferredDeclarations :
+            { partiallyInferredDeclarations :
+                FastDict.Dict
+                    String
+                    { nameRange : Elm.Syntax.Range.Range
+                    , type_ : Type TypeVariableFromContext
+                    }
+            }
+        contextWithIntroducedPartiallyInferredDeclarations =
+            { partiallyInferredDeclarations =
+                (letIn.declaration0 :: letIn.declaration1Up)
+                    |> List.foldl
+                        (\letDeclaration soFar ->
+                            case letDeclaration.declaration of
+                                LetDestructuring _ ->
+                                    soFar
+
+                                LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
+                                    case letValueOrFunctionDeclaration.signature of
+                                        Just _ ->
                                             soFar
 
-                                        LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
-                                            case letValueOrFunctionDeclaration.signature of
-                                                Just _ ->
-                                                    soFar
+                                        Nothing ->
+                                            soFar
+                                                |> FastDict.insert
+                                                    letValueOrFunctionDeclaration.name
+                                                    { nameRange = letValueOrFunctionDeclaration.nameRange
+                                                    , type_ = letValueOrFunctionDeclaration.type_
+                                                    }
+                        )
+                        context.partiallyInferredDeclarations
+            }
+    in
+    letIn.result
+        |> expressionTypedNodeUsesOfPartiallyInferredDeclarations contextWithIntroducedPartiallyInferredDeclarations
+        |> usesOfPartiallyInferredDeclarationsMerge
+            ((letIn.declaration0 :: letIn.declaration1Up)
+                |> listMapToUsesOfPartiallyInferredDeclarationsAndMerge
+                    (\letDeclaration ->
+                        case letDeclaration.declaration of
+                            LetDestructuring letDestructuring ->
+                                letDestructuring.expression
+                                    |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
+                                        contextWithIntroducedPartiallyInferredDeclarations
 
-                                                Nothing ->
-                                                    soFar
-                                                        |> FastDict.insert
-                                                            letValueOrFunctionDeclaration.name
-                                                            { nameRange = letValueOrFunctionDeclaration.nameRange
-                                                            , type_ = letValueOrFunctionDeclaration.type_
-                                                            }
-                                )
-                                context.partiallyInferredDeclarations
-                    }
-            in
-            letIn.result
-                |> expressionTypedNodeUsesOfPartiallyInferredDeclarations contextWithIntroducedPartiallyInferredDeclarations
-                |> usesOfPartiallyInferredDeclarationsMerge
-                    ((letIn.declaration0 :: letIn.declaration1Up)
-                        |> listMapToUsesOfPartiallyInferredDeclarationsAndMerge
-                            (\letDeclaration ->
-                                case letDeclaration.declaration of
-                                    LetDestructuring letDestructuring ->
-                                        letDestructuring.expression
-                                            |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
-                                                contextWithIntroducedPartiallyInferredDeclarations
-
-                                    LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
-                                        letValueOrFunctionDeclaration.result
-                                            |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
-                                                { partiallyInferredDeclarations =
-                                                    contextWithIntroducedPartiallyInferredDeclarations.partiallyInferredDeclarations
-                                                        |> FastDict.remove letValueOrFunctionDeclaration.name
-                                                }
-                            )
+                            LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
+                                letValueOrFunctionDeclaration.result
+                                    |> expressionTypedNodeUsesOfPartiallyInferredDeclarations
+                                        { partiallyInferredDeclarations =
+                                            contextWithIntroducedPartiallyInferredDeclarations.partiallyInferredDeclarations
+                                                |> FastDict.remove letValueOrFunctionDeclaration.name
+                                        }
                     )
+            )
 
 
 usesOfPartiallyInferredDeclarationsMerge :
@@ -7162,7 +7204,8 @@ listMapToUsesOfPartiallyInferredDeclarationsAndMerge elementToUsesOfPartiallyInf
 
 
 {-| Attention: resulting `introducedTypeVariables`
-will not contain type variables introduced from a potential let destructuring pattern.
+will not contain type variables introduced from a potential let destructuring pattern
+or let declaration type (annotated or not).
 These have to be tracked separately
 -}
 letDeclarationTypeInfer :
@@ -11445,7 +11488,7 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                                     ++ (signature.range |> rangeToInfoString)
                                     ++ ") is too loose. It is annotated as "
                                     ++ (letValueOrFunction.type_ |> typeToInfoString)
-                                    ++ " should be at least "
+                                    ++ " but should be at least as strict as "
                                     ++ (typeSubstituted.type_ |> typeToInfoString)
                                 )
 
@@ -11545,6 +11588,851 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                 )
 
 
+expressionTypedNodeCondenseTypeVariables :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> (TypeVariableFromContext -> TypeVariableFromContext)
+    ->
+        TypedNode
+            (Expression (Type TypeVariableFromContext))
+            (Type TypeVariableFromContext)
+    ->
+        Result
+            String
+            { node :
+                TypedNode
+                    (Expression (Type TypeVariableFromContext))
+                    (Type TypeVariableFromContext)
+            , substitutions : VariableSubstitutions
+            }
+expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange expressionTypedNode =
+    case
+        expressionCondenseTypeVariables declarationTypes
+            typeVariableChange
+            expressionTypedNode.value
+    of
+        Err error ->
+            Err error
+
+        Ok condensedExpression ->
+            Ok
+                { node =
+                    { range = expressionTypedNode.range
+                    , value = condensedExpression.expression
+                    , type_ =
+                        expressionTypedNode.type_
+                            |> typeMapVariables typeVariableChange
+                    }
+                , substitutions = condensedExpression.substitutions
+                }
+
+
+expressionCondenseTypeVariables :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> (TypeVariableFromContext -> TypeVariableFromContext)
+    -> Expression (Type TypeVariableFromContext)
+    ->
+        Result
+            String
+            { expression : Expression (Type TypeVariableFromContext)
+            , substitutions : VariableSubstitutions
+            }
+expressionCondenseTypeVariables declarationTypes typeVariableChange expression =
+    -- IGNORE TCO
+    case expression of
+        ExpressionUnit ->
+            Ok
+                { expression = ExpressionUnit
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionFloat floatValue ->
+            Ok
+                { expression = ExpressionFloat floatValue
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionChar charValue ->
+            Ok
+                { expression = ExpressionChar charValue
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionString stringValue ->
+            Ok
+                { expression = ExpressionString stringValue
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionInteger expressionNumber ->
+            Ok
+                { expression = ExpressionInteger expressionNumber
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionReference reference ->
+            Ok
+                { expression = ExpressionReference reference
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionOperatorFunction expressionOperatorFunction ->
+            Ok
+                { expression = ExpressionOperatorFunction expressionOperatorFunction
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionRecordAccessFunction fieldName ->
+            Ok
+                { expression = ExpressionRecordAccessFunction fieldName
+                , substitutions = variableSubstitutionsNone
+                }
+
+        ExpressionNegation inNegation ->
+            Result.map
+                (\condensedInNegation ->
+                    { expression =
+                        ExpressionNegation
+                            condensedInNegation.node
+                    , substitutions = condensedInNegation.substitutions
+                    }
+                )
+                (inNegation
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionParenthesized inParens ->
+            Result.map
+                (\condensedInParens ->
+                    { expression =
+                        ExpressionParenthesized
+                            condensedInParens.node
+                    , substitutions = condensedInParens.substitutions
+                    }
+                )
+                (inParens
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionRecordAccess expressionRecordAccess ->
+            Result.map
+                (\condensedRecord ->
+                    { expression =
+                        ExpressionRecordAccess
+                            { record = condensedRecord.node
+                            , fieldName = expressionRecordAccess.fieldName
+                            , fieldNameRange = expressionRecordAccess.fieldNameRange
+                            }
+                    , substitutions = condensedRecord.substitutions
+                    }
+                )
+                (expressionRecordAccess.record
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionInfixOperation expressionInfixOperation ->
+            resultAndThen2
+                (\condensedLeft condensedRight ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionInfixOperation
+                                    { operator =
+                                        { symbol = expressionInfixOperation.operator.symbol
+                                        , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
+                                        , type_ =
+                                            expressionInfixOperation.operator.type_
+                                                |> typeMapVariables typeVariableChange
+                                        }
+                                    , left = condensedLeft.node
+                                    , right = condensedRight.node
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge declarationTypes
+                            condensedLeft.substitutions
+                            condensedRight.substitutions
+                        )
+                )
+                (expressionInfixOperation.left
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionInfixOperation.right
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionTuple expressionTuple ->
+            resultAndThen2
+                (\condensedPart0 condensedPart1 ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionTuple
+                                    { part0 = condensedPart0.node
+                                    , part1 = condensedPart1.node
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge declarationTypes
+                            condensedPart0.substitutions
+                            condensedPart1.substitutions
+                        )
+                )
+                (expressionTuple.part0
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionTuple.part1
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionTriple expressionTriple ->
+            resultAndThen3
+                (\condensedPart0 condensedPart1 condensedPart2 ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionTriple
+                                    { part0 = condensedPart0.node
+                                    , part1 = condensedPart1.node
+                                    , part2 = condensedPart2.node
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge3 declarationTypes
+                            condensedPart0.substitutions
+                            condensedPart1.substitutions
+                            condensedPart2.substitutions
+                        )
+                )
+                (expressionTriple.part0
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionTriple.part1
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionTriple.part2
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionIfThenElse expressionIfThenElse ->
+            resultAndThen3
+                (\condensedCondition condensedOnTrue condensedOnFalse ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionIfThenElse
+                                    { condition = condensedCondition.node
+                                    , onTrue = condensedOnTrue.node
+                                    , onFalse = condensedOnFalse.node
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge3 declarationTypes
+                            condensedCondition.substitutions
+                            condensedOnTrue.substitutions
+                            condensedOnFalse.substitutions
+                        )
+                )
+                (expressionIfThenElse.condition
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionIfThenElse.onTrue
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionIfThenElse.onFalse
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionList expressionListElements ->
+            Result.map
+                (\condensedElements ->
+                    { expression = ExpressionList condensedElements.nodes
+                    , substitutions = condensedElements.substitutions
+                    }
+                )
+                (expressionListElements
+                    |> listFoldrWhileOkFrom
+                        substitutionsNoneNodesEmpty
+                        (\element soFar ->
+                            Result.andThen
+                                (\condensedElement ->
+                                    Result.map
+                                        (\substitutionsSoFarWithElement ->
+                                            { nodes =
+                                                condensedElement.node :: soFar.nodes
+                                            , substitutions = substitutionsSoFarWithElement
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedElement.substitutions
+                                        )
+                                )
+                                (element
+                                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+        ExpressionCall expressionCall ->
+            resultAndThen3
+                (\condensedCalled condensedArgument0 condensedArgument1Up ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionCall
+                                    { called = condensedCalled.node
+                                    , argument0 = condensedArgument0.node
+                                    , argument1Up = condensedArgument1Up.nodes
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge3 declarationTypes
+                            condensedCalled.substitutions
+                            condensedArgument0.substitutions
+                            condensedArgument1Up.substitutions
+                        )
+                )
+                (expressionCall.called
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionCall.argument0
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionCall.argument1Up
+                    |> listFoldrWhileOkFrom
+                        substitutionsNoneNodesEmpty
+                        (\argument soFar ->
+                            Result.andThen
+                                (\condensedArgument ->
+                                    Result.map
+                                        (\substitutionsSoFarWithArgument ->
+                                            { nodes =
+                                                condensedArgument.node :: soFar.nodes
+                                            , substitutions = substitutionsSoFarWithArgument
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedArgument.substitutions
+                                        )
+                                )
+                                (argument
+                                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+        ExpressionRecord expressionRecordFields ->
+            Result.map
+                (\condensedFields ->
+                    { expression =
+                        ExpressionRecord
+                            condensedFields.nodes
+                    , substitutions = condensedFields.substitutions
+                    }
+                )
+                (expressionRecordFields
+                    |> listFoldrWhileOkFrom
+                        substitutionsNoneNodesEmpty
+                        (\field soFar ->
+                            Result.andThen
+                                (\condensedFieldValue ->
+                                    Result.map
+                                        (\substitutionsSoFarWithField ->
+                                            { nodes =
+                                                { range = field.range
+                                                , name = field.name
+                                                , nameRange = field.nameRange
+                                                , value = condensedFieldValue.node
+                                                }
+                                                    :: soFar.nodes
+                                            , substitutions = substitutionsSoFarWithField
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedFieldValue.substitutions
+                                        )
+                                )
+                                (field.value
+                                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            resultAndThen2
+                (\condensedField0Value condensedField1Up ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionRecordUpdate
+                                    { recordVariable =
+                                        { range = expressionRecordUpdate.recordVariable.range
+                                        , value = expressionRecordUpdate.recordVariable.value
+                                        , type_ =
+                                            expressionRecordUpdate.recordVariable.type_
+                                                |> typeMapVariables typeVariableChange
+                                        }
+                                    , field0 =
+                                        { range = expressionRecordUpdate.field0.range
+                                        , name = expressionRecordUpdate.field0.name
+                                        , nameRange = expressionRecordUpdate.field0.nameRange
+                                        , value = condensedField0Value.node
+                                        }
+                                    , field1Up = condensedField1Up.nodes
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge declarationTypes
+                            condensedField0Value.substitutions
+                            condensedField1Up.substitutions
+                        )
+                )
+                (expressionRecordUpdate.field0.value
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionRecordUpdate.field1Up
+                    |> listFoldrWhileOkFrom
+                        substitutionsNoneNodesEmpty
+                        (\field soFar ->
+                            Result.andThen
+                                (\condensedFieldValue ->
+                                    Result.map
+                                        (\substitutionsSoFarWithField ->
+                                            { nodes =
+                                                { range = field.range
+                                                , name = field.name
+                                                , nameRange = field.nameRange
+                                                , value = condensedFieldValue.node
+                                                }
+                                                    :: soFar.nodes
+                                            , substitutions = substitutionsSoFarWithField
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedFieldValue.substitutions
+                                        )
+                                )
+                                (field.value
+                                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+        ExpressionLambda expressionLambda ->
+            Result.map
+                (\condensedResult ->
+                    { expression =
+                        ExpressionLambda
+                            { parameter0 =
+                                expressionLambda.parameter0
+                                    |> patternTypedNodeMapTypeVariables typeVariableChange
+                            , parameter1Up =
+                                expressionLambda.parameter1Up
+                                    |> List.map
+                                        (\argument ->
+                                            argument |> patternTypedNodeMapTypeVariables typeVariableChange
+                                        )
+                            , result = condensedResult.node
+                            }
+                    , substitutions = condensedResult.substitutions
+                    }
+                )
+                (expressionLambda.result
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        ExpressionCaseOf expressionCaseOf ->
+            resultAndThen3
+                (\condensedMatched condensedCase0Result condensedCase1Up ->
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression =
+                                ExpressionCaseOf
+                                    { matchedExpression = condensedMatched.node
+                                    , case0 =
+                                        { pattern =
+                                            expressionCaseOf.case0.pattern
+                                                |> patternTypedNodeMapTypeVariables typeVariableChange
+                                        , result = condensedCase0Result.node
+                                        }
+                                    , case1Up = condensedCase1Up.nodes
+                                    }
+                            , substitutions = fullSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsMerge3 declarationTypes
+                            condensedMatched.substitutions
+                            condensedCase0Result.substitutions
+                            condensedCase1Up.substitutions
+                        )
+                )
+                (expressionCaseOf.matchedExpression
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionCaseOf.case0.result
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionCaseOf.case1Up
+                    |> listFoldrWhileOkFrom
+                        substitutionsNoneNodesEmpty
+                        (\case_ soFar ->
+                            Result.andThen
+                                (\condensedCaseResult ->
+                                    Result.map
+                                        (\substitutionsSoFarWithCase ->
+                                            { nodes =
+                                                { pattern =
+                                                    case_.pattern
+                                                        |> patternTypedNodeMapTypeVariables typeVariableChange
+                                                , result = condensedCaseResult.node
+                                                }
+                                                    :: soFar.nodes
+                                            , substitutions = substitutionsSoFarWithCase
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedCaseResult.substitutions
+                                        )
+                                )
+                                (case_.result
+                                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+        ExpressionLetIn expressionLetIn ->
+            resultAndThen3
+                (\condensedResult condensedDeclaraton0 condensedDeclaration1Up ->
+                    let
+                        condensedLetIn :
+                            { declaration0 :
+                                { range : Elm.Syntax.Range.Range
+                                , declaration : LetDeclaration (Type TypeVariableFromContext)
+                                }
+                            , declaration1Up :
+                                List
+                                    { range : Elm.Syntax.Range.Range
+                                    , declaration : LetDeclaration (Type TypeVariableFromContext)
+                                    }
+                            , result :
+                                TypedNode
+                                    (Expression (Type TypeVariableFromContext))
+                                    (Type TypeVariableFromContext)
+                            }
+                        condensedLetIn =
+                            { declaration0 =
+                                { range = expressionLetIn.declaration0.range
+                                , declaration = condensedDeclaraton0.declaration
+                                }
+                            , declaration1Up =
+                                condensedDeclaration1Up.nodes
+                            , result = condensedResult.node
+                            }
+
+                        moreConcreteDeclarationTypesToApplyToUses :
+                            FastDict.Dict
+                                String
+                                { nameRange : Elm.Syntax.Range.Range
+                                , type_ : Type TypeVariableFromContext
+                                }
+                        moreConcreteDeclarationTypesToApplyToUses =
+                            case condensedDeclaraton0.moreConcreteTypeToApplyToUses of
+                                Nothing ->
+                                    condensedDeclaration1Up.moreConcreteTypesToApplyToUses
+
+                                Just declaration0UpdatedValueOrFunctionType ->
+                                    FastDict.insert declaration0UpdatedValueOrFunctionType.name
+                                        { nameRange = declaration0UpdatedValueOrFunctionType.nameRange
+                                        , type_ = declaration0UpdatedValueOrFunctionType.type_
+                                        }
+                                        condensedDeclaration1Up.moreConcreteTypesToApplyToUses
+
+                        variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError : Result String VariableSubstitutions
+                        variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError =
+                            expressionLetInUsesOfPartiallyInferredDeclarations
+                                { partiallyInferredDeclarations =
+                                    moreConcreteDeclarationTypesToApplyToUses
+                                }
+                                condensedLetIn
+                                |> fastDictFoldlWhileOkFrom
+                                    variableSubstitutionsNone
+                                    (\_ forLet soFar ->
+                                        forLet.uses
+                                            |> listFoldlWhileOkFrom
+                                                soFar
+                                                (\use soFarWithUses ->
+                                                    let
+                                                        usePathSegment : String
+                                                        usePathSegment =
+                                                            use.range |> rangeToInfoString
+
+                                                        partialTypeNewInstance : Type TypeVariableFromContext
+                                                        partialTypeNewInstance =
+                                                            forLet.partiallyInferredDeclarationType
+                                                                |> typeMapVariables
+                                                                    (\( variableContext, variableName ) ->
+                                                                        -- TODO can create accidental overlaps
+                                                                        -- with variables in the existing use type
+                                                                        -- in a second cycle. We should explicitly
+                                                                        -- check that for uses and disambiguate accordingly
+                                                                        -- (seems too complicated)
+                                                                        -- or e.g. put the literal substitution/new let type
+                                                                        -- in the name
+                                                                        ( typeVariableContextAddPathSegment usePathSegment variableContext
+                                                                        , variableName
+                                                                        )
+                                                                    )
+                                                    in
+                                                    Result.andThen
+                                                        (\useUnifiedWithNewLetTypeInstance ->
+                                                            variableSubstitutionsMerge declarationTypes
+                                                                soFarWithUses
+                                                                useUnifiedWithNewLetTypeInstance.substitutions
+                                                        )
+                                                        (typeUnify declarationTypes
+                                                            use.type_
+                                                            partialTypeNewInstance
+                                                        )
+                                                )
+                                    )
+                    in
+                    Result.map
+                        (\fullSubstitutions ->
+                            { expression = ExpressionLetIn condensedLetIn
+                            , substitutions = condensedResult.substitutions
+                            }
+                        )
+                        (Result.andThen
+                            (\variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes ->
+                                variableSubstitutionsMerge4 declarationTypes
+                                    condensedResult.substitutions
+                                    condensedDeclaraton0.substitutions
+                                    condensedDeclaration1Up.substitutions
+                                    variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes
+                            )
+                            variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError
+                        )
+                )
+                (expressionLetIn.result
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionLetIn.declaration0.declaration
+                    |> letDeclarationCondenseTypeVariables declarationTypes typeVariableChange
+                )
+                (expressionLetIn.declaration1Up
+                    |> listFoldrWhileOkFrom
+                        { nodes = []
+                        , substitutions = variableSubstitutionsNone
+                        , moreConcreteTypesToApplyToUses = FastDict.empty
+                        }
+                        (\letDeclarationAndRange soFar ->
+                            Result.andThen
+                                (\condensedLetDeclaration ->
+                                    Result.map
+                                        (\substitutionsWithDeclaration ->
+                                            { nodes =
+                                                { range = letDeclarationAndRange.range
+                                                , declaration = condensedLetDeclaration.declaration
+                                                }
+                                                    :: soFar.nodes
+                                            , substitutions = substitutionsWithDeclaration
+                                            , moreConcreteTypesToApplyToUses =
+                                                case condensedLetDeclaration.moreConcreteTypeToApplyToUses of
+                                                    Nothing ->
+                                                        soFar.moreConcreteTypesToApplyToUses
+
+                                                    Just moreConcreteTypeToApplyToUses ->
+                                                        FastDict.insert moreConcreteTypeToApplyToUses.name
+                                                            { nameRange = moreConcreteTypeToApplyToUses.nameRange
+                                                            , type_ = moreConcreteTypeToApplyToUses.type_
+                                                            }
+                                                            soFar.moreConcreteTypesToApplyToUses
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge declarationTypes
+                                            soFar.substitutions
+                                            condensedLetDeclaration.substitutions
+                                        )
+                                )
+                                (letDeclarationAndRange.declaration
+                                    |> letDeclarationCondenseTypeVariables declarationTypes typeVariableChange
+                                )
+                        )
+                )
+
+
+letDeclarationCondenseTypeVariables :
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> (TypeVariableFromContext -> TypeVariableFromContext)
+    -> LetDeclaration (Type TypeVariableFromContext)
+    ->
+        Result
+            String
+            { declaration : LetDeclaration (Type TypeVariableFromContext)
+            , substitutions : VariableSubstitutions
+            , moreConcreteTypeToApplyToUses :
+                Maybe
+                    { name : String
+                    , nameRange : Elm.Syntax.Range.Range
+                    , type_ : Type TypeVariableFromContext
+                    }
+            }
+letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressionLetDeclaration =
+    case expressionLetDeclaration of
+        LetDestructuring letDestructuring ->
+            Result.map
+                (\condenxedDestructuringExpression ->
+                    { declaration =
+                        LetDestructuring
+                            { pattern =
+                                letDestructuring.pattern
+                                    |> patternTypedNodeMapTypeVariables typeVariableChange
+                            , expression = condenxedDestructuringExpression.node
+                            }
+                    , substitutions = condenxedDestructuringExpression.substitutions
+                    , moreConcreteTypeToApplyToUses = Nothing
+                    }
+                )
+                (letDestructuring.expression
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+        LetValueOrFunctionDeclaration letValueOrFunction ->
+            Result.andThen
+                (\condensedResult ->
+                    let
+                        uncondensedTypeContainedVariables : FastSetFast TypeVariableFromContext
+                        uncondensedTypeContainedVariables =
+                            letValueOrFunction.type_
+                                |> typeContainedVariables
+
+                        condensedType :
+                            { type_ : Type TypeVariableFromContext
+                            , containedVariables : FastSetFast TypeVariableFromContext
+                            }
+                        condensedType =
+                            letValueOrFunction.type_
+                                |> typeMapVariablesAndCollectResultingVariables
+                                    typeVariableChange
+
+                        condensedTypeIsEquallyStrict =
+                            (uncondensedTypeContainedVariables |> FastDict.size)
+                                == (condensedType.containedVariables |> FastDict.size)
+                                && ((uncondensedTypeContainedVariables
+                                        |> fastSetFastToListHighestToLowestAndMap
+                                            (\( _, variableBeforeSubstitution ) ->
+                                                variableBeforeSubstitution
+                                                    |> typeVariableConstraint
+                                                    |> maybeTypeVariableConstraintToString
+                                            )
+                                        |> List.sort
+                                    )
+                                        == (condensedType.containedVariables
+                                                |> fastSetFastToListHighestToLowestAndMap
+                                                    (\( _, variableBeforeSubstitution ) ->
+                                                        variableBeforeSubstitution
+                                                            |> typeVariableConstraint
+                                                            |> maybeTypeVariableConstraintToString
+                                                    )
+                                                |> List.sort
+                                           )
+                                   )
+                    in
+                    case letValueOrFunction.signature of
+                        Nothing ->
+                            Ok
+                                { moreConcreteTypeToApplyToUses =
+                                    -- if we don't check whether the condensed type
+                                    -- is _actually_ more strict, we could end up in an endless loop
+                                    -- if partially declared types cross-influence each other.
+                                    -- How do we check it's gotten more strict?
+                                    --   - each variable has at most one corresponding condensed variable
+                                    --     so if we have less condensed variables, the type is more limited
+                                    --   - also, if any condensed variable has more constraints,
+                                    --     the type is also more limited
+                                    if condensedTypeIsEquallyStrict then
+                                        Nothing
+
+                                    else
+                                        Just
+                                            { name = letValueOrFunction.name
+                                            , nameRange = letValueOrFunction.nameRange
+                                            , type_ = condensedType.type_
+                                            }
+                                , declaration =
+                                    LetValueOrFunctionDeclaration
+                                        { signature = Nothing
+                                        , nameRange = letValueOrFunction.nameRange
+                                        , name = letValueOrFunction.name
+                                        , parameters =
+                                            letValueOrFunction.parameters
+                                                |> List.map
+                                                    (\argument ->
+                                                        argument |> patternTypedNodeMapTypeVariables typeVariableChange
+                                                    )
+                                        , result = condensedResult.node
+                                        , type_ = condensedType.type_
+                                        }
+                                , substitutions = condensedResult.substitutions
+                                }
+
+                        Just signature ->
+                            if Basics.not condensedTypeIsEquallyStrict then
+                                Err
+                                    ("the let value/function annotation type ("
+                                        ++ (signature.range |> rangeToInfoString)
+                                        ++ ") is too loose. It is annotated as "
+                                        ++ (letValueOrFunction.type_ |> typeToInfoString)
+                                        ++ " but should be at least as strict as "
+                                        ++ (condensedType.type_ |> typeToInfoString)
+                                    )
+
+                            else
+                                Ok
+                                    { moreConcreteTypeToApplyToUses = Nothing
+                                    , declaration =
+                                        LetValueOrFunctionDeclaration
+                                            { signature =
+                                                Just
+                                                    { nameRange = signature.nameRange
+                                                    , range = signature.range
+                                                    , annotationType = signature.annotationType
+                                                    , annotationTypeRange = signature.annotationTypeRange
+                                                    }
+                                            , nameRange = letValueOrFunction.nameRange
+                                            , name = letValueOrFunction.name
+                                            , parameters =
+                                                letValueOrFunction.parameters
+                                                    |> List.map
+                                                        (\argument ->
+                                                            argument |> patternTypedNodeMapTypeVariables typeVariableChange
+                                                        )
+                                            , result = condensedResult.node
+                                            , type_ =
+                                                letValueOrFunction.type_
+                                                    |> typeMapVariables typeVariableChange
+                                            }
+                                    , substitutions = condensedResult.substitutions
+                                    }
+                )
+                (letValueOrFunction.result
+                    |> expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange
+                )
+
+
+{-| Use for renaming but not for possibly adding constraints
+(in which case you're looking for `expressionTypedNodeCondenseTypeVariables`)
+-}
 expressionTypedNodeMapTypeVariables :
     (typeVariable -> changedTypeVariable)
     -> TypedNode (Expression (Type typeVariable)) (Type typeVariable)
@@ -12252,16 +13140,32 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                             Err error
 
                         Ok variableToTypeWithCondensedVariables ->
-                            expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                variableToTypeWithCondensedVariables
-                                (expressionTypedNode
-                                    |> expressionTypedNodeMapTypeVariables
+                            case
+                                expressionTypedNode
+                                    |> expressionTypedNodeCondenseTypeVariables
+                                        declarationTypes
                                         (\originalTypeVariable ->
                                             variableToCondensedLookup
                                                 |> FastDict.get originalTypeVariable
                                                 |> Maybe.withDefault originalTypeVariable
                                         )
-                                )
+                            of
+                                Err error ->
+                                    Err error
+
+                                Ok condensedExpressionTypedNode ->
+                                    case
+                                        variableSubstitutionsMerge declarationTypes
+                                            variableToTypeWithCondensedVariables
+                                            condensedExpressionTypedNode.substitutions
+                                    of
+                                        Err error ->
+                                            Err error
+
+                                        Ok fullSubstitutionsForNextIteration ->
+                                            expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                fullSubstitutionsForNextIteration
+                                                condensedExpressionTypedNode.node
 
         [] ->
             case substitutions.variableToType |> FastDict.popMin of
