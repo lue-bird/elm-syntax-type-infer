@@ -1,10 +1,13 @@
-#### 1.0.5 (unreleased)
+#### 1.0.6 (unreleased)
 considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - optimize for the case that all types do match (e.g. check for type equivalence, then shortcut)
+
+#### 1.0.5
+- correct oversights from 1.0.4
 
 #### 1.0.4
 - correctly infer un-annotated let value/function declarations
