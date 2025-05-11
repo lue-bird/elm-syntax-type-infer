@@ -5941,6 +5941,186 @@ suite =
                             )
                         )
             )
+        , Test.test "transitive (with a unification to concrete type) un-annotated let declarations involving constrained variable type: let a = 2 ; b = round a in ()"
+            (\() ->
+                { documentation = Nothing
+                , signature =
+                    Just
+                        (Elm.Syntax.Node.empty
+                            { name = Elm.Syntax.Node.empty "waste"
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    Elm.Syntax.TypeAnnotation.Unit
+                            }
+                        )
+                , declaration =
+                    Elm.Syntax.Node.empty
+                        { name = Elm.Syntax.Node.empty "waste"
+                        , arguments = []
+                        , expression =
+                            Elm.Syntax.Node.empty
+                                (Elm.Syntax.Expression.LetExpression
+                                    { declarations =
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.LetFunction
+                                                { documentation = Nothing
+                                                , signature = Nothing
+                                                , declaration =
+                                                    Elm.Syntax.Node.empty
+                                                        { name =
+                                                            Elm.Syntax.Node.Node
+                                                                { start = { row = 1, column = 0 }
+                                                                , end = { row = 1, column = 0 }
+                                                                }
+                                                                "a"
+                                                        , arguments = []
+                                                        , expression =
+                                                            Elm.Syntax.Node.empty
+                                                                (Elm.Syntax.Expression.Integer 2)
+                                                        }
+                                                }
+                                            )
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.LetFunction
+                                                { documentation = Nothing
+                                                , signature = Nothing
+                                                , declaration =
+                                                    Elm.Syntax.Node.empty
+                                                        { name =
+                                                            Elm.Syntax.Node.Node
+                                                                { start = { row = 2, column = 0 }
+                                                                , end = { row = 2, column = 0 }
+                                                                }
+                                                                "b"
+                                                        , arguments = []
+                                                        , expression =
+                                                            Elm.Syntax.Node.empty
+                                                                (Elm.Syntax.Expression.Application
+                                                                    [ Elm.Syntax.Node.empty
+                                                                        (Elm.Syntax.Expression.FunctionOrValue [] "round")
+                                                                    , Elm.Syntax.Node.Node
+                                                                        { start = { row = 3, column = 0 }
+                                                                        , end = { row = 3, column = 0 }
+                                                                        }
+                                                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                                                                    ]
+                                                                )
+                                                        }
+                                                }
+                                            )
+                                        ]
+                                    , expression =
+                                        Elm.Syntax.Node.empty
+                                            Elm.Syntax.Expression.UnitExpr
+                                    }
+                                )
+                        }
+                }
+                    |> List.singleton
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    exampleModuleOriginLookup
+                                |> .types
+                        }
+                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "waste"
+                                { range = Elm.Syntax.Range.empty
+                                , type_ =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        ElmSyntaxTypeInfer.TypeUnit
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionLetIn
+                                        { declaration0 =
+                                            { range = Elm.Syntax.Range.empty
+                                            , declaration =
+                                                ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
+                                                    { signature = Nothing
+                                                    , nameRange =
+                                                        { start = { row = 1, column = 0 }
+                                                        , end = { row = 1, column = 0 }
+                                                        }
+                                                    , name = "a"
+                                                    , parameters = []
+                                                    , result =
+                                                        { range = Elm.Syntax.Range.empty
+                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionInteger
+                                                                { base = ElmSyntaxTypeInfer.Base10
+                                                                , value = 2
+                                                                }
+                                                        }
+                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    }
+                                            }
+                                        , declaration1Up =
+                                            [ { range = Elm.Syntax.Range.empty
+                                              , declaration =
+                                                    ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
+                                                        { signature = Nothing
+                                                        , nameRange =
+                                                            { start = { row = 2, column = 0 }
+                                                            , end = { row = 2, column = 0 }
+                                                            }
+                                                        , name = "b"
+                                                        , parameters = []
+                                                        , result =
+                                                            { range = Elm.Syntax.Range.empty
+                                                            , type_ = typeInt
+                                                            , value =
+                                                                ElmSyntaxTypeInfer.ExpressionCall
+                                                                    { called =
+                                                                        { range = Elm.Syntax.Range.empty
+                                                                        , type_ =
+                                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                                    { input = typeFloat, output = typeInt }
+                                                                                )
+                                                                        , value =
+                                                                            ElmSyntaxTypeInfer.ExpressionReference
+                                                                                { moduleOrigin = [ "Basics" ]
+                                                                                , qualification = []
+                                                                                , name = "round"
+                                                                                }
+                                                                        }
+                                                                    , argument0 =
+                                                                        { range =
+                                                                            { start = { row = 3, column = 0 }
+                                                                            , end = { row = 3, column = 0 }
+                                                                            }
+                                                                        , type_ = typeFloat
+                                                                        , value =
+                                                                            ElmSyntaxTypeInfer.ExpressionReference
+                                                                                { moduleOrigin = []
+                                                                                , qualification = []
+                                                                                , name = "a"
+                                                                                }
+                                                                        }
+                                                                    , argument1Up = []
+                                                                    }
+                                                            }
+                                                        , type_ = typeInt
+                                                        }
+                                              }
+                                            ]
+                                        , result =
+                                            { range = Elm.Syntax.Range.empty
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            , value = ElmSyntaxTypeInfer.ExpressionUnit
+                                            }
+                                        }
+                                }
+                            )
+                        )
+            )
         ]
 
 

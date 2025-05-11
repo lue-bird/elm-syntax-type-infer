@@ -11319,9 +11319,30 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                     in
                                                     Result.andThen
                                                         (\useUnifiedWithNewLetTypeInstance ->
-                                                            variableSubstitutionsMerge declarationTypes
-                                                                soFarWithUses
-                                                                useUnifiedWithNewLetTypeInstance.substitutions
+                                                            -- we need to check if the partialTpeNewInstance
+                                                            -- is actually more strict then the already existing use type.
+                                                            -- If we don't, this would run indefinitely: E.g.
+                                                            -- a : number
+                                                            -- b = round a
+                                                            -- where a is already known as Float
+                                                            -- when it is unified with the let `number`
+                                                            if
+                                                                typesAreEquallyStrict
+                                                                    (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
+                                                                    (use.type_ |> typeContainedVariables)
+                                                            then
+                                                                Ok
+                                                                    { equivalentVariables =
+                                                                        equivalentVariableSetMerge
+                                                                            soFarWithUses.equivalentVariables
+                                                                            useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                                    , variableToType = soFarWithUses.variableToType
+                                                                    }
+
+                                                            else
+                                                                variableSubstitutionsMerge declarationTypes
+                                                                    soFarWithUses
+                                                                    useUnifiedWithNewLetTypeInstance.substitutions
                                                         )
                                                         (typeUnify declarationTypes
                                                             use.type_
@@ -12180,9 +12201,24 @@ expressionCondenseTypeVariables declarationTypes typeVariableChange expression =
                                                     else
                                                         Result.andThen
                                                             (\useUnifiedWithNewLetTypeInstance ->
-                                                                variableSubstitutionsMerge declarationTypes
-                                                                    soFarWithUses
-                                                                    useUnifiedWithNewLetTypeInstance.substitutions
+                                                                -- optimization: skip variable→type substitutions when it doesn't get more strict
+                                                                if
+                                                                    typesAreEquallyStrict
+                                                                        (use.type_ |> typeContainedVariables)
+                                                                        (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
+                                                                then
+                                                                    Ok
+                                                                        { equivalentVariables =
+                                                                            equivalentVariableSetMerge
+                                                                                soFarWithUses.equivalentVariables
+                                                                                useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                                        , variableToType = soFarWithUses.variableToType
+                                                                        }
+
+                                                                else
+                                                                    variableSubstitutionsMerge declarationTypes
+                                                                        soFarWithUses
+                                                                        useUnifiedWithNewLetTypeInstance.substitutions
                                                             )
                                                             (typeUnify declarationTypes
                                                                 use.type_
@@ -12403,22 +12439,22 @@ typesAreEquallyStrict :
     FastSetFast TypeVariableFromContext
     -> FastSetFast TypeVariableFromContext
     -> Bool
-typesAreEquallyStrict uncondensedTypeContainedVariables condensedTypeContainedVariables =
-    (uncondensedTypeContainedVariables |> FastDict.size)
-        == (condensedTypeContainedVariables |> FastDict.size)
-        && ((uncondensedTypeContainedVariables
+typesAreEquallyStrict aType bType =
+    (aType |> FastDict.size)
+        == (bType |> FastDict.size)
+        && ((aType
                 |> fastSetFastToListHighestToLowestAndMap
-                    (\( _, variableBeforeSubstitution ) ->
-                        variableBeforeSubstitution
+                    (\( _, aVariable ) ->
+                        aVariable
                             |> typeVariableConstraint
                             |> maybeTypeVariableConstraintToString
                     )
                 |> List.sort
             )
-                == (condensedTypeContainedVariables
+                == (bType
                         |> fastSetFastToListHighestToLowestAndMap
-                            (\( _, variableBeforeSubstitution ) ->
-                                variableBeforeSubstitution
+                            (\( _, bVariable ) ->
+                                bVariable
                                     |> typeVariableConstraint
                                     |> maybeTypeVariableConstraintToString
                             )
@@ -13118,6 +13154,10 @@ expressionTypedNodeApplyVariableSubstitutions :
                 (Type TypeVariableFromContext)
             )
 expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions expressionTypedNode =
+    let
+        _ =
+            Debug.log "substituting" substitutions
+    in
     case substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
             case
