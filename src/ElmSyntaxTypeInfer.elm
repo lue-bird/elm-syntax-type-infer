@@ -1732,6 +1732,7 @@ typeNotVariableToInfoString typeNotVariable =
         TypeRecordExtension recordExtension ->
             "{ "
                 ++ (recordExtension.recordVariable |> typeVariableFromContextToInfoString)
+                ++ " | "
                 ++ (recordExtension.fields
                         |> FastDict.toList
                         |> List.map
