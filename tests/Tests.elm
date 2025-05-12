@@ -1462,13 +1462,13 @@ suite =
                                             (Elm.Syntax.Node.empty
                                                 Elm.Syntax.Pattern.UnitPattern
                                             )
-                                            (Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Node.Node (dummyRange 1)
                                                 (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                             )
                                         )
                                     ]
                                 , expression =
-                                    Elm.Syntax.Node.empty
+                                    Elm.Syntax.Node.Node (dummyRange 2)
                                         (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                 }
                             )
@@ -3083,7 +3083,7 @@ suite =
                                                             (Elm.Syntax.Expression.ListExpr
                                                                 [ Elm.Syntax.Node.empty
                                                                     (Elm.Syntax.Expression.Floatable 2.2)
-                                                                , Elm.Syntax.Node.empty
+                                                                , Elm.Syntax.Node.Node (dummyRange 1)
                                                                     (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                                                 ]
                                                             )
@@ -3094,7 +3094,7 @@ suite =
                                         )
                                     ]
                                 , expression =
-                                    Elm.Syntax.Node.empty
+                                    Elm.Syntax.Node.Node (dummyRange 2)
                                         (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                 }
                             )
@@ -3126,7 +3126,8 @@ suite =
                                                     { name = Elm.Syntax.Node.empty "b"
                                                     , arguments = []
                                                     , expression =
-                                                        Elm.Syntax.Node.empty
+                                                        Elm.Syntax.Node.Node
+                                                            (dummyRange 1)
                                                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                                     }
                                             , signature =
@@ -3146,7 +3147,8 @@ suite =
                                         )
                                     ]
                                 , expression =
-                                    Elm.Syntax.Node.empty
+                                    Elm.Syntax.Node.Node
+                                        (dummyRange 2)
                                         (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                 }
                             )
@@ -3321,7 +3323,8 @@ suite =
                                                     { name = Elm.Syntax.Node.empty "b"
                                                     , arguments = []
                                                     , expression =
-                                                        Elm.Syntax.Node.empty
+                                                        Elm.Syntax.Node.Node
+                                                            (dummyRange 1)
                                                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                                     }
                                             , signature =
@@ -3346,7 +3349,8 @@ suite =
                                                     { name = Elm.Syntax.Node.empty "c"
                                                     , arguments = []
                                                     , expression =
-                                                        Elm.Syntax.Node.empty
+                                                        Elm.Syntax.Node.Node
+                                                            (dummyRange 2)
                                                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                                     }
                                             , signature = Nothing
@@ -3355,7 +3359,8 @@ suite =
                                         )
                                     ]
                                 , expression =
-                                    Elm.Syntax.Node.empty
+                                    Elm.Syntax.Node.Node
+                                        (dummyRange 3)
                                         (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                 }
                             )
@@ -3599,11 +3604,11 @@ suite =
                     , expression =
                         Elm.Syntax.Node.empty
                             (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
+                                [ Elm.Syntax.Node.Node (dummyRange 1)
                                     (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                 , Elm.Syntax.Node.empty
                                     (Elm.Syntax.Expression.ListExpr
-                                        [ Elm.Syntax.Node.empty
+                                        [ Elm.Syntax.Node.Node (dummyRange 2)
                                             (Elm.Syntax.Expression.FunctionOrValue [] "a")
                                         ]
                                     )
@@ -6124,6 +6129,11 @@ suite =
         ]
 
 
+dummyRange : Int -> Elm.Syntax.Range.Range
+dummyRange index =
+    { start = { row = index, column = 0 }, end = { row = index, column = 0 } }
+
+
 typeList : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
 typeList element =
     ElmSyntaxTypeInfer.TypeNotVariable
@@ -6231,6 +6241,7 @@ expressionToInferredType expression =
                         exampleModuleOriginLookup
                     |> .types
             }
+        |> Debug.log "actual"
         |> Result.andThen toSingleInferredDeclaration
 
 
