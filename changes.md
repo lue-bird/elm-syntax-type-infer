@@ -1,4 +1,4 @@
-#### 1.0.8 (unreleased)
+#### 2.0.1 (unreleased)
 TODO
 - do _not_ instantiate let type variables that are also present higher up
   (e.g. in outer declaration top level annotation)
@@ -11,6 +11,9 @@ optimization ideas
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
 
+
+## 2.0.0
+- types now parameterize type variables, not types
 
 #### 1.0.7
 - internal: significantly disentangle logic, now more bottom-up inferring and top-down unifying.
