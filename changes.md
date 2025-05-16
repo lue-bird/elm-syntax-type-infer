@@ -2,6 +2,20 @@
 TODO
 - do _not_ instantiate let type variables that are also present higher up
   (e.g. in outer declaration top level annotation)
+    - how?
+      Each TypeVariableFromContext now also stores
+      it's origin Range.
+      Wether a type variable is forall is then entirely determined by
+      if the let declaration Range includes the type variable Range.
+
+      On condensing, make sure to Range.combine across all variables.
+
+      Add a new field to expressionTypeInfer context:
+          `reusedTypeVariablesAcrossAnnotations : FastDict.Dict String Range`
+      collected in a separate step where all Ranges by type var name are combined
+      across the whole top-level declaration
+
+      Performance will sadly take a hit
 
 considering
 - embed origin module if from local module top level as the actual name, not []
