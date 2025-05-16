@@ -15,7 +15,7 @@ TODO
       collected in a separate step where all Ranges by type var name are combined
       across the whole top-level declaration
 
-      Performance will sadly take a hit
+      (to verify) Side benefit: all path checking and storing can be removed as the range is already unique (→ no more FromEnd ++ index, context altering etc!)
 
 considering
 - embed origin module if from local module top level as the actual name, not []
