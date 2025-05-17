@@ -4813,8 +4813,7 @@ locationToInfoString location =
 
 expressionTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , -- TODO map to origin range instead of type?
-      locallyIntroducedExpressionVariables :
+    , locallyIntroducedExpressionVariables :
         FastDict.Dict String (Type TypeVariableFromContext)
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
@@ -4903,7 +4902,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
                 (operatorFunctionType
                     { moduleOriginLookup = context.moduleOriginLookup
-                    , errorRange = fullRange
+                    , range = fullRange
                     }
                     operator
                 )
@@ -7456,7 +7455,7 @@ expressionInfixOperationTypeInfer context infixOperation =
         )
         (operatorFunctionType
             { moduleOriginLookup = context.moduleOriginLookup
-            , errorRange = infixOperation.fullRange
+            , range = infixOperation.fullRange
             }
             infixOperation.operator
         )
@@ -7465,8 +7464,7 @@ expressionInfixOperationTypeInfer context infixOperation =
 
 
 operatorFunctionType :
-    { -- TODO rename to range
-      errorRange : Elm.Syntax.Range.Range
+    { range : Elm.Syntax.Range.Range
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> String
@@ -7485,7 +7483,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -7523,7 +7521,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -7561,7 +7559,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -7620,7 +7618,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -7679,7 +7677,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 appendableVariable : TypeVariableFromContext
                 appendableVariable =
@@ -7701,7 +7699,7 @@ operatorFunctionType context operator =
             let
                 equatableVariable : TypeVariableFromContext
                 equatableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "equatable" )
+                    ( context.range |> rangeToAsComparable, "equatable" )
 
                 equatable : Type TypeVariableFromContext
                 equatable =
@@ -7719,7 +7717,7 @@ operatorFunctionType context operator =
             let
                 equatableVariable : TypeVariableFromContext
                 equatableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "equatable" )
+                    ( context.range |> rangeToAsComparable, "equatable" )
 
                 equatable : Type TypeVariableFromContext
                 equatable =
@@ -7737,7 +7735,7 @@ operatorFunctionType context operator =
             let
                 aVariable : TypeVariableFromContext
                 aVariable =
-                    ( context.errorRange |> rangeToAsComparable, "element" )
+                    ( context.range |> rangeToAsComparable, "element" )
 
                 a : Type TypeVariableFromContext
                 a =
@@ -7755,7 +7753,7 @@ operatorFunctionType context operator =
             let
                 numberVariable : TypeVariableFromContext
                 numberVariable =
-                    ( context.errorRange |> rangeToAsComparable, "number" )
+                    ( context.range |> rangeToAsComparable, "number" )
 
                 number : Type TypeVariableFromContext
                 number =
@@ -7773,7 +7771,7 @@ operatorFunctionType context operator =
             let
                 numberVariable : TypeVariableFromContext
                 numberVariable =
-                    ( context.errorRange |> rangeToAsComparable, "number" )
+                    ( context.range |> rangeToAsComparable, "number" )
 
                 number : Type TypeVariableFromContext
                 number =
@@ -7791,7 +7789,7 @@ operatorFunctionType context operator =
             let
                 numberVariable : TypeVariableFromContext
                 numberVariable =
-                    ( context.errorRange |> rangeToAsComparable, "number" )
+                    ( context.range |> rangeToAsComparable, "number" )
 
                 number : Type TypeVariableFromContext
                 number =
@@ -7812,7 +7810,7 @@ operatorFunctionType context operator =
             let
                 numberVariable : TypeVariableFromContext
                 numberVariable =
-                    ( context.errorRange |> rangeToAsComparable, "number" )
+                    ( context.range |> rangeToAsComparable, "number" )
 
                 number : Type TypeVariableFromContext
                 number =
@@ -7830,7 +7828,7 @@ operatorFunctionType context operator =
             let
                 comparableVariable : TypeVariableFromContext
                 comparableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "comparable" )
+                    ( context.range |> rangeToAsComparable, "comparable" )
 
                 comparable : Type TypeVariableFromContext
                 comparable =
@@ -7848,7 +7846,7 @@ operatorFunctionType context operator =
             let
                 comparableVariable : TypeVariableFromContext
                 comparableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "comparable" )
+                    ( context.range |> rangeToAsComparable, "comparable" )
 
                 comparable : Type TypeVariableFromContext
                 comparable =
@@ -7866,7 +7864,7 @@ operatorFunctionType context operator =
             let
                 comparableVariable : TypeVariableFromContext
                 comparableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "comparable" )
+                    ( context.range |> rangeToAsComparable, "comparable" )
 
                 comparable : Type TypeVariableFromContext
                 comparable =
@@ -7884,7 +7882,7 @@ operatorFunctionType context operator =
             let
                 comparableVariable : TypeVariableFromContext
                 comparableVariable =
-                    ( context.errorRange |> rangeToAsComparable, "comparable" )
+                    ( context.range |> rangeToAsComparable, "comparable" )
 
                 comparable : Type TypeVariableFromContext
                 comparable =
@@ -7911,7 +7909,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
             in
             Ok
                 (if context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced then
@@ -7991,7 +7989,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
             in
             Ok
                 (if context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced then
@@ -8089,7 +8087,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -8130,7 +8128,7 @@ operatorFunctionType context operator =
             let
                 rangeAsComparable : RangeAsComparable
                 rangeAsComparable =
-                    context.errorRange |> rangeToAsComparable
+                    context.range |> rangeToAsComparable
 
                 aVariable : TypeVariableFromContext
                 aVariable =
@@ -8179,7 +8177,7 @@ operatorFunctionType context operator =
         unknownOperator ->
             Err
                 ("("
-                    ++ (context.errorRange |> rangeToInfoString)
+                    ++ (context.range |> rangeToInfoString)
                     ++ ") "
                     ++ "unknown operator ("
                     ++ unknownOperator
@@ -12496,10 +12494,6 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                 soFar
                                                 (\use soFarWithUses ->
                                                     let
-                                                        usePathSegment : String
-                                                        usePathSegment =
-                                                            use.range |> rangeToInfoString
-
                                                         partialTypeNewInstance :
                                                             { type_ : Type TypeVariableFromContext
                                                             , containedVariables : FastSetFast TypeVariableFromContext
