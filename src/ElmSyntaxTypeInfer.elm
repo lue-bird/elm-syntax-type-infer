@@ -4553,7 +4553,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
                 head :: tail ->
                     resultAndThen2
-                        (\headInferred tailInferred ->
+                        (\headInferred tailInferredNodes ->
                             Result.andThen
                                 (\unifiedElementType ->
                                     Result.map2
@@ -4570,7 +4570,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                             |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
                                                 unifiedElementType.substitutions
                                         )
-                                        (tailInferred.nodes
+                                        (tailInferredNodes
                                             |> listFoldrWhileOkFrom []
                                                 (\tailElementInferred tailAfterUnificationSoFar ->
                                                     Result.map
@@ -4585,7 +4585,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 )
                                         )
                                 )
-                                (( headInferred, tailInferred.nodes )
+                                (( headInferred, tailInferredNodes )
                                     |> listFilledMapAndTypesUnify
                                         { declarationTypes = context.declarationTypes
                                         , range = fullRange
@@ -4596,15 +4596,11 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         (head |> patternTypeInfer context)
                         (tail
                             |> listFoldrWhileOkFrom
-                                indexFromEnd0NodesEmpty
+                                []
                                 (\elementNode soFar ->
                                     Result.map
                                         (\elementInferred ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , nodes =
-                                                elementInferred
-                                                    :: soFar.nodes
-                                            }
+                                            elementInferred :: soFar
                                         )
                                         (elementNode |> patternTypeInfer context)
                                 )
@@ -4745,8 +4741,7 @@ patternVariantTypeInfer context patternVariant =
             patternVariant.variantValueTypes
             patternVariant.values
             |> listFoldrWhileOkFrom
-                { indexFromEnd = 0
-                , values = []
+                { values = []
                 , resultType =
                     TypeNotVariable
                         (TypeConstruct
@@ -4771,8 +4766,7 @@ patternVariantTypeInfer context patternVariant =
                                 (\valueTypeUnified ->
                                     Result.map2
                                         (\resultTypeAfterUnification valueInferredAfterUnification ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , resultType = resultTypeAfterUnification
+                                            { resultType = resultTypeAfterUnification
                                             , values =
                                                 valueInferredAfterUnification
                                                     :: soFar.values
@@ -5210,7 +5204,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     , value =
                                         ExpressionList
                                             (headInferred
-                                                :: tailElementsInferred.nodes
+                                                :: tailElementsInferred
                                             )
                                     , type_ = typeListList headInferred.type_
                                     }
@@ -5223,7 +5217,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     , range = fullRange
                                     }
                                     .type_
-                                    ( headInferred, tailElementsInferred.nodes )
+                                    ( headInferred, tailElementsInferred )
                                 )
                                 |> Result.mapError
                                     (\error ->
@@ -5233,15 +5227,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (head |> expressionTypeInfer context)
                         (tail
                             |> listFoldrWhileOkFrom
-                                indexFromEnd0NodesEmpty
+                                []
                                 (\elementNode soFar ->
                                     Result.map
                                         (\elementInferred ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , nodes =
-                                                elementInferred
-                                                    :: soFar.nodes
-                                            }
+                                            elementInferred :: soFar
                                         )
                                         (elementNode |> expressionTypeInfer context)
                                 )
@@ -5271,7 +5261,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         ExpressionCall
                                             { called = calledInferred
                                             , argument0 = argument0Inferred
-                                            , argument1Up = argument1UpInferred.nodes
+                                            , argument1Up = argument1UpInferred
                                             }
                                     , type_ = TypeVariable introducedResultTypeVariable
                                     }
@@ -5287,7 +5277,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         (TypeFunction
                                             { input = argument0Inferred.type_
                                             , output =
-                                                argument1UpInferred.nodes
+                                                argument1UpInferred
                                                     |> List.foldr
                                                         (\argumentInferred output ->
                                                             TypeNotVariable
@@ -5312,15 +5302,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (argument0 |> expressionTypeInfer context)
                         (argument1Up
                             |> listFoldrWhileOkFrom
-                                indexFromEnd0NodesEmpty
+                                []
                                 (\argumentNode soFar ->
                                     Result.map
                                         (\argumentInferred ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , nodes =
-                                                argumentInferred
-                                                    :: soFar.nodes
-                                            }
+                                            argumentInferred :: soFar
                                         )
                                         (argumentNode |> expressionTypeInfer context)
                                 )
@@ -5475,7 +5461,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             , value =
                                                 ExpressionLambda
                                                     { parameter0 = parameter0Inferred
-                                                    , parameter1Up = parameter1UpInferred.nodes
+                                                    , parameter1Up = parameter1UpInferred
                                                     , result = resultInferred
                                                     }
                                             , type_ =
@@ -5483,7 +5469,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     (TypeFunction
                                                         { input = parameter0Inferred.type_
                                                         , output =
-                                                            parameter1UpInferred.nodes
+                                                            parameter1UpInferred
                                                                 |> List.foldr
                                                                     (\argumentTypedNode output ->
                                                                         TypeNotVariable
@@ -5509,7 +5495,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             { declarationTypes = context.declarationTypes
                                             , range = fullRange
                                             }
-                                            ((parameter0Inferred :: parameter1UpInferred.nodes)
+                                            ((parameter0Inferred :: parameter1UpInferred)
                                                 |> listMapToFastDictsAndUnify
                                                     patternTypedNodeIntroducedVariables
                                             )
@@ -5535,7 +5521,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             (parameter |> patternTypedNodeIntroducedVariables)
                                                     )
                                                     (parameter0Inferred |> patternTypedNodeIntroducedVariables)
-                                                    parameter1UpInferred.nodes
+                                                    parameter1UpInferred
                                                 )
                                         }
                                 )
@@ -5548,14 +5534,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         )
                         (parameter1Up
                             |> listFoldrWhileOkFrom
-                                indexFromEnd0NodesEmpty
+                                []
                                 (\pattern soFar ->
                                     Result.map
                                         (\patternInferred ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , nodes =
-                                                patternInferred :: soFar.nodes
-                                            }
+                                            patternInferred :: soFar
                                         )
                                         (pattern
                                             |> patternTypeInfer
@@ -5581,7 +5564,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         ExpressionCaseOf
                                             { matchedExpression = matchedInferred
                                             , case0 = case0Inferred
-                                            , case1Up = case1UpInferred.nodes
+                                            , case1Up = case1UpInferred
                                             }
                                     , type_ = case0Inferred.result.type_
                                     }
@@ -5589,7 +5572,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             context.declarationTypes
                                             unifiedTypes.substitutions
                                 )
-                                (case1UpInferred.nodes
+                                (case1UpInferred
                                     |> listFoldlWhileOkFromResult
                                         (Result.map
                                             (\matchedExpressionCase0PatternUnifiedType ->
@@ -5659,13 +5642,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         )
                         (case1Up
                             |> listFoldrWhileOkFrom
-                                indexFromEnd0NodesEmpty
+                                []
                                 (\case_ soFar ->
                                     Result.map
                                         (\caseInferred ->
-                                            { indexFromEnd = soFar.indexFromEnd + 1
-                                            , nodes = caseInferred :: soFar.nodes
-                                            }
+                                            caseInferred :: soFar
                                         )
                                         (case_
                                             |> expressionCaseTypeInfer
@@ -5727,7 +5708,7 @@ expressionLetInTypeInfer :
 expressionLetInTypeInfer context syntaxExpressionLetIn =
     let
         acrossLetInIncludingContextSoFar :
-            { locallyIntroducedExpressionVariables :
+            { introducedExpressionVariables :
                 FastDict.Dict String (Type TypeVariableFromContext)
             , introducedDeclarationTypes :
                 FastDict.Dict
@@ -5750,16 +5731,14 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                             }
                                 of
                                     Err _ ->
-                                        { index = soFar.index + 1
-                                        , introducedDeclarationTypes =
+                                        { introducedDeclarationTypes =
                                             soFar.introducedDeclarationTypes
                                         , introducedExpressionVariables =
                                             soFar.introducedExpressionVariables
                                         }
 
                                     Ok patternInferred ->
-                                        { index = soFar.index + 1
-                                        , introducedDeclarationTypes =
+                                        { introducedDeclarationTypes =
                                             soFar.introducedDeclarationTypes
                                         , introducedExpressionVariables =
                                             FastDict.union soFar.introducedExpressionVariables
@@ -5790,8 +5769,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                             )
                                 of
                                     Just type_ ->
-                                        { index = soFar.index + 1
-                                        , introducedExpressionVariables =
+                                        { introducedExpressionVariables =
                                             soFar.introducedExpressionVariables
                                         , introducedDeclarationTypes =
                                             soFar.introducedDeclarationTypes
@@ -5809,8 +5787,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                         }
 
                                     Nothing ->
-                                        { index = soFar.index + 1
-                                        , introducedExpressionVariables =
+                                        { introducedExpressionVariables =
                                             soFar.introducedExpressionVariables
                                         , introducedDeclarationTypes =
                                             soFar.introducedDeclarationTypes
@@ -5824,17 +5801,11 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                     }
                                         }
                     )
-                    { index = 0
-                    , introducedExpressionVariables =
+                    { introducedExpressionVariables =
                         context.locallyIntroducedExpressionVariables
                     , introducedDeclarationTypes =
                         context.locallyIntroducedDeclarationTypes
                     }
-                |> (\result ->
-                        { locallyIntroducedExpressionVariables = result.introducedExpressionVariables
-                        , introducedDeclarationTypes = result.introducedDeclarationTypes
-                        }
-                   )
     in
     resultAndThen3
         (\declaration0Inferred declaration1UpInferred resultInferred ->
@@ -5850,7 +5821,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         ExpressionLetIn
                             { declaration0 = declaration0Inferred
                             , declaration1Up =
-                                declaration1UpInferred.nodesReverse |> List.reverse
+                                declaration1UpInferred
                             , result = resultInferred
                             }
                     }
@@ -5875,7 +5846,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         { declarationTypes = context.declarationTypes
                         , range = syntaxExpressionLetIn.fullRange
                         }
-                        ((declaration0Inferred :: declaration1UpInferred.nodesReverse)
+                        ((declaration0Inferred :: declaration1UpInferred)
                             |> listMapToFastDictsAndUnify
                                 (\declarationInferred ->
                                     case declarationInferred.declaration of
@@ -5893,7 +5864,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         { declarationTypes = context.declarationTypes
                         , range = syntaxExpressionLetIn.fullRange
                         }
-                        ((declaration0Inferred :: declaration1UpInferred.nodesReverse)
+                        ((declaration0Inferred :: declaration1UpInferred)
                             |> listMapToFastDictsAndUnify
                                 (\declarationInferred ->
                                     case declarationInferred.declaration of
@@ -5924,7 +5895,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
         (syntaxExpressionLetIn.declaration0
             |> letDeclarationTypeInfer
                 { locallyIntroducedExpressionVariables =
-                    acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
+                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
                 , locallyIntroducedDeclarationTypes =
                     acrossLetInIncludingContextSoFar.introducedDeclarationTypes
                 , moduleOriginLookup = context.moduleOriginLookup
@@ -5932,21 +5903,17 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                 }
         )
         (syntaxExpressionLetIn.declaration1Up
-            |> listFoldlWhileOkFrom
-                index1NodesReverseEmpty
+            |> listFoldrWhileOkFrom
+                []
                 (\letDeclarationNode soFar ->
                     Result.map
                         (\letDeclarationInferred ->
-                            { index = soFar.index + 1
-                            , nodesReverse =
-                                letDeclarationInferred
-                                    :: soFar.nodesReverse
-                            }
+                            letDeclarationInferred :: soFar
                         )
                         (letDeclarationNode
                             |> letDeclarationTypeInfer
                                 { locallyIntroducedExpressionVariables =
-                                    acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
+                                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
                                 , locallyIntroducedDeclarationTypes =
                                     acrossLetInIncludingContextSoFar.introducedDeclarationTypes
                                 , moduleOriginLookup = context.moduleOriginLookup
@@ -5958,7 +5925,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
         (syntaxExpressionLetIn.expression
             |> expressionTypeInfer
                 { locallyIntroducedExpressionVariables =
-                    acrossLetInIncludingContextSoFar.locallyIntroducedExpressionVariables
+                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
                 , moduleOriginLookup = context.moduleOriginLookup
                 , declarationTypes = context.declarationTypes
                 , locallyIntroducedDeclarationTypes =
@@ -6112,23 +6079,6 @@ typeUnit =
 expressionListEmpty : Expression type_
 expressionListEmpty =
     ExpressionList []
-
-
-indexFromEnd0NodesEmpty : { nodes : List node_, indexFromEnd : Int }
-indexFromEnd0NodesEmpty =
-    { indexFromEnd = 0
-    , nodes = []
-    }
-
-
-index1NodesReverseEmpty :
-    { index : Int
-    , nodesReverse : List node_
-    }
-index1NodesReverseEmpty =
-    { index = 1
-    , nodesReverse = []
-    }
 
 
 expressionCaseTypeInfer :
@@ -14157,12 +14107,11 @@ parameterPatternsTypeInfer :
 parameterPatternsTypeInfer context parameterPatterns =
     parameterPatterns
         |> listFoldrWhileOkFrom
-            introducedExpressionVariablesEmptyNodesEmptyIndexFromEnd0
+            introducedExpressionVariablesEmptyNodesEmpty
             (\pattern soFar ->
                 Result.map
                     (\patternInferred ->
-                        { indexFromEnd = soFar.indexFromEnd + 1
-                        , nodes =
+                        { nodes =
                             patternInferred
                                 :: soFar.nodes
                         , introducedExpressionVariables =
@@ -14180,15 +14129,13 @@ parameterPatternsTypeInfer context parameterPatterns =
             )
 
 
-introducedExpressionVariablesEmptyNodesEmptyIndexFromEnd0 :
+introducedExpressionVariablesEmptyNodesEmpty :
     { introducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
     , nodes : List node_
-    , indexFromEnd : Int
     }
-introducedExpressionVariablesEmptyNodesEmptyIndexFromEnd0 =
+introducedExpressionVariablesEmptyNodesEmpty =
     { introducedExpressionVariables = FastDict.empty
     , nodes = []
-    , indexFromEnd = 0
     }
 
 

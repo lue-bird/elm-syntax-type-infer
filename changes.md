@@ -2,9 +2,6 @@
 - do _not_ instantiate let type variables that are also used outside the let declaration
 - types now parameterize type variables, not types
 
-TODO
-- remove indexed fold for previous path tracing
-
 considering
 - embed origin module if from local module top level as the actual name, not []
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)

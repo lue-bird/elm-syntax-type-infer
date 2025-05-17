@@ -5787,6 +5787,8 @@ waste =
         ]
 
 
+{-| TODO Remove in favor of typeInferModuleFromSource
+-}
 dummyRange : Int -> Elm.Syntax.Range.Range
 dummyRange index =
     { start = { row = index, column = 0 }, end = { row = index, column = 0 } }
