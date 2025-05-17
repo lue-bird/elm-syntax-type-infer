@@ -136,7 +136,7 @@ accessors = [ .a, .b ]
                                                               , ElmSyntaxTypeInfer.TypeVariable "a"
                                                               )
                                                             ]
-                                                    , recordVariable = "baseRecord"
+                                                    , recordVariable = "record"
                                                     }
                                                 )
                                         , output =
@@ -680,7 +680,7 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { recordVariable = "baseBaseRec"
+                                                { recordVariable = "rec"
                                                 , fields =
                                                     FastDict.fromList
                                                         [ ( "a"
@@ -699,7 +699,7 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                                         typeList
                                             (ElmSyntaxTypeInfer.TypeNotVariable
                                                 (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                    { recordVariable = "baseBaseRec"
+                                                    { recordVariable = "rec"
                                                     , fields =
                                                         FastDict.fromList
                                                             [ ( "a"
@@ -725,7 +725,7 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
             recordExtensionTypeInExample =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeRecordExtension
-                        { recordVariable = "baseX"
+                        { recordVariable = "x"
                         , fields =
                             FastDict.fromList
                                 [ ( "a"

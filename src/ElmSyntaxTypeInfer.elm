@@ -1464,7 +1464,12 @@ typeApplyVariableSubstitutions context substitutions originalType =
                     |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                        )
 
                 Ok variableToCondensedLookup ->
                     case
@@ -1574,7 +1579,10 @@ typeSubstituteVariableByNotVariable context replacement type_ =
 
                                 else
                                     Err
-                                        ("cannot unify number type variable with types other than Int/Float, found: "
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify number type variable with types other than Int/Float, found: "
                                             ++ (replacement.type_ |> typeNotVariableToInfoString)
                                         )
 
@@ -1589,7 +1597,12 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                         }
 
                                 else
-                                    Err "cannot unify appendable type variable with types other than String/List _"
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify appendable type variable with types other than String/List _"
+                                        )
 
                             TypeVariableConstraintComparable ->
                                 if
@@ -1602,7 +1615,12 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                         }
 
                                 else
-                                    Err "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
+                                        )
 
                             TypeVariableConstraintCompappend ->
                                 if
@@ -1615,7 +1633,12 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                         }
 
                                 else
-                                    Err "cannot unify compappend type variable with types other than String/List of comparable"
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify compappend type variable with types other than String/List of comparable"
+                                        )
 
             else
                 Ok
@@ -2021,19 +2044,44 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                                     )
 
                             TypeUnit ->
-                                Err "cannot unify record extension type variable with types other than record/record extension"
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "cannot unify record extension type variable with types other than record/record extension"
+                                    )
 
                             TypeConstruct _ ->
-                                Err "cannot unify record extension type variable with types other than record/record extension"
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "cannot unify record extension type variable with types other than record/record extension"
+                                    )
 
                             TypeTuple _ ->
-                                Err "cannot unify record extension type variable with types other than record/record extension"
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "cannot unify record extension type variable with types other than record/record extension"
+                                    )
 
                             TypeTriple _ ->
-                                Err "cannot unify record extension type variable with types other than record/record extension"
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "cannot unify record extension type variable with types other than record/record extension"
+                                    )
 
                             TypeFunction _ ->
-                                Err "cannot unify record extension type variable with types other than record/record extension"
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "cannot unify record extension type variable with types other than record/record extension"
+                                    )
                 )
                 (typeRecordExtension.fields
                     |> fastDictFoldlWhileOkFrom
@@ -2514,11 +2562,18 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                     Nothing
 
                 Just originAliasDeclaration ->
+                    let
+                        prefix : String
+                        prefix =
+                            "parameter"
+                                ++ (typeConstructToExpand.moduleOrigin |> String.concat)
+                                ++ typeConstructToExpand.name
+                    in
                     List.map2
                         (\parameterName argument ->
                             { variable =
                                 ( context.range |> rangeToAsComparable
-                                , "parameter" ++ (parameterName |> stringFirstCharToUpper)
+                                , prefix ++ (parameterName |> stringFirstCharToUpper)
                                 )
                             , type_ = argument
                             }
@@ -2530,7 +2585,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                 |> typeMapVariables
                                     (\aliasVariable ->
                                         ( context.range |> rangeToAsComparable
-                                        , "parameter" ++ (aliasVariable |> stringFirstCharToUpper)
+                                        , prefix ++ (aliasVariable |> stringFirstCharToUpper)
                                         )
                                     )
                             )
@@ -3033,22 +3088,52 @@ typeNotVariableUnify context a b =
                             result
 
                         Nothing ->
-                            Err "unit (`()`) cannot be unified with types other than unit"
+                            Err
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "unit (`()`) cannot be unified with types other than unit"
+                                )
 
                 TypeTuple _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "unit (`()`) cannot be unified with types other than unit"
+                        )
 
                 TypeTriple _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "unit (`()`) cannot be unified with types other than unit"
+                        )
 
                 TypeRecord _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "unit (`()`) cannot be unified with types other than unit"
+                        )
 
                 TypeRecordExtension _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "unit (`()`) cannot be unified with types other than unit"
+                        )
 
                 TypeFunction _ ->
-                    Err "unit (`()`) cannot be unified with types other than unit"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "unit (`()`) cannot be unified with types other than unit"
+                        )
 
         TypeConstruct aTypeConstruct ->
             case b of
@@ -3110,7 +3195,10 @@ typeNotVariableUnify context a b =
 
                                     Nothing ->
                                         Err
-                                            ("choice type "
+                                            ("("
+                                                ++ (context.range |> rangeToInfoString)
+                                                ++ ") "
+                                                ++ "choice type "
                                                 ++ qualifiedToString
                                                     { qualification = aTypeConstruct.moduleOrigin
                                                     , name = aTypeConstruct.name
@@ -3126,7 +3214,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3141,7 +3232,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3156,7 +3250,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3171,7 +3268,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3186,7 +3286,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3201,7 +3304,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("choice type "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "choice type "
                                     ++ qualifiedToString
                                         { qualification = aTypeConstruct.moduleOrigin
                                         , name = aTypeConstruct.name
@@ -3235,7 +3341,12 @@ typeNotVariableUnify context a b =
                         (typeUnify context aTuple.part1 bTuple.part1)
 
                 TypeUnit ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                        )
 
                 TypeConstruct bTypeConstruct ->
                     case typeUnifyWithTryToExpandTypeConstruct context bTypeConstruct a of
@@ -3243,19 +3354,44 @@ typeNotVariableUnify context a b =
                             result
 
                         Nothing ->
-                            Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                            Err
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                                )
 
                 TypeTriple _ ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                        )
 
                 TypeRecord _ ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                        )
 
                 TypeRecordExtension _ ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                        )
 
                 TypeFunction _ ->
-                    Err "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "tuple (`( ..., ... )`) cannot be unified with types other than tuple"
+                        )
 
         TypeTriple aTriple ->
             case b of
@@ -3286,7 +3422,12 @@ typeNotVariableUnify context a b =
                         (typeUnify context aTriple.part1 bTriple.part1)
 
                 TypeUnit ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                        )
 
                 TypeConstruct bTypeConstruct ->
                     case typeUnifyWithTryToExpandTypeConstruct context bTypeConstruct a of
@@ -3294,19 +3435,44 @@ typeNotVariableUnify context a b =
                             result
 
                         Nothing ->
-                            Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                            Err
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                                )
 
                 TypeTuple _ ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                        )
 
                 TypeRecord _ ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                        )
 
                 TypeRecordExtension _ ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                        )
 
                 TypeFunction _ ->
-                    Err "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "triple (`( ..., ..., ... )`) cannot be unified with types other than triple"
+                        )
 
         TypeRecord aRecord ->
             case b of
@@ -3320,7 +3486,10 @@ typeNotVariableUnify context a b =
 
                 TypeUnit ->
                     Err
-                        ("record "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record "
                             ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeUnit |> typeNotVariableToInfoString)
@@ -3333,7 +3502,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("record "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "record "
                                     ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
                                     ++ " cannot be unified with types other than record or record extension, found: "
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
@@ -3341,7 +3513,10 @@ typeNotVariableUnify context a b =
 
                 TypeTuple bParts ->
                     Err
-                        ("record "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record "
                             ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeTuple bParts |> typeNotVariableToInfoString)
@@ -3349,7 +3524,10 @@ typeNotVariableUnify context a b =
 
                 TypeTriple bParts ->
                     Err
-                        ("record "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record "
                             ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeTriple bParts |> typeNotVariableToInfoString)
@@ -3357,7 +3535,10 @@ typeNotVariableUnify context a b =
 
                 TypeFunction bTypeFunction ->
                     Err
-                        ("record "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record "
                             ++ (TypeRecord aRecord |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
@@ -3377,7 +3558,10 @@ typeNotVariableUnify context a b =
 
                 TypeUnit ->
                     Err
-                        ("record extension "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record extension "
                             ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeUnit |> typeNotVariableToInfoString)
@@ -3390,7 +3574,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("record extension "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "record extension "
                                     ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                                     ++ " cannot be unified with types other than record or record extension, found: "
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
@@ -3398,7 +3585,10 @@ typeNotVariableUnify context a b =
 
                 TypeTuple bParts ->
                     Err
-                        ("record extension "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record extension "
                             ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeTuple bParts |> typeNotVariableToInfoString)
@@ -3406,7 +3596,10 @@ typeNotVariableUnify context a b =
 
                 TypeTriple bParts ->
                     Err
-                        ("record extension "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record extension "
                             ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeTriple bParts |> typeNotVariableToInfoString)
@@ -3414,7 +3607,10 @@ typeNotVariableUnify context a b =
 
                 TypeFunction bTypeFunction ->
                     Err
-                        ("record extension "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record extension "
                             ++ (TypeRecordExtension aRecordExtension |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than record or record extension, found: "
                             ++ (TypeFunction bTypeFunction |> typeNotVariableToInfoString)
@@ -3447,7 +3643,10 @@ typeNotVariableUnify context a b =
 
                 TypeUnit ->
                     Err
-                        ("function "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
                             ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeUnit |> typeNotVariableToInfoString)
@@ -3460,7 +3659,10 @@ typeNotVariableUnify context a b =
 
                         Nothing ->
                             Err
-                                ("function "
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "function "
                                     ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                                     ++ " cannot be unified with types other than function: "
                                     ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
@@ -3468,7 +3670,10 @@ typeNotVariableUnify context a b =
 
                 TypeTuple bTypeTuple ->
                     Err
-                        ("function "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
                             ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
@@ -3476,7 +3681,10 @@ typeNotVariableUnify context a b =
 
                 TypeTriple bTypeTriple ->
                     Err
-                        ("function "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
                             ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
@@ -3484,7 +3692,10 @@ typeNotVariableUnify context a b =
 
                 TypeRecord bTypeRecord ->
                     Err
-                        ("function "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
                             ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
@@ -3492,7 +3703,10 @@ typeNotVariableUnify context a b =
 
                 TypeRecordExtension bTypeRecordExtension ->
                     Err
-                        ("function "
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
                             ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
@@ -3540,7 +3754,10 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
         Nothing ->
             Just
                 (Err
-                    ("could not find declaration types in the origin module of the type construct "
+                    ("("
+                        ++ (context.range |> rangeToInfoString)
+                        ++ ") "
+                        ++ "could not find declaration types in the origin module of the type construct "
                         ++ qualifiedToString
                             { qualification = aTypeConstructToExpand.moduleOrigin
                             , name = aTypeConstructToExpand.name
@@ -3554,6 +3771,13 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                     Nothing
 
                 Just aOriginAliasDeclaration ->
+                    let
+                        prefix : String
+                        prefix =
+                            "parameter"
+                                ++ (aTypeConstructToExpand.moduleOrigin |> String.concat)
+                                ++ aTypeConstructToExpand.name
+                    in
                     Result.andThen
                         (\constructedAliasedType ->
                             Result.andThen
@@ -3579,7 +3803,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                             (\parameterName argument ->
                                 { variable =
                                     ( context.range |> rangeToAsComparable
-                                    , "parameter" ++ (parameterName |> stringFirstCharToUpper)
+                                    , prefix ++ (parameterName |> stringFirstCharToUpper)
                                     )
                                 , type_ = argument
                                 }
@@ -3592,7 +3816,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                         |> typeMapVariables
                                             (\aliasVariable ->
                                                 ( context.range |> rangeToAsComparable
-                                                , "parameter" ++ (aliasVariable |> stringFirstCharToUpper)
+                                                , prefix ++ (aliasVariable |> stringFirstCharToUpper)
                                                 )
                                             )
                                 , substitutions = variableSubstitutionsNone
@@ -3644,7 +3868,10 @@ typeRecordUnify context aFields bFields =
         (FastDict.merge
             (\name _ _ ->
                 Err
-                    ("record with the field "
+                    ("("
+                        ++ (context.range |> rangeToInfoString)
+                        ++ ") "
+                        ++ "record with the field "
                         ++ name
                         ++ " cannot be unified with a record that does not have this field"
                     )
@@ -3670,7 +3897,10 @@ typeRecordUnify context aFields bFields =
             )
             (\name _ _ ->
                 Err
-                    ("record with the field "
+                    ("("
+                        ++ (context.range |> rangeToInfoString)
+                        ++ ") "
+                        ++ "record with the field "
                         ++ name
                         ++ " cannot be unified with a record that does not have this field"
                     )
@@ -3720,9 +3950,16 @@ typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
         (FastDict.merge
             (\name _ _ ->
                 Err
-                    ("record extension with the field "
+                    ("("
+                        ++ (context.range |> rangeToInfoString)
+                        ++ ") "
+                        ++ "record extension with the field `"
                         ++ name
-                        ++ " cannot be unified with a record that does not have this field"
+                        ++ "` cannot be unified with a record that does not have this field. The record extension is `"
+                        ++ (TypeRecordExtension recordExtension |> typeNotVariableToInfoString)
+                        ++ "` and the record is `"
+                        ++ (TypeRecord recordFields |> typeNotVariableToInfoString)
+                        ++ "`"
                     )
             )
             (\name aValue bValue soFarOrError ->
@@ -3783,13 +4020,18 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
     Result.andThen
         (\fieldsUnified ->
             let
-                ( _, aRecordVariableName ) =
+                ( aRecordExtensionRecordVariableUsesRangeAsComparable, aRecordExtensionRecordVariableName ) =
                     aRecordExtension.recordVariable
+
+                ( bRecordExtensionRecordVariableUsesRangeAsComparable, _ ) =
+                    bRecordExtension.recordVariable
 
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    ( context.range |> rangeToAsComparable
-                    , "base" ++ (aRecordVariableName |> stringFirstCharToUpper)
+                    ( rangeAsComparableOverarching
+                        aRecordExtensionRecordVariableUsesRangeAsComparable
+                        bRecordExtensionRecordVariableUsesRangeAsComparable
+                    , aRecordExtensionRecordVariableName
                     )
 
                 bVariableReplacementFields : FastDict.Dict String (Type TypeVariableFromContext)
@@ -4313,7 +4555,12 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
     -- IGNORE TCO
     case pattern of
         Elm.Syntax.Pattern.FloatPattern _ ->
-            Err "float patterns are invalid syntax"
+            Err
+                ("("
+                    ++ (fullRange |> rangeToInfoString)
+                    ++ ") "
+                    ++ "float patterns are invalid syntax"
+                )
 
         Elm.Syntax.Pattern.AllPattern ->
             Ok
@@ -4465,7 +4712,12 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         (tuplePart2 |> patternTypeInfer context)
 
                 _ :: _ :: _ :: _ :: _ ->
-                    Err "too many tuple parts"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "too many tuple parts"
+                        )
 
         Elm.Syntax.Pattern.RecordPattern recordFields ->
             let
@@ -4618,7 +4870,10 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     case context.moduleOriginLookup.references |> FastDict.get ( qualified.moduleName, qualified.name ) of
                         Nothing ->
                             Err
-                                ("no module origin found for the pattern variant "
+                                ("("
+                                    ++ (fullRange |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "no module origin found for the pattern variant "
                                     ++ qualifiedToString
                                         { qualification = qualified.moduleName
                                         , name = qualified.name
@@ -4629,7 +4884,10 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                             case context.declarationTypes |> FastDict.get moduleOrigin of
                                 Nothing ->
                                     Err
-                                        ("no declaration types found at the module origin of the variant reference "
+                                        ("("
+                                            ++ (fullRange |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "no declaration types found at the module origin of the variant reference "
                                             ++ qualifiedToString
                                                 { qualification = moduleOrigin
                                                 , name = qualified.name
@@ -4664,7 +4922,10 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     of
                         Nothing ->
                             Err
-                                ("no choice type found at the module origin with the variant reference "
+                                ("("
+                                    ++ (fullRange |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "no choice type found at the module origin with the variant reference "
                                     ++ qualifiedToString
                                         { qualification = moduleOriginInfo.name
                                         , name = qualified.name
@@ -4952,7 +5213,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 TypeNotVariable
                                     (TypeRecordExtension
                                         { recordVariable =
-                                            ( fullRange |> rangeToAsComparable, "record" )
+                                            ( fullRange |> rangeToAsComparable
+                                            , "record"
+                                            )
                                         , fields =
                                             FastDict.singleton fieldName
                                                 fieldValueType
@@ -4987,10 +5250,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             (variableSubstitutionsFromVariableToType
                                 ( fullRange |> rangeToAsComparable, "number" )
                                 negatedInferred.type_
-                            )
-                        |> Result.mapError
-                            (\error ->
-                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
                             )
                 )
                 (negated |> expressionTypeInfer context)
@@ -5046,10 +5305,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 )
                             )
                         )
-                        |> Result.mapError
-                            (\error ->
-                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                            )
                 )
                 (recordNode |> expressionTypeInfer context)
 
@@ -5103,10 +5358,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             onTrueInferred.type_
                             onFalseInferred.type_
                         )
-                        |> Result.mapError
-                            (\error ->
-                                "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                            )
                 )
                 (condition |> expressionTypeInfer context)
                 (onTrue |> expressionTypeInfer context)
@@ -5181,7 +5432,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (part2 |> expressionTypeInfer context)
 
                 _ :: _ :: _ :: _ :: _ ->
-                    Err "too many tuple parts"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "too many tuple parts"
+                        )
 
         Elm.Syntax.Expression.ListExpr elements ->
             case elements of
@@ -5218,10 +5474,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     .type_
                                     ( headInferred, tailElementsInferred )
                                 )
-                                |> Result.mapError
-                                    (\error ->
-                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                    )
                         )
                         (head |> expressionTypeInfer context)
                         (tail
@@ -5239,7 +5491,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.Application application ->
             case application of
                 [] ->
-                    Err "empty application is invalid syntax"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "empty application is invalid syntax"
+                        )
 
                 [ subExpression ] ->
                     -- never produced by elm-syntax
@@ -5292,10 +5549,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     )
                                     calledInferred.type_
                                 )
-                                |> Result.mapError
-                                    (\error ->
-                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                    )
                         )
                         (called |> expressionTypeInfer context)
                         (argument0 |> expressionTypeInfer context)
@@ -5353,7 +5606,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.RecordUpdateExpression (Elm.Syntax.Node.Node recordVariableRange recordVariable) fields ->
             case fields of
                 [] ->
-                    Err "record update without fields is invalid syntax"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "record update without fields is invalid syntax"
+                        )
 
                 (Elm.Syntax.Node.Node field0Range ( Elm.Syntax.Node.Node field0NameRange field0Name, field0ValueNode )) :: field1Up ->
                     resultAndThen3
@@ -5406,10 +5664,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                         )
                                     )
                                 )
-                                |> Result.mapError
-                                    (\error ->
-                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                    )
                         )
                         ({ fullRange = recordVariableRange
                          , qualification = []
@@ -5447,7 +5701,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.LambdaExpression lambda ->
             case lambda.args of
                 [] ->
-                    Err "lambda without parameter patterns is invalid syntax"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "lambda without parameter patterns is invalid syntax"
+                        )
 
                 parameter0 :: parameter1Up ->
                     resultAndThen2
@@ -5485,10 +5744,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 |> expressionTypedNodeApplyVariableSubstitutions
                                                     context.declarationTypes
                                                     parameterPatternVariablesAndUsesUnificationSubstitutions
-                                                |> Result.mapError
-                                                    (\error ->
-                                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                                    )
                                         )
                                         (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
                                             { declarationTypes = context.declarationTypes
@@ -5499,10 +5754,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                     patternTypedNodeIntroducedVariables
                                             )
                                             resultInferred
-                                            |> Result.mapError
-                                                (\error ->
-                                                    "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                                )
                                         )
                                 )
                                 (lambda.expression
@@ -5551,7 +5802,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.CaseExpression caseOf ->
             case caseOf.cases of
                 [] ->
-                    Err "case-of without case branches is invalid syntax"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "case-of without case branches is invalid syntax"
+                        )
 
                 case0 :: case1Up ->
                     resultAndThen3
@@ -5623,10 +5879,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                 )
                                         )
                                 )
-                                |> Result.mapError
-                                    (\error ->
-                                        "(" ++ (fullRange |> rangeToInfoString) ++ ") " ++ error
-                                    )
                         )
                         (caseOf.expression |> expressionTypeInfer context)
                         (case0
@@ -5662,7 +5914,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.LetExpression letIn ->
             case letIn.declarations of
                 [] ->
-                    Err "let-in without declarations is invalid syntax"
+                    Err
+                        ("("
+                            ++ (fullRange |> rangeToInfoString)
+                            ++ ") "
+                            ++ "let-in without declarations is invalid syntax"
+                        )
 
                 letDeclaration0Node :: letDeclaration1Up ->
                     expressionLetInTypeInfer context
@@ -5673,10 +5930,20 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         }
 
         Elm.Syntax.Expression.Operator _ ->
-            Err "Elm.Syntax.Expression.Operator is not valid syntax"
+            Err
+                ("("
+                    ++ (fullRange |> rangeToInfoString)
+                    ++ ") "
+                    ++ "Elm.Syntax.Expression.Operator is not valid syntax"
+                )
 
         Elm.Syntax.Expression.GLSLExpression _ ->
-            Err "glsl shader expressions not supported"
+            Err
+                ("("
+                    ++ (fullRange |> rangeToInfoString)
+                    ++ ") "
+                    ++ "glsl shader expressions not supported"
+                )
 
 
 expressionLetInTypeInfer :
@@ -5886,10 +6153,6 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         letInTypedNodeInferred
                     )
                 )
-                |> Result.mapError
-                    (\error ->
-                        "(" ++ (syntaxExpressionLetIn.fullRange |> rangeToInfoString) ++ ") " ++ error
-                    )
         )
         (syntaxExpressionLetIn.declaration0
             |> letDeclarationTypeInfer
@@ -5951,7 +6214,12 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context para
             (\variableName usesInLambdaResult soFar ->
                 case parameterIntroducedTypeVariables |> FastDict.get variableName of
                     Nothing ->
-                        Err "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
+                        Err
+                            ("("
+                                ++ (context.range |> rangeToInfoString)
+                                ++ ") "
+                                ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
+                            )
 
                     Just variableParameterType ->
                         Result.andThen
@@ -5993,7 +6261,12 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression c
             (\declarationName usesInLambdaResult soFar ->
                 case parameterIntroducedTypeVariables |> FastDict.get declarationName of
                     Nothing ->
-                        Err "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
+                        Err
+                            ("("
+                                ++ (context.range |> rangeToInfoString)
+                                ++ ") "
+                                ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
+                            )
 
                     Just inferredDeclarationType ->
                         usesInLambdaResult
@@ -6138,13 +6411,6 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
                             }
                             (patternInferred |> patternTypedNodeIntroducedVariables)
                             resultInferred
-                            |> Result.mapError
-                                (\error ->
-                                    "("
-                                        ++ (caseRange |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ error
-                                )
                         )
                 )
                 (syntaxCaseResult
@@ -7054,10 +7320,6 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
                             }
                             patternInferred.type_
                             expressionInferred.type_
-                            |> Result.mapError
-                                (\error ->
-                                    "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
-                                )
                         )
                 )
                 (letDestructuringPattern
@@ -7171,10 +7433,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                     }
                                     parametersInferred.introducedExpressionVariables
                                     resultInferred
-                                    |> Result.mapError
-                                        (\error ->
-                                            "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
-                                        )
                                 )
                         )
                         (implementation.expression
@@ -7285,10 +7543,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                     }
                                                     parametersInferred.introducedExpressionVariables
                                                     resultInferred
-                                                    |> Result.mapError
-                                                        (\error ->
-                                                            "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
-                                                        )
                                                 )
                                         )
                                         (typeUnify
@@ -7309,10 +7563,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                     resultInferred.type_
                                             )
                                         )
-                                        |> Result.mapError
-                                            (\error ->
-                                                "(" ++ (letDeclarationRange |> rangeToInfoString) ++ ") " ++ error
-                                            )
                                 )
                                 (implementation.expression
                                     |> expressionTypeInfer
@@ -7445,13 +7695,6 @@ expressionInfixOperationTypeInfer context infixOperation =
                     operatorAsFunctionType.rightType
                     rightInferred.type_
                 )
-                |> Result.mapError
-                    (\error ->
-                        "("
-                            ++ (infixOperation.fullRange |> rangeToInfoString)
-                            ++ ") "
-                            ++ error
-                    )
         )
         (operatorFunctionType
             { moduleOriginLookup = context.moduleOriginLookup
@@ -13221,7 +13464,12 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                     |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
+                    Err
+                        ("("
+                            ++ (expressionTypedNode.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                        )
 
                 Ok variableToCondensedLookup ->
                     case
@@ -13341,7 +13589,12 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
                     |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
+                    Err
+                        ("("
+                            ++ (patternTypedNode.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                        )
 
                 Ok variableToCondensedLookup ->
                     case

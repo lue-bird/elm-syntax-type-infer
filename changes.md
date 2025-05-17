@@ -1,13 +1,12 @@
-#### 1.0.8 (unreleased)
-- do _not_ instantiate let type variables that are also used outside the let declaration
-- types now parameterize type variables, not types
-
-TODO
-- avoid Result.mapError (...range...). Instead put the range directly into the errors produced by substitution, unification etc
-
+## 2.0.0 (unreleased)
 considering
 - embed origin module if from local module top level as the actual name, not []
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
+
+
+#### 1.0.8 (unreleased)
+- do not instantiate let type variables that are also used outside the let declaration (TODO test & still has bugs apparently)
+- types now parameterize type variables, not types
 
 optimization ideas
 - special-case declarations without parameters
