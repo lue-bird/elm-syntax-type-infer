@@ -5258,19 +5258,18 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
             Result.andThen
                 (\accessedRecordInferred ->
                     let
-                        fieldName : String
-                        fieldName =
-                            fieldNameNode |> Elm.Syntax.Node.value
+                        (Elm.Syntax.Node.Node fieldRange fieldName) =
+                            fieldNameNode
 
                         introducedFieldValueTypeVariable : TypeVariableFromContext
                         introducedFieldValueTypeVariable =
-                            ( fullRange |> rangeToAsComparable
-                            , "field" ++ (fieldName |> stringFirstCharToUpper)
+                            ( fieldRange |> rangeToAsComparable
+                            , fieldName
                             )
 
                         introducedRecordTypeVariable : TypeVariableFromContext
                         introducedRecordTypeVariable =
-                            ( recordNode |> Elm.Syntax.Node.range |> rangeToAsComparable
+                            ( fullRange |> rangeToAsComparable
                             , "record"
                             )
                     in

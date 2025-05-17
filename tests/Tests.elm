@@ -544,12 +544,12 @@ numbers = ( 1, 2.2, 3 )
                                             , fields =
                                                 FastDict.singleton "field"
                                                     (ElmSyntaxTypeInfer.TypeVariable
-                                                        "fieldField"
+                                                        "field"
                                                     )
                                             }
                                         )
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeVariable "fieldField"
+                                    ElmSyntaxTypeInfer.TypeVariable "field"
                                 }
                             )
                         )
