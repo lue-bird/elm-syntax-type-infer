@@ -5951,8 +5951,16 @@ typeInferModuleFromSource :
             String
             (FastDict.Dict
                 String
-                { parameters : List (ElmSyntaxTypeInfer.TypedNode (ElmSyntaxTypeInfer.Pattern String) String)
-                , result : ElmSyntaxTypeInfer.TypedNode (ElmSyntaxTypeInfer.Expression String) String
+                { parameters :
+                    List
+                        (ElmSyntaxTypeInfer.TypedNode
+                            (ElmSyntaxTypeInfer.Pattern (ElmSyntaxTypeInfer.Type String))
+                            (ElmSyntaxTypeInfer.Type String)
+                        )
+                , result :
+                    ElmSyntaxTypeInfer.TypedNode
+                        (ElmSyntaxTypeInfer.Expression (ElmSyntaxTypeInfer.Type String))
+                        (ElmSyntaxTypeInfer.Type String)
                 , type_ : ElmSyntaxTypeInfer.Type String
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation : Maybe { content : String, range : Elm.Syntax.Range.Range }

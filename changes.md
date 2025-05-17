@@ -4,8 +4,6 @@
 
 TODO
 - remove indexed fold for previous path tracing
-- revert parameterizing not type but type variable
-  (e.g. in outer declaration top level annotation)
 
 considering
 - embed origin module if from local module top level as the actual name, not []
