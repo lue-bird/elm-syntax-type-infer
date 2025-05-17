@@ -1321,32 +1321,11 @@ waste = case ( 1.1, "" ) of ( _, _ ) -> ()
             )
         , Test.test "determine lambda parameter type by unification with pattern in let destructuring: \\a -> let () = a in a"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetExpression
-                                { declarations =
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.LetDestructuring
-                                            (Elm.Syntax.Node.empty
-                                                Elm.Syntax.Pattern.UnitPattern
-                                            )
-                                            (Elm.Syntax.Node.Node (dummyRange 1)
-                                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                            )
-                                        )
-                                    ]
-                                , expression =
-                                    Elm.Syntax.Node.Node (dummyRange 2)
-                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                }
-                            )
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+unitIdentity = \\a -> let () = a in a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -2926,102 +2905,42 @@ tuple = "" |> Tuple.pair
             )
         , Test.test "single un-annotated let declaration getting its type from unification: \\a -> let b = [ a, 2.2 ] in a"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetExpression
-                                { declarations =
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.LetFunction
-                                            { declaration =
-                                                Elm.Syntax.Node.empty
-                                                    { name = Elm.Syntax.Node.empty "b"
-                                                    , arguments = []
-                                                    , expression =
-                                                        Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.Expression.ListExpr
-                                                                [ Elm.Syntax.Node.empty
-                                                                    (Elm.Syntax.Expression.Floatable 2.2)
-                                                                , Elm.Syntax.Node.Node (dummyRange 1)
-                                                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                                ]
-                                                            )
-                                                    }
-                                            , signature = Nothing
-                                            , documentation = Nothing
-                                            }
-                                        )
-                                    ]
-                                , expression =
-                                    Elm.Syntax.Node.Node (dummyRange 2)
-                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                }
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input = typeFloat
-                                , output = typeFloat
-                                }
+                """module A exposing (..)
+floatBeFloat = \\a -> let b = [ a, 2.2 ] in a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeFloat
+                                    , output = typeFloat
+                                    }
+                                )
                             )
                         )
             )
         , Test.test "unknown lambda parameter getting its type directly from annotated let: \\a -> let b : Float ; b = a in a"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetExpression
-                                { declarations =
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.LetFunction
-                                            { declaration =
-                                                Elm.Syntax.Node.empty
-                                                    { name = Elm.Syntax.Node.empty "b"
-                                                    , arguments = []
-                                                    , expression =
-                                                        Elm.Syntax.Node.Node
-                                                            (dummyRange 1)
-                                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                    }
-                                            , signature =
-                                                Just
-                                                    (Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "b"
-                                                        , typeAnnotation =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.TypeAnnotation.Typed
-                                                                    (Elm.Syntax.Node.empty ( [ "Basics" ], "Float" ))
-                                                                    []
-                                                                )
-                                                        }
-                                                    )
-                                            , documentation = Nothing
-                                            }
-                                        )
-                                    ]
-                                , expression =
-                                    Elm.Syntax.Node.Node
-                                        (dummyRange 2)
-                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                }
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input = typeFloat
-                                , output = typeFloat
-                                }
+                """module A exposing (..)
+allTheSame =
+    \\a ->
+        let b : Float
+            b = a
+        in
+        a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeFloat
+                                    , output = typeFloat
+                                    }
+                                )
                             )
                         )
             )
@@ -3170,70 +3089,26 @@ tuple = "" |> Tuple.pair
             )
         , Test.test "single un-annotated let declaration getting its type from unification with annotated let: \\a -> let b : Float ; b = a ; c = a in a"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetExpression
-                                { declarations =
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.LetFunction
-                                            { declaration =
-                                                Elm.Syntax.Node.empty
-                                                    { name = Elm.Syntax.Node.empty "b"
-                                                    , arguments = []
-                                                    , expression =
-                                                        Elm.Syntax.Node.Node
-                                                            (dummyRange 1)
-                                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                    }
-                                            , signature =
-                                                Just
-                                                    (Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "b"
-                                                        , typeAnnotation =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.TypeAnnotation.Typed
-                                                                    (Elm.Syntax.Node.empty ( [ "Basics" ], "Float" ))
-                                                                    []
-                                                                )
-                                                        }
-                                                    )
-                                            , documentation = Nothing
-                                            }
-                                        )
-                                    , Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.LetFunction
-                                            { declaration =
-                                                Elm.Syntax.Node.empty
-                                                    { name = Elm.Syntax.Node.empty "c"
-                                                    , arguments = []
-                                                    , expression =
-                                                        Elm.Syntax.Node.Node
-                                                            (dummyRange 2)
-                                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                    }
-                                            , signature = Nothing
-                                            , documentation = Nothing
-                                            }
-                                        )
-                                    ]
-                                , expression =
-                                    Elm.Syntax.Node.Node
-                                        (dummyRange 3)
-                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                }
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input = typeFloat
-                                , output = typeFloat
-                                }
+                """module A exposing (..)
+allTheSame =
+    \\a ->
+        let b : Float
+            b = a
+
+            c = a
+        in
+        a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeFloat
+                                    , output = typeFloat
+                                    }
+                                )
                             )
                         )
             )
@@ -3459,26 +3334,10 @@ tuple = "" |> Tuple.pair
             )
         , Test.test "self-referential a union with list of a \\a -> [ a, [ a ] ] should fail"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.Node (dummyRange 1)
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.ListExpr
-                                        [ Elm.Syntax.Node.Node (dummyRange 2)
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                        ]
-                                    )
-                                ]
-                            )
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+impossible = \\a -> [ a, [ a ] ]
+"""
+                    |> typeInferModuleFromSource
                     |> Expect.err
             )
         , Test.test "inner types are consistent in List.map (\\a -> a) [ 2.2 ]"
@@ -5785,13 +5644,6 @@ waste =
                         )
             )
         ]
-
-
-{-| TODO Remove in favor of typeInferModuleFromSource
--}
-dummyRange : Int -> Elm.Syntax.Range.Range
-dummyRange index =
-    { start = { row = index, column = 0 }, end = { row = index, column = 0 } }
 
 
 typeList : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
