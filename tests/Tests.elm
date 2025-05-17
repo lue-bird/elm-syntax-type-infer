@@ -5643,6 +5643,44 @@ waste =
                             )
                         )
             )
+        , Test.test "type variables are preserved across let use when variable comes from lambda: \\a -> let b = -a in b"
+            (\() ->
+                """module A exposing (..)
+waste =
+    \\a -> let b = -a in b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    , output = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "type variables are preserved across let use when variable comes from declaration parameter: (parameter) a = let b = -a in b"
+            (\() ->
+                """module A exposing (..)
+waste a =
+    let b = -a in b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    , output = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    }
+                                )
+                            )
+                        )
+            )
         ]
 
 
