@@ -7455,12 +7455,81 @@ expressionInfixOperationTypeInfer context infixOperation =
         )
         (operatorFunctionType
             { moduleOriginLookup = context.moduleOriginLookup
-            , range = infixOperation.fullRange
+            , range =
+                infixOperationApproximateOperatorRange
+                    { operator = infixOperation.operator
+                    , leftEnd = infixOperation.left |> Elm.Syntax.Node.range |> .end
+                    , rightStart = infixOperation.right |> Elm.Syntax.Node.range |> .start
+                    }
             }
             infixOperation.operator
         )
         (infixOperation.left |> expressionTypeInfer context)
         (infixOperation.right |> expressionTypeInfer context)
+
+
+{-| elm-syntax should include this info (and will in v8)
+This is just some stupid approximation to give better error messages
+-}
+infixOperationApproximateOperatorRange :
+    { operator : String
+    , leftEnd : Elm.Syntax.Range.Location
+    , rightStart : Elm.Syntax.Range.Location
+    }
+    -> Elm.Syntax.Range.Range
+infixOperationApproximateOperatorRange infixOperation =
+    let
+        operatorLength : Int
+        operatorLength =
+            infixOperation.operator |> String.length
+    in
+    if infixOperation.leftEnd.row == infixOperation.rightStart.row then
+        if infixOperation.leftEnd.column + operatorLength == infixOperation.rightStart.column then
+            -- x+y
+            { start =
+                { row = infixOperation.rightStart.row
+                , column = infixOperation.leftEnd.column
+                }
+            , end =
+                { row = infixOperation.rightStart.row
+                , column = infixOperation.rightStart.column
+                }
+            }
+
+        else
+            -- assume
+            -- x + y
+            { start =
+                { row = infixOperation.rightStart.row
+                , column =
+                    infixOperation.rightStart.column
+                        - 1
+                        - operatorLength
+                }
+            , end =
+                { row = infixOperation.rightStart.row
+                , column =
+                    infixOperation.rightStart.column - 1
+                }
+            }
+
+    else
+        -- assume
+        -- x
+        --     + y
+        { start =
+            { row = infixOperation.rightStart.row
+            , column =
+                infixOperation.rightStart.column
+                    - 1
+                    - operatorLength
+            }
+        , end =
+            { row = infixOperation.rightStart.row
+            , column =
+                infixOperation.rightStart.column - 1
+            }
+        }
 
 
 operatorFunctionType :
