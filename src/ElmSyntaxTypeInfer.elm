@@ -6028,11 +6028,6 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression c
                                                             )
 
                                                         else
-                                                            let
-                                                                _ =
-                                                                    Debug.log "directly use existing let type var"
-                                                                        inferredDeclarationTypeVariable
-                                                            in
                                                             inferredDeclarationTypeVariable
                                                     )
                                     in
@@ -6110,17 +6105,17 @@ expressionCaseTypeInfer :
                     (Type TypeVariableFromContext)
             }
 expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
-    let
-        caseRange : Elm.Syntax.Range.Range
-        caseRange =
-            { start = syntaxCasePattern |> Elm.Syntax.Node.range |> .start
-            , end = syntaxCaseResult |> Elm.Syntax.Node.range |> .end
-            }
-    in
     Result.andThen
         (\patternInferred ->
             Result.andThen
                 (\resultInferred ->
+                    let
+                        caseRange : Elm.Syntax.Range.Range
+                        caseRange =
+                            { start = syntaxCasePattern |> Elm.Syntax.Node.range |> .start
+                            , end = syntaxCaseResult |> Elm.Syntax.Node.range |> .end
+                            }
+                    in
                     Result.andThen
                         (\substitutionsFromUnifyingPatternVariablesWithUses ->
                             Result.map2
@@ -6261,11 +6256,6 @@ expressionReferenceTypeInfer context expressionReference =
                                                             )
 
                                                         else
-                                                            let
-                                                                _ =
-                                                                    Debug.log "directly use existing let type var"
-                                                                        partiallyInferredTypeVariable
-                                                            in
                                                             partiallyInferredTypeVariable
                                                     )
                                     in
@@ -8559,15 +8549,15 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                     name : String
                     name =
                         implementation.name |> Elm.Syntax.Node.value
-
-                    valueOrFunctionDeclarationToInferRange : Elm.Syntax.Range.Range
-                    valueOrFunctionDeclarationToInferRange =
-                        valueOrFunctionDeclarationToInfer
-                            |> syntaxValueOrFunctionDeclarationRange
                 in
                 Result.andThen
                     (\parametersInferred ->
                         let
+                            valueOrFunctionDeclarationToInferRange : Elm.Syntax.Range.Range
+                            valueOrFunctionDeclarationToInferRange =
+                                valueOrFunctionDeclarationToInfer
+                                    |> syntaxValueOrFunctionDeclarationRange
+
                             maybeDocumentationAndRange : Maybe { range : Elm.Syntax.Range.Range, content : String }
                             maybeDocumentationAndRange =
                                 case valueOrFunctionDeclarationToInfer.documentation of
@@ -9556,7 +9546,6 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
             typeVariablesFromContextToDisambiguationLookup
                 (declarationValueOrFunctionInfo
                     |> valueOrFunctionDeclarationInfoContainedTypeVariables
-                    |> Debug.log "all contained type variables"
                 )
     in
     declarationValueOrFunctionInfo
@@ -10305,7 +10294,9 @@ valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoF
             FastDict.empty
 
 
-valueOrFunctionDeclarationInfoRange : ValueOrFunctionDeclarationInfo typeVariable -> Elm.Syntax.Range.Range
+valueOrFunctionDeclarationInfoRange :
+    ValueOrFunctionDeclarationInfo typeVariable_
+    -> Elm.Syntax.Range.Range
 valueOrFunctionDeclarationInfoRange valueOrFunctionDeclarationInfo =
     { start =
         case valueOrFunctionDeclarationInfo.documentation of
