@@ -1,5 +1,6 @@
 module Tests exposing (suite)
 
+import Elm.Parser
 import Elm.Syntax.Declaration
 import Elm.Syntax.Exposing
 import Elm.Syntax.Expression
@@ -113,34 +114,35 @@ suite =
             )
         , Test.test "record accessor functions unified: [ .a, .b ]"
             (\() ->
-                Elm.Syntax.Expression.ListExpr
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.RecordAccessFunction ".a")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.RecordAccessFunction ".b")
-                    ]
-                    |> expressionExpectInferredType
-                        (typeList
-                            (ElmSyntaxTypeInfer.TypeNotVariable
-                                (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { fields =
-                                                    FastDict.fromList
-                                                        [ ( "b"
-                                                          , ElmSyntaxTypeInfer.TypeVariable "b"
-                                                          )
-                                                        , ( "a"
-                                                          , ElmSyntaxTypeInfer.TypeVariable "b"
-                                                          )
-                                                        ]
-                                                , recordVariable = "record"
-                                                }
-                                            )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeVariable "b"
-                                    }
+                """module A exposing (..)
+accessors = [ .a, .b ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (typeList
+                                (ElmSyntaxTypeInfer.TypeNotVariable
+                                    (ElmSyntaxTypeInfer.TypeFunction
+                                        { input =
+                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                    { fields =
+                                                        FastDict.fromList
+                                                            [ ( "b"
+                                                              , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                              )
+                                                            , ( "a"
+                                                              , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                              )
+                                                            ]
+                                                    , recordVariable = "baseRecord"
+                                                    }
+                                                )
+                                        , output =
+                                            ElmSyntaxTypeInfer.TypeVariable "a"
+                                        }
+                                    )
                                 )
                             )
                         )
@@ -161,23 +163,22 @@ suite =
             )
         , Test.test "(independent) integers and float in triple ( 1, 2.2, 3 )"
             (\() ->
-                Elm.Syntax.Expression.TupledExpression
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 1)
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 3)
-                    ]
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeTriple
-                                { part0 =
-                                    ElmSyntaxTypeInfer.TypeVariable "number"
-                                , part1 = typeFloat
-                                , part2 =
-                                    ElmSyntaxTypeInfer.TypeVariable "number1"
-                                }
+                """module A exposing (..)
+numbers = ( 1, 2.2, 3 )
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeTriple
+                                    { part0 =
+                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                    , part1 = typeFloat
+                                    , part2 =
+                                        ElmSyntaxTypeInfer.TypeVariable "number1"
+                                    }
+                                )
                             )
                         )
             )
@@ -543,12 +544,12 @@ suite =
                                             , fields =
                                                 FastDict.singleton "field"
                                                     (ElmSyntaxTypeInfer.TypeVariable
-                                                        "field"
+                                                        "fieldField"
                                                     )
                                             }
                                         )
                                 , output =
-                                    ElmSyntaxTypeInfer.TypeVariable "field"
+                                    ElmSyntaxTypeInfer.TypeVariable "fieldField"
                                 }
                             )
                         )
@@ -667,52 +668,11 @@ suite =
             )
         , Test.test "record update union with same record variable \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "rec")
-                                )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "rec")
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "a"
-                                            , Elm.Syntax.Node.empty
-                                                Elm.Syntax.Expression.UnitExpr
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Integer 1)
-                                            )
-                                        ]
-                                    )
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "rec")
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "c"
-                                            , Elm.Syntax.Node.empty
-                                                Elm.Syntax.Expression.UnitExpr
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Floatable 2.2)
-                                            )
-                                        ]
-                                    )
-                                ]
-                            )
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -720,7 +680,7 @@ suite =
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { recordVariable = "rec"
+                                                { recordVariable = "baseBaseRec"
                                                 , fields =
                                                     FastDict.fromList
                                                         [ ( "a"
@@ -739,7 +699,7 @@ suite =
                                         typeList
                                             (ElmSyntaxTypeInfer.TypeNotVariable
                                                 (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                    { recordVariable = "rec"
+                                                    { recordVariable = "baseBaseRec"
                                                     , fields =
                                                         FastDict.fromList
                                                             [ ( "a"
@@ -765,7 +725,7 @@ suite =
             recordExtensionTypeInExample =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeRecordExtension
-                        { recordVariable = "x"
+                        { recordVariable = "baseX"
                         , fields =
                             FastDict.fromList
                                 [ ( "a"
@@ -783,50 +743,11 @@ suite =
           in
           Test.test "record update union with record update over different record variable \\x y -> [ { x | a = (), b = 1 }, { y | c = (), b = 2.2 } ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "x")
-                        , Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "y")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "x")
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "a"
-                                            , Elm.Syntax.Node.empty
-                                                Elm.Syntax.Expression.UnitExpr
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Integer 1)
-                                            )
-                                        ]
-                                    )
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "y")
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "c"
-                                            , Elm.Syntax.Node.empty
-                                                Elm.Syntax.Expression.UnitExpr
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Floatable 2.2)
-                                            )
-                                        ]
-                                    )
-                                ]
-                            )
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+records = \\x y -> [ { x | a = (), b = 1 }, { y | c = (), b = 2.2 } ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -847,59 +768,17 @@ suite =
             )
         , Test.test "record update union with record \\a -> [ { a | b = 1 }, { c = (), b = 2.2 } ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordUpdateExpression
-                                        (Elm.Syntax.Node.empty "a")
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Integer 1)
-                                            )
-                                        ]
-                                    )
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.RecordExpr
-                                        [ Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "c"
-                                            , Elm.Syntax.Node.empty
-                                                Elm.Syntax.Expression.UnitExpr
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            ( Elm.Syntax.Node.empty "b"
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Floatable 2.2)
-                                            )
-                                        ]
-                                    )
-                                ]
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeRecord
-                                            (FastDict.fromList
-                                                [ ( "c"
-                                                  , ElmSyntaxTypeInfer.TypeNotVariable
-                                                        ElmSyntaxTypeInfer.TypeUnit
-                                                  )
-                                                , ( "b", typeFloat )
-                                                ]
-                                            )
-                                        )
-                                , output =
-                                    typeList
-                                        (ElmSyntaxTypeInfer.TypeNotVariable
+                """module A exposing (..)
+records = \\a -> [ { a | b = 1 }, { c = (), b = 2.2 } ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecord
                                                 (FastDict.fromList
                                                     [ ( "c"
@@ -910,8 +789,22 @@ suite =
                                                     ]
                                                 )
                                             )
-                                        )
-                                }
+                                    , output =
+                                        typeList
+                                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                                (ElmSyntaxTypeInfer.TypeRecord
+                                                    (FastDict.fromList
+                                                        [ ( "c"
+                                                          , ElmSyntaxTypeInfer.TypeNotVariable
+                                                                ElmSyntaxTypeInfer.TypeUnit
+                                                          )
+                                                        , ( "b", typeFloat )
+                                                        ]
+                                                    )
+                                                )
+                                            )
+                                    }
+                                )
                             )
                         )
             )
@@ -1137,31 +1030,11 @@ suite =
             )
         , Test.test "same generic pattern in pattern: case ( 1.1, \"\" ) of ( _, _ ) -> ()"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.TupledExpression
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 1.1)
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Literal "")
-                                ]
-                            )
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.TuplePattern
-                                    [ Elm.Syntax.Node.empty
-                                        Elm.Syntax.Pattern.AllPattern
-                                    , Elm.Syntax.Node.empty
-                                        Elm.Syntax.Pattern.AllPattern
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                Elm.Syntax.Expression.UnitExpr
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+waste = case ( 1.1, "" ) of ( _, _ ) -> ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -1643,16 +1516,11 @@ suite =
             )
         , Test.test "curried call: Tuple.pair <| \"\""
             (\() ->
-                Elm.Syntax.Expression.OperatorApplication
-                    "<|"
-                    Elm.Syntax.Infix.Right
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
-                    )
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Literal "")
-                    )
-                    |> expressionToInferredType
+                """module A exposing (..)
+tuple = Tuple.pair <| ""
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -1672,16 +1540,11 @@ suite =
             )
         , Test.test "curried call: \"\" |> Tuple.pair"
             (\() ->
-                Elm.Syntax.Expression.OperatorApplication
-                    "|>"
-                    Elm.Syntax.Infix.Left
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Literal "")
-                    )
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
-                    )
-                    |> expressionToInferredType
+                """module A exposing (..)
+tuple = "" |> Tuple.pair
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
@@ -4620,94 +4483,25 @@ suite =
             )
         , Test.test "inner types are consistent in unindent : List String -> List String ; unindent lines = lines |> List.map (\\line -> line)"
             (\() ->
-                { documentation = Nothing
-                , signature =
-                    Just
-                        (Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "unindent"
-                            , typeAnnotation =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                (Elm.Syntax.Node.empty ( [], "List" ))
-                                                [ Elm.Syntax.Node.empty
-                                                    (Elm.Syntax.TypeAnnotation.Typed
-                                                        (Elm.Syntax.Node.empty ( [], "String" ))
-                                                        []
-                                                    )
-                                                ]
-                                            )
-                                        )
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                (Elm.Syntax.Node.empty ( [], "List" ))
-                                                [ Elm.Syntax.Node.empty
-                                                    (Elm.Syntax.TypeAnnotation.Typed
-                                                        (Elm.Syntax.Node.empty ( [], "String" ))
-                                                        []
-                                                    )
-                                                ]
-                                            )
-                                        )
-                                    )
-                            }
-                        )
-                , declaration =
-                    Elm.Syntax.Node.empty
-                        { name = Elm.Syntax.Node.empty "unindent"
-                        , arguments =
-                            [ Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.VarPattern "lines")
-                            ]
-                        , expression =
-                            Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.OperatorApplication
-                                    "|>"
-                                    Elm.Syntax.Infix.Left
-                                    (Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.FunctionOrValue [] "lines")
-                                    )
-                                    (Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Expression.Application
-                                            [ Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
-                                            , Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.LambdaExpression
-                                                    { args =
-                                                        [ Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.Pattern.VarPattern "line")
-                                                        ]
-                                                    , expression =
-                                                        Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.Expression.FunctionOrValue [] "line")
-                                                    }
-                                                )
-                                            ]
-                                        )
-                                    )
-                                )
-                        }
-                }
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            []
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+unindent : List String -> List String
+unindent lines = lines |> List.map (\\line -> line)
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map (FastDict.map (\_ -> .result))
                     |> Expect.equal
                         (Ok
                             (FastDict.singleton "unindent"
-                                { range = Elm.Syntax.Range.empty
+                                { range = { end = { column = 51, row = 3 }, start = { column = 18, row = 3 } }
                                 , type_ = typeList typeString
                                 , value =
                                     ElmSyntaxTypeInfer.ExpressionInfixOperation
-                                        { operator =
+                                        { left =
+                                            { range = { end = { column = 23, row = 3 }, start = { column = 18, row = 3 } }
+                                            , type_ = typeList typeString
+                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "lines", qualification = [] }
+                                            }
+                                        , operator =
                                             { moduleOrigin = [ "Basics" ]
                                             , symbol = "|>"
                                             , type_ =
@@ -4730,18 +4524,8 @@ suite =
                                                         }
                                                     )
                                             }
-                                        , left =
-                                            { range = Elm.Syntax.Range.empty
-                                            , type_ = typeList typeString
-                                            , value =
-                                                ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = []
-                                                    , qualification = []
-                                                    , name = "lines"
-                                                    }
-                                            }
                                         , right =
-                                            { range = Elm.Syntax.Range.empty
+                                            { range = { end = { column = 51, row = 3 }, start = { column = 27, row = 3 } }
                                             , type_ =
                                                 ElmSyntaxTypeInfer.TypeNotVariable
                                                     (ElmSyntaxTypeInfer.TypeFunction
@@ -4751,8 +4535,44 @@ suite =
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionCall
-                                                    { called =
-                                                        { range = Elm.Syntax.Range.empty
+                                                    { argument0 =
+                                                        { range = { end = { column = 51, row = 3 }, start = { column = 36, row = 3 } }
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                    { input = typeString
+                                                                    , output = typeString
+                                                                    }
+                                                                )
+                                                        , value =
+                                                            ElmSyntaxTypeInfer.ExpressionParenthesized
+                                                                { range = { end = { column = 50, row = 3 }, start = { column = 37, row = 3 } }
+                                                                , type_ =
+                                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                                            { input = typeString
+                                                                            , output = typeString
+                                                                            }
+                                                                        )
+                                                                , value =
+                                                                    ElmSyntaxTypeInfer.ExpressionLambda
+                                                                        { parameter0 =
+                                                                            { range = { end = { column = 42, row = 3 }, start = { column = 38, row = 3 } }
+                                                                            , type_ = typeString
+                                                                            , value = ElmSyntaxTypeInfer.PatternVariable "line"
+                                                                            }
+                                                                        , parameter1Up = []
+                                                                        , result =
+                                                                            { range = { end = { column = 50, row = 3 }, start = { column = 46, row = 3 } }
+                                                                            , type_ = typeString
+                                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "line", qualification = [] }
+                                                                            }
+                                                                        }
+                                                                }
+                                                        }
+                                                    , argument1Up = []
+                                                    , called =
+                                                        { range = { end = { column = 35, row = 3 }, start = { column = 27, row = 3 } }
                                                         , type_ =
                                                             ElmSyntaxTypeInfer.TypeNotVariable
                                                                 (ElmSyntaxTypeInfer.TypeFunction
@@ -4772,42 +4592,8 @@ suite =
                                                                             )
                                                                     }
                                                                 )
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = [ "List" ]
-                                                                , qualification = [ "List" ]
-                                                                , name = "map"
-                                                                }
+                                                        , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
                                                         }
-                                                    , argument0 =
-                                                        { range = Elm.Syntax.Range.empty
-                                                        , type_ =
-                                                            ElmSyntaxTypeInfer.TypeNotVariable
-                                                                (ElmSyntaxTypeInfer.TypeFunction
-                                                                    { input = typeString, output = typeString }
-                                                                )
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.ExpressionLambda
-                                                                { parameter0 =
-                                                                    { range = Elm.Syntax.Range.empty
-                                                                    , type_ = typeString
-                                                                    , value =
-                                                                        ElmSyntaxTypeInfer.PatternVariable "line"
-                                                                    }
-                                                                , parameter1Up = []
-                                                                , result =
-                                                                    { range = Elm.Syntax.Range.empty
-                                                                    , type_ = typeString
-                                                                    , value =
-                                                                        ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { moduleOrigin = []
-                                                                            , qualification = []
-                                                                            , name = "line"
-                                                                            }
-                                                                    }
-                                                                }
-                                                        }
-                                                    , argument1Up = []
                                                     }
                                             }
                                         }
@@ -5679,127 +5465,71 @@ suite =
             )
         , Test.test "transitive un-annotated let declarations with constrained variable type as call result: let a = 2 ; b = a in ()"
             (\() ->
-                { documentation = Nothing
-                , signature =
-                    Just
-                        (Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "waste"
-                            , typeAnnotation =
-                                Elm.Syntax.Node.empty
-                                    Elm.Syntax.TypeAnnotation.Unit
-                            }
-                        )
-                , declaration =
-                    Elm.Syntax.Node.empty
-                        { name = Elm.Syntax.Node.empty "waste"
-                        , arguments = []
-                        , expression =
-                            Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.LetExpression
-                                    { declarations =
-                                        [ Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.LetFunction
-                                                { documentation = Nothing
-                                                , signature = Nothing
-                                                , declaration =
-                                                    Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "a"
-                                                        , arguments = []
-                                                        , expression =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.Expression.Integer 2)
-                                                        }
-                                                }
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.LetFunction
-                                                { documentation = Nothing
-                                                , signature = Nothing
-                                                , declaration =
-                                                    Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "b"
-                                                        , arguments = []
-                                                        , expression =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                        }
-                                                }
-                                            )
-                                        ]
-                                    , expression =
-                                        Elm.Syntax.Node.empty
-                                            Elm.Syntax.Expression.UnitExpr
-                                    }
-                                )
-                        }
-                }
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            []
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+waste =
+    let
+        a = 2 
+        b = a
+    in
+    ()
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map (FastDict.map (\_ -> .result))
                     |> Expect.equal
                         (Ok
                             (FastDict.singleton "waste"
-                                { range = Elm.Syntax.Range.empty
-                                , type_ =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        ElmSyntaxTypeInfer.TypeUnit
+                                { range = { end = { column = 7, row = 7 }, start = { column = 5, row = 3 } }
+                                , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                 , value =
                                     ElmSyntaxTypeInfer.ExpressionLetIn
                                         { declaration0 =
-                                            { range = Elm.Syntax.Range.empty
-                                            , declaration =
+                                            { declaration =
                                                 ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
-                                                    { signature = Nothing
-                                                    , nameRange = Elm.Syntax.Range.empty
-                                                    , name = "a"
+                                                    { name = "a"
+                                                    , nameRange = { end = { column = 10, row = 4 }, start = { column = 9, row = 4 } }
                                                     , parameters = []
                                                     , result =
-                                                        { range = Elm.Syntax.Range.empty
+                                                        { range = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
                                                         , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.ExpressionInteger
-                                                                { base = ElmSyntaxTypeInfer.Base10
-                                                                , value = 2
-                                                                }
+                                                        , value = ElmSyntaxTypeInfer.ExpressionInteger { base = ElmSyntaxTypeInfer.Base10, value = 2 }
                                                         }
+                                                    , signature = Nothing
                                                     , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
                                                     }
+                                            , range = { end = { column = 14, row = 4 }, start = { column = 9, row = 4 } }
                                             }
                                         , declaration1Up =
-                                            [ { range = Elm.Syntax.Range.empty
-                                              , declaration =
+                                            [ { declaration =
                                                     ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
-                                                        { signature = Nothing
-                                                        , nameRange = Elm.Syntax.Range.empty
-                                                        , name = "b"
+                                                        { name = "b"
+                                                        , nameRange =
+                                                            { end = { column = 10, row = 5 }
+                                                            , start = { column = 9, row = 5 }
+                                                            }
                                                         , parameters = []
                                                         , result =
-                                                            { range = Elm.Syntax.Range.empty
+                                                            { range =
+                                                                { end = { column = 14, row = 5 }
+                                                                , start = { column = 13, row = 5 }
+                                                                }
                                                             , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
-                                                            , value =
-                                                                ElmSyntaxTypeInfer.ExpressionReference
-                                                                    { moduleOrigin = []
-                                                                    , qualification = []
-                                                                    , name = "a"
-                                                                    }
+                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
                                                             }
+                                                        , signature = Nothing
                                                         , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
                                                         }
+                                              , range =
+                                                    { end = { column = 14, row = 5 }
+                                                    , start = { column = 9, row = 5 }
+                                                    }
                                               }
                                             ]
                                         , result =
-                                            { range = Elm.Syntax.Range.empty
-                                            , type_ =
-                                                ElmSyntaxTypeInfer.TypeNotVariable
-                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            { range =
+                                                { end = { column = 7, row = 7 }
+                                                , start = { column = 5, row = 7 }
+                                                }
+                                            , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                             , value = ElmSyntaxTypeInfer.ExpressionUnit
                                             }
                                         }
@@ -5809,136 +5539,64 @@ suite =
             )
         , Test.test "transitive (with a unification) un-annotated let declarations involving constrained variable type: let a = 2 ; b = -a in ()"
             (\() ->
-                { documentation = Nothing
-                , signature =
-                    Just
-                        (Elm.Syntax.Node.empty
-                            { name = Elm.Syntax.Node.empty "waste"
-                            , typeAnnotation =
-                                Elm.Syntax.Node.empty
-                                    Elm.Syntax.TypeAnnotation.Unit
-                            }
-                        )
-                , declaration =
-                    Elm.Syntax.Node.empty
-                        { name = Elm.Syntax.Node.empty "waste"
-                        , arguments = []
-                        , expression =
-                            Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.LetExpression
-                                    { declarations =
-                                        [ Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.LetFunction
-                                                { documentation = Nothing
-                                                , signature = Nothing
-                                                , declaration =
-                                                    Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "a"
-                                                        , arguments = []
-                                                        , expression =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.Expression.Integer 2)
-                                                        }
-                                                }
-                                            )
-                                        , Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.LetFunction
-                                                { documentation = Nothing
-                                                , signature = Nothing
-                                                , declaration =
-                                                    Elm.Syntax.Node.empty
-                                                        { name = Elm.Syntax.Node.empty "b"
-                                                        , arguments = []
-                                                        , expression =
-                                                            Elm.Syntax.Node.empty
-                                                                (Elm.Syntax.Expression.Negation
-                                                                    (Elm.Syntax.Node.empty
-                                                                        (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                                                    )
-                                                                )
-                                                        }
-                                                }
-                                            )
-                                        ]
-                                    , expression =
-                                        Elm.Syntax.Node.empty
-                                            Elm.Syntax.Expression.UnitExpr
-                                    }
-                                )
-                        }
-                }
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            []
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+waste =
+    let
+        a = 2
+        b = -a
+    in
+    ()
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map (FastDict.map (\_ -> .result))
                     |> Expect.equal
                         (Ok
                             (FastDict.singleton "waste"
-                                { range = Elm.Syntax.Range.empty
-                                , type_ =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        ElmSyntaxTypeInfer.TypeUnit
+                                { range = { end = { column = 7, row = 7 }, start = { column = 5, row = 3 } }
+                                , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                 , value =
                                     ElmSyntaxTypeInfer.ExpressionLetIn
                                         { declaration0 =
-                                            { range = Elm.Syntax.Range.empty
-                                            , declaration =
+                                            { declaration =
                                                 ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
-                                                    { signature = Nothing
-                                                    , nameRange = Elm.Syntax.Range.empty
-                                                    , name = "a"
+                                                    { name = "a"
+                                                    , nameRange = { end = { column = 10, row = 4 }, start = { column = 9, row = 4 } }
                                                     , parameters = []
                                                     , result =
-                                                        { range = Elm.Syntax.Range.empty
+                                                        { range = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
                                                         , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.ExpressionInteger
-                                                                { base = ElmSyntaxTypeInfer.Base10
-                                                                , value = 2
-                                                                }
+                                                        , value = ElmSyntaxTypeInfer.ExpressionInteger { base = ElmSyntaxTypeInfer.Base10, value = 2 }
                                                         }
+                                                    , signature = Nothing
                                                     , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
                                                     }
+                                            , range = { end = { column = 14, row = 4 }, start = { column = 9, row = 4 } }
                                             }
                                         , declaration1Up =
-                                            [ { range = Elm.Syntax.Range.empty
-                                              , declaration =
+                                            [ { declaration =
                                                     ElmSyntaxTypeInfer.LetValueOrFunctionDeclaration
-                                                        { signature = Nothing
-                                                        , nameRange = Elm.Syntax.Range.empty
-                                                        , name = "b"
+                                                        { name = "b"
+                                                        , nameRange = { end = { column = 10, row = 5 }, start = { column = 9, row = 5 } }
                                                         , parameters = []
                                                         , result =
-                                                            { range = Elm.Syntax.Range.empty
+                                                            { range = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
                                                             , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
                                                             , value =
                                                                 ElmSyntaxTypeInfer.ExpressionNegation
-                                                                    { range = Elm.Syntax.Range.empty
+                                                                    { range = { end = { column = 15, row = 5 }, start = { column = 14, row = 5 } }
                                                                     , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
-                                                                    , value =
-                                                                        ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { moduleOrigin = []
-                                                                            , qualification = []
-                                                                            , name = "a"
-                                                                            }
+                                                                    , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
                                                                     }
                                                             }
+                                                        , signature = Nothing
                                                         , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
                                                         }
+                                              , range = { end = { column = 15, row = 5 }, start = { column = 9, row = 5 } }
                                               }
                                             ]
                                         , result =
-                                            { range = Elm.Syntax.Range.empty
-                                            , type_ =
-                                                ElmSyntaxTypeInfer.TypeNotVariable
-                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            { range = { end = { column = 7, row = 7 }, start = { column = 5, row = 7 } }
+                                            , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                             , value = ElmSyntaxTypeInfer.ExpressionUnit
                                             }
                                         }
@@ -6284,3 +5942,72 @@ exampleModuleOriginLookup =
     []
         |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
             ElmSyntaxTypeInfer.elmCoreTypes
+
+
+typeInferModuleFromSource :
+    String
+    ->
+        Result
+            String
+            (FastDict.Dict
+                String
+                { parameters : List (ElmSyntaxTypeInfer.TypedNode (ElmSyntaxTypeInfer.Pattern String) String)
+                , result : ElmSyntaxTypeInfer.TypedNode (ElmSyntaxTypeInfer.Expression String) String
+                , type_ : ElmSyntaxTypeInfer.Type String
+                , nameRange : Elm.Syntax.Range.Range
+                , documentation : Maybe { content : String, range : Elm.Syntax.Range.Range }
+                , signature :
+                    Maybe
+                        { range : Elm.Syntax.Range.Range
+                        , nameRange : Elm.Syntax.Range.Range
+                        , annotationTypeRange : Elm.Syntax.Range.Range
+                        , annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
+                        }
+                }
+            )
+typeInferModuleFromSource moduleSource =
+    moduleSource
+        |> Elm.Parser.parseToFile
+        |> Result.mapError (\_ -> "failed to parse")
+        |> Result.andThen
+            (\parsed ->
+                let
+                    moduleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+                    moduleOriginLookup =
+                        parsed.imports
+                            |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                                ElmSyntaxTypeInfer.elmCoreTypes
+                in
+                parsed.declarations
+                    |> List.filterMap
+                        (\(Elm.Syntax.Node.Node _ parsedDeclaration) ->
+                            case parsedDeclaration of
+                                Elm.Syntax.Declaration.FunctionDeclaration function ->
+                                    Just function
+
+                                Elm.Syntax.Declaration.AliasDeclaration _ ->
+                                    Nothing
+
+                                Elm.Syntax.Declaration.CustomTypeDeclaration _ ->
+                                    Nothing
+
+                                Elm.Syntax.Declaration.PortDeclaration _ ->
+                                    Nothing
+
+                                Elm.Syntax.Declaration.InfixDeclaration _ ->
+                                    Nothing
+
+                                Elm.Syntax.Declaration.Destructuring _ _ ->
+                                    Nothing
+                        )
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        , moduleOriginLookup = moduleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            parsed.declarations
+                                |> List.map Elm.Syntax.Node.value
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookup
+                                |> .types
+                        }
+            )
