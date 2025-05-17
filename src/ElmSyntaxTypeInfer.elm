@@ -8881,32 +8881,66 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                         in
                         case valueOrFunctionDeclarationToInfer.signature of
                             Nothing ->
-                                Result.map
+                                Result.andThen
                                     (\resultInferred ->
-                                        let
-                                            inferredFullType : Type TypeVariableFromContext
-                                            inferredFullType =
-                                                parametersInferred.nodes
-                                                    |> List.foldr
-                                                        (\parameterTypedNode typeSoFar ->
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = parameterTypedNode.type_
-                                                                    , output = typeSoFar
-                                                                    }
-                                                                )
-                                                        )
-                                                        resultInferred.type_
-                                        in
-                                        soFar
-                                            |> FastDict.insert name
-                                                { nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                , documentation = maybeDocumentationAndRange
-                                                , signature = Nothing
-                                                , result = resultInferred
-                                                , type_ = inferredFullType
-                                                , parameters = parametersInferred.nodes
+                                        Result.andThen
+                                            (\parameterPatternVariablesAndUsesUnificationSubstitutions ->
+                                                Result.map2
+                                                    (\resultSubstituted parametersSubstituted ->
+                                                        let
+                                                            inferredFullType : Type TypeVariableFromContext
+                                                            inferredFullType =
+                                                                parametersSubstituted
+                                                                    |> List.foldr
+                                                                        (\parameterTypedNode typeSoFar ->
+                                                                            TypeNotVariable
+                                                                                (TypeFunction
+                                                                                    { input = parameterTypedNode.type_
+                                                                                    , output = typeSoFar
+                                                                                    }
+                                                                                )
+                                                                        )
+                                                                        resultInferred.type_
+                                                        in
+                                                        -- TODO unify parameter uses and apply substitutions
+                                                        soFar
+                                                            |> FastDict.insert name
+                                                                { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                                , documentation = maybeDocumentationAndRange
+                                                                , signature = Nothing
+                                                                , result = resultSubstituted
+                                                                , type_ = inferredFullType
+                                                                , parameters = parametersSubstituted
+                                                                }
+                                                    )
+                                                    (resultInferred
+                                                        |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                            parameterPatternVariablesAndUsesUnificationSubstitutions
+                                                    )
+                                                    (parametersInferred.nodes
+                                                        |> listFoldrWhileOkFrom []
+                                                            (\parameterInferred parametersSubstitutedSoFar ->
+                                                                Result.map
+                                                                    (\parameterSubstituted ->
+                                                                        parameterSubstituted :: parametersSubstitutedSoFar
+                                                                    )
+                                                                    (parameterInferred
+                                                                        |> patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                            parameterPatternVariablesAndUsesUnificationSubstitutions
+                                                                    )
+                                                            )
+                                                    )
+                                            )
+                                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                                { declarationTypes = declarationTypes
+                                                , range = valueOrFunctionDeclarationToInferRange
                                                 }
+                                                (parametersInferred.nodes
+                                                    |> listMapToFastDictsAndUnify
+                                                        patternTypedNodeIntroducedVariables
+                                                )
+                                                resultInferred
+                                            )
                                     )
                                     (implementation.expression
                                         |> expressionTypeInfer
