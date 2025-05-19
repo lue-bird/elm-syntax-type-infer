@@ -3454,6 +3454,63 @@ impossible = \\a -> [ a, [ a ] ]
                             )
                         )
             )
+        , Test.test "inner types in annotated module-level declaration: eat : String -> () ; eat yum = ()"
+            (\() ->
+                """module A exposing (..)
+eat : String -> ()
+eat yum = ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "eat"
+                                { documentation = Nothing
+                                , nameRange = { end = { column = 4, row = 3 }, start = { column = 1, row = 3 } }
+                                , signature =
+                                    Just
+                                        { annotationType =
+                                            Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
+                                                (Elm.Syntax.Node.Node { end = { column = 13, row = 2 }, start = { column = 7, row = 2 } }
+                                                    (Elm.Syntax.TypeAnnotation.Typed
+                                                        (Elm.Syntax.Node.Node { end = { column = 13, row = 2 }, start = { column = 7, row = 2 } } ( [], "String" ))
+                                                        []
+                                                    )
+                                                )
+                                                (Elm.Syntax.Node.Node { end = { column = 19, row = 2 }, start = { column = 17, row = 2 } }
+                                                    Elm.Syntax.TypeAnnotation.Unit
+                                                )
+                                        , annotationTypeRange = { end = { column = 19, row = 2 }, start = { column = 7, row = 2 } }
+                                        , nameRange = { end = { column = 4, row = 2 }, start = { column = 1, row = 2 } }
+                                        , range = { end = { column = 19, row = 2 }, start = { column = 1, row = 2 } }
+                                        }
+                                , parameters =
+                                    [ { range = { end = { column = 8, row = 3 }, start = { column = 5, row = 3 } }
+                                      , type_ = typeString
+                                      , value =
+                                            ElmSyntaxTypeInfer.PatternVariable "yum"
+                                      }
+                                    ]
+                                , type_ =
+                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                        (ElmSyntaxTypeInfer.TypeFunction
+                                            { input = typeString
+                                            , output =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    ElmSyntaxTypeInfer.TypeUnit
+                                            }
+                                        )
+                                , result =
+                                    { range = { end = { column = 13, row = 3 }, start = { column = 11, row = 3 } }
+                                    , type_ =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    , value =
+                                        ElmSyntaxTypeInfer.ExpressionUnit
+                                    }
+                                }
+                            )
+                        )
+            )
         , Test.test "inner types are consistent in listFloatIdentity : List Float -> List Float ; listFloatIdentity listFloat = List.map (\\a -> a) listFloat"
             (\() ->
                 { documentation = Nothing
