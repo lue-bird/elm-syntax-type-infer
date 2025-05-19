@@ -2145,6 +2145,279 @@ tuple = "" |> Tuple.pair
                             )
                         )
             )
+        , let
+            importedTypes :
+                FastDict.Dict
+                    Elm.Syntax.ModuleName.ModuleName
+                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes =
+                FastDict.union
+                    ElmSyntaxTypeInfer.elmCoreTypes
+                    (FastDict.singleton [ "Imported" ]
+                        ([ Elm.Syntax.Declaration.AliasDeclaration
+                            { documentation = Nothing
+                            , name = Elm.Syntax.Node.empty "Record"
+                            , generics = []
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.Record
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "field"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            )
+                                        ]
+                                    )
+                            }
+                         ]
+                            |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                exampleModuleOriginLookup
+                            |> .types
+                        )
+                    )
+
+            moduleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+            moduleOriginLookup =
+                [ Elm.Syntax.Node.empty
+                    { moduleName = Elm.Syntax.Node.empty [ "Imported" ]
+                    , moduleAlias = Nothing
+                    , exposingList =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                (Elm.Syntax.Exposing.All Elm.Syntax.Range.empty)
+                            )
+                    }
+                ]
+                    |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                        importedTypes
+          in
+          Test.test "fully applied imported (exposing(..)) record type alias constructor for one field, no generics"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "Record")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "constructedRecord"
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = importedTypes
+                        , moduleOriginLookup = moduleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Imported" ]
+                                    , name = "Record"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
+        , let
+            importedTypes :
+                FastDict.Dict
+                    Elm.Syntax.ModuleName.ModuleName
+                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes =
+                FastDict.union
+                    ElmSyntaxTypeInfer.elmCoreTypes
+                    (FastDict.singleton [ "Imported" ]
+                        ([ Elm.Syntax.Declaration.AliasDeclaration
+                            { documentation = Nothing
+                            , name = Elm.Syntax.Node.empty "Record"
+                            , generics = []
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.Record
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "field"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            )
+                                        ]
+                                    )
+                            }
+                         ]
+                            |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                exampleModuleOriginLookup
+                            |> .types
+                        )
+                    )
+
+            moduleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+            moduleOriginLookup =
+                [ Elm.Syntax.Node.empty
+                    { moduleName = Elm.Syntax.Node.empty [ "Imported" ]
+                    , moduleAlias = Nothing
+                    , exposingList =
+                        Just
+                            (Elm.Syntax.Node.empty
+                                (Elm.Syntax.Exposing.Explicit
+                                    [ Elm.Syntax.Node.empty
+                                        (Elm.Syntax.Exposing.TypeOrAliasExpose "Record")
+                                    ]
+                                )
+                            )
+                    }
+                ]
+                    |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                        importedTypes
+          in
+          Test.test "fully applied imported (explicit exposing) record type alias constructor for one field, no generics"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [] "Record")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "constructedRecord"
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = importedTypes
+                        , moduleOriginLookup = moduleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Imported" ]
+                                    , name = "Record"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
+        , let
+            importedTypes :
+                FastDict.Dict
+                    Elm.Syntax.ModuleName.ModuleName
+                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes =
+                FastDict.union
+                    ElmSyntaxTypeInfer.elmCoreTypes
+                    (FastDict.singleton [ "Imported" ]
+                        ([ Elm.Syntax.Declaration.AliasDeclaration
+                            { documentation = Nothing
+                            , name = Elm.Syntax.Node.empty "Record"
+                            , generics = []
+                            , typeAnnotation =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.TypeAnnotation.Record
+                                        [ Elm.Syntax.Node.empty
+                                            ( Elm.Syntax.Node.empty "field"
+                                            , Elm.Syntax.Node.empty
+                                                (Elm.Syntax.TypeAnnotation.Typed
+                                                    (Elm.Syntax.Node.empty ( [], "String" ))
+                                                    []
+                                                )
+                                            )
+                                        ]
+                                    )
+                            }
+                         ]
+                            |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                exampleModuleOriginLookup
+                            |> .types
+                        )
+                    )
+
+            moduleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
+            moduleOriginLookup =
+                [ Elm.Syntax.Node.empty
+                    { moduleName = Elm.Syntax.Node.empty [ "Imported" ]
+                    , moduleAlias = Nothing
+                    , exposingList = Nothing
+                    }
+                ]
+                    |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
+                        importedTypes
+          in
+          Test.test "fully applied imported (not exposed) record type alias constructor for one field, no generics"
+            (\() ->
+                [ { declaration =
+                        Elm.Syntax.Node.empty
+                            { expression =
+                                Elm.Syntax.Node.empty
+                                    (Elm.Syntax.Expression.Application
+                                        [ Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.FunctionOrValue [ "Imported" ] "Record")
+                                        , Elm.Syntax.Node.empty
+                                            (Elm.Syntax.Expression.Literal "")
+                                        ]
+                                    )
+                            , name = Elm.Syntax.Node.empty "constructedRecord"
+                            , arguments = []
+                            }
+                  , signature = Nothing
+                  , documentation = Nothing
+                  }
+                ]
+                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
+                        { importedTypes = importedTypes
+                        , moduleOriginLookup = moduleOriginLookup
+                        , otherModuleDeclaredTypes =
+                            []
+                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
+                                    moduleOriginLookup
+                                |> .types
+                        }
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = [ "Imported" ]
+                                    , name = "Record"
+                                    , arguments = []
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "local type aliases with same name as variant from different module: type alias Just a = a ; just : Just (Just String) ; just = \"\""
             (\() ->
                 [ { declaration =

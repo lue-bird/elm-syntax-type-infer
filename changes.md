@@ -8,6 +8,9 @@ optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
 
 
+#### 1.0.9
+- correctly infer imported record type alias constructor
+
 #### 1.0.8
 - correctly don't instantiate let type variables that are also used outside the let declaration
 - faster

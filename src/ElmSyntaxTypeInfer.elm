@@ -866,7 +866,21 @@ importsToModuleOriginLookup modulesTypes imports =
                                                             ( moduleAliasOrFullName, reference )
                                                             syntaxImport.moduleName
                                                 )
-                                                FastDict.empty
+                                                (moduleTypes.typeAliases
+                                                    |> FastDict.foldl
+                                                        (\typeAliasName typeAliasInfo recordTypeALiasNamesSoFar ->
+                                                            case typeAliasInfo.recordFieldOrder of
+                                                                Nothing ->
+                                                                    recordTypeALiasNamesSoFar
+
+                                                                Just _ ->
+                                                                    recordTypeALiasNamesSoFar
+                                                                        |> FastDict.insert
+                                                                            ( moduleAliasOrFullName, typeAliasName )
+                                                                            syntaxImport.moduleName
+                                                        )
+                                                        FastDict.empty
+                                                )
                                         )
                         in
                         { keepOperatorIsExposedFromParserAdvanced =
@@ -1006,8 +1020,18 @@ importToNormal modulesTypes syntaxImport =
                                     |> List.foldl
                                         (\(Elm.Syntax.Node.Node _ expose) namesSoFar ->
                                             case expose of
-                                                Elm.Syntax.Exposing.TypeOrAliasExpose _ ->
-                                                    namesSoFar
+                                                Elm.Syntax.Exposing.TypeOrAliasExpose opaqueTypeOrTypeAliasName ->
+                                                    case moduleTypes.typeAliases |> FastDict.get opaqueTypeOrTypeAliasName of
+                                                        Nothing ->
+                                                            namesSoFar
+
+                                                        Just typeAlias ->
+                                                            case typeAlias.recordFieldOrder of
+                                                                Nothing ->
+                                                                    namesSoFar
+
+                                                                Just _ ->
+                                                                    opaqueTypeOrTypeAliasName :: namesSoFar
 
                                                 Elm.Syntax.Exposing.InfixExpose operator ->
                                                     operator :: namesSoFar
