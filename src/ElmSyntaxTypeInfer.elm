@@ -8650,11 +8650,11 @@ in a module.
         []
             |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
                 ElmSyntaxTypeInfer.elmCoreTypes
-    
+
 See [`ModuleTypes`](#ModuleTypes) and [`ModuleOriginLookup`](#ModuleOriginLookup)
 
 Warning! Always first verify that provided type alias declarations aren't (mutually) recursive.
-Otherwise this function might never terminate. 
+Otherwise this function might never terminate.
 
 -}
 valueAndFunctionDeclarations :
@@ -8902,7 +8902,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                         )
                                                                         resultInferred.type_
                                                         in
-                                                        -- TODO unify parameter uses and apply substitutions
                                                         soFar
                                                             |> FastDict.insert name
                                                                 { nameRange = implementation.name |> Elm.Syntax.Node.range
@@ -10316,6 +10315,7 @@ collectedLocalReferenceUsesMerge a b =
     -->     , ( "setFromListMap", 4 )
     -->     , ( "setUnifyList", 1 )
     -->     ]
+
 -}
 fastDictUnionWith :
     (comparable -> a -> a -> a)
@@ -13123,6 +13123,7 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
    so if we have less condensed variables, the type is more limited
  - also, if any condensed variable has more constraints,
    the type is also more limited
+
 -}
 typesAreEquallyStrict :
     FastSetFast TypeVariableFromContext
