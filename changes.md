@@ -5,6 +5,8 @@ considering
 
 optimization ideas
 - special-case declarations without parameters
+- merge expressionTypedNodeUsesOfPartiallyInferredDeclarations
+  and regular uses collecting
 - go through typeUnify and add e.g. typeUnifyWithFunction
 
 
