@@ -7051,7 +7051,7 @@ expressionTypedNodeUsesOfPartiallyInferredDeclarations context expressionTypedNo
             let
                 fieldUsesOfPartiallyInferredDeclarations :
                     FastDict.Dict
-                        ( RangeAsComparable, String )
+                        TypeVariableFromContext
                         { partiallyInferredDeclarationType : Type TypeVariableFromContext
                         , uses :
                             List
@@ -7206,7 +7206,7 @@ expressionLetInUsesOfPartiallyInferredDeclarations context letIn =
 
 usesOfPartiallyInferredDeclarationsMerge :
     FastDict.Dict
-        ( RangeAsComparable, String )
+        TypeVariableFromContext
         { partiallyInferredDeclarationType : Type TypeVariableFromContext
         , uses :
             List
@@ -7216,7 +7216,7 @@ usesOfPartiallyInferredDeclarationsMerge :
         }
     ->
         FastDict.Dict
-            ( RangeAsComparable, String )
+            TypeVariableFromContext
             { partiallyInferredDeclarationType : Type TypeVariableFromContext
             , uses :
                 List
@@ -7226,7 +7226,7 @@ usesOfPartiallyInferredDeclarationsMerge :
             }
     ->
         FastDict.Dict
-            ( RangeAsComparable, String )
+            TypeVariableFromContext
             { partiallyInferredDeclarationType : Type TypeVariableFromContext
             , uses :
                 List
@@ -7254,7 +7254,7 @@ listMapToUsesOfPartiallyInferredDeclarationsAndMerge :
     (a
      ->
         FastDict.Dict
-            ( RangeAsComparable, String )
+            TypeVariableFromContext
             { partiallyInferredDeclarationType : Type TypeVariableFromContext
             , uses :
                 List
@@ -7266,7 +7266,7 @@ listMapToUsesOfPartiallyInferredDeclarationsAndMerge :
     -> List a
     ->
         FastDict.Dict
-            ( RangeAsComparable, String )
+            TypeVariableFromContext
             { partiallyInferredDeclarationType : Type TypeVariableFromContext
             , uses :
                 List
@@ -9251,7 +9251,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                         allPartiallyInferredDeclarationsAndUsesBeforeSubstitution :
                             FastDict.Dict
-                                ( RangeAsComparable, String )
+                                TypeVariableFromContext
                                 { partiallyInferredDeclarationType : Type TypeVariableFromContext
                                 , uses :
                                     List
@@ -9307,7 +9307,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                         allPartiallyInferredDeclarationsAndUsesCondensed :
                             FastDict.Dict
-                                ( RangeAsComparable, String )
+                                TypeVariableFromContext
                                 { partiallyInferredDeclarationType : Type TypeVariableFromContext
                                 , uses :
                                     List
@@ -9512,7 +9512,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                         allPartiallyInferredDeclarationsAndUsesBeforeSubstitution :
                                             FastDict.Dict
-                                                ( RangeAsComparable, String )
+                                                TypeVariableFromContext
                                                 { partiallyInferredDeclarationType : Type TypeVariableFromContext
                                                 , uses :
                                                     List
@@ -9545,7 +9545,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                         allPartiallyInferredDeclarationsAndUsesAfterSubstitution :
                                             FastDict.Dict
-                                                ( RangeAsComparable, String )
+                                                TypeVariableFromContext
                                                 { partiallyInferredDeclarationType : Type TypeVariableFromContext
                                                 , uses :
                                                     List
