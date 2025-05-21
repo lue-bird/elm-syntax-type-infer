@@ -397,10 +397,11 @@ typeNotVariableMapVariables variableMap typeNotVariable =
                 }
 
 
+{-| because the FastSet module doesn't offer certain helpers
+that are highly valuable for performance which FastDict does have
+e.g. fast conversion between the two or restructure
+-}
 type alias FastSetFast a =
-    -- because the FastSet module doesn't offer certain helpers
-    -- that are highly valuable for performance which FastDict does have
-    -- e.g. fast conversion between the two or restructure
     FastDict.Dict a ()
 
 
