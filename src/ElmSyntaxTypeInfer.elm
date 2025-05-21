@@ -3174,38 +3174,37 @@ typeNotVariableUnify context a b =
                                         (TypeConstruct
                                             { moduleOrigin = aTypeConstruct.moduleOrigin
                                             , name = aTypeConstruct.name
-                                            , arguments = argumentsABUnified.arguments
+                                            , arguments =
+                                                argumentsABUnified.argumentsReverse
+                                                    |> List.reverse
                                             }
                                         )
                                 , substitutions = argumentsABUnified.substitutions
                                 }
                             )
-                            (-- TODO single operation
-                             List.map2
-                                (\aArgument bArgument -> { a = aArgument, b = bArgument })
+                            (listFoldl2WhileOkFrom
+                                argumentsReverseListEmptySubstitutionsNone
                                 aTypeConstruct.arguments
                                 bTypeConstruct.arguments
-                                |> listFoldrWhileOkFrom
-                                    argumentsListEmptySubstitutionsNone
-                                    (\ab soFar ->
-                                        Result.andThen
-                                            (\argumentTypeUnifiedAndSubstitutions ->
-                                                Result.map
-                                                    (\substitutionsWithArgument ->
-                                                        { arguments =
-                                                            argumentTypeUnifiedAndSubstitutions.type_
-                                                                :: soFar.arguments
-                                                        , substitutions =
-                                                            substitutionsWithArgument
-                                                        }
-                                                    )
-                                                    (variableSubstitutionsMerge context
-                                                        soFar.substitutions
-                                                        argumentTypeUnifiedAndSubstitutions.substitutions
-                                                    )
-                                            )
-                                            (typeUnify context ab.a ab.b)
-                                    )
+                                (\aArgument bArgument soFar ->
+                                    Result.andThen
+                                        (\argumentTypeUnifiedAndSubstitutions ->
+                                            Result.map
+                                                (\substitutionsWithArgument ->
+                                                    { argumentsReverse =
+                                                        argumentTypeUnifiedAndSubstitutions.type_
+                                                            :: soFar.argumentsReverse
+                                                    , substitutions =
+                                                        substitutionsWithArgument
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge context
+                                                    soFar.substitutions
+                                                    argumentTypeUnifiedAndSubstitutions.substitutions
+                                                )
+                                        )
+                                        (typeUnify context aArgument bArgument)
+                                )
                             )
 
                     else
@@ -3748,6 +3747,16 @@ argumentsListEmptySubstitutionsNone =
     }
 
 
+argumentsReverseListEmptySubstitutionsNone :
+    { argumentsReverse : List argument_
+    , substitutions : VariableSubstitutions
+    }
+argumentsReverseListEmptySubstitutionsNone =
+    { argumentsReverse = []
+    , substitutions = variableSubstitutionsNone
+    }
+
+
 okTypeUnitSubstitutionsNone : Result error_ { type_ : Type TypeVariableFromContext, substitutions : VariableSubstitutions }
 okTypeUnitSubstitutionsNone =
     Ok
@@ -3823,48 +3832,43 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                     (TypeNotVariable b)
                                 )
                         )
-                        (-- TODO single operation
-                         List.map2
-                            (\parameterName argument ->
-                                { variable =
-                                    ( context.range |> rangeToAsComparable
-                                    , prefix ++ (parameterName |> stringFirstCharToUpper)
-                                    )
-                                , type_ = argument
-                                }
-                            )
+                        (listFoldl2WhileOkFrom
+                            { type_ =
+                                aOriginAliasDeclaration.type_
+                                    |> typeMapVariables
+                                        (\aliasVariable ->
+                                            ( context.range |> rangeToAsComparable
+                                            , prefix ++ (aliasVariable |> stringFirstCharToUpper)
+                                            )
+                                        )
+                            , substitutions = variableSubstitutionsNone
+                            }
                             aOriginAliasDeclaration.parameters
                             aTypeConstructToExpand.arguments
-                            |> listFoldlWhileOkFrom
-                                { type_ =
-                                    aOriginAliasDeclaration.type_
-                                        |> typeMapVariables
-                                            (\aliasVariable ->
-                                                ( context.range |> rangeToAsComparable
-                                                , prefix ++ (aliasVariable |> stringFirstCharToUpper)
-                                                )
+                            (\parameterName argument constructedAliasedTypeSoFar ->
+                                Result.andThen
+                                    (\afterSubstitution ->
+                                        Result.map
+                                            (\substitutionsSoFarAndAfterSubstitution ->
+                                                { type_ = afterSubstitution.type_
+                                                , substitutions = substitutionsSoFarAndAfterSubstitution
+                                                }
                                             )
-                                , substitutions = variableSubstitutionsNone
-                                }
-                                (\substitution constructedAliasedTypeSoFar ->
-                                    Result.andThen
-                                        (\afterSubstitution ->
-                                            Result.map
-                                                (\substitutionsSoFarAndAfterSubstitution ->
-                                                    { type_ = afterSubstitution.type_
-                                                    , substitutions = substitutionsSoFarAndAfterSubstitution
-                                                    }
+                                            (variableSubstitutionsMerge context
+                                                constructedAliasedTypeSoFar.substitutions
+                                                afterSubstitution.substitutions
+                                            )
+                                    )
+                                    (constructedAliasedTypeSoFar.type_
+                                        |> typeSubstituteVariable context
+                                            { variable =
+                                                ( context.range |> rangeToAsComparable
+                                                , prefix ++ (parameterName |> stringFirstCharToUpper)
                                                 )
-                                                (variableSubstitutionsMerge context
-                                                    constructedAliasedTypeSoFar.substitutions
-                                                    afterSubstitution.substitutions
-                                                )
-                                        )
-                                        (constructedAliasedTypeSoFar.type_
-                                            |> typeSubstituteVariable context
-                                                substitution
-                                        )
-                                )
+                                            , type_ = argument
+                                            }
+                                    )
+                            )
                         )
                         |> Just
 
@@ -15149,6 +15153,35 @@ listMapToFastDict elementToKeyValue list =
                 soFar |> FastDict.insert keyValue.key keyValue.value
             )
             FastDict.empty
+
+
+listFoldl2WhileOkFrom :
+    state
+    -> List a
+    -> List b
+    -> (a -> b -> state -> Result error state)
+    -> Result error state
+listFoldl2WhileOkFrom initialState aList bList reduce =
+    case aList of
+        [] ->
+            Ok initialState
+
+        aHead :: aTail ->
+            case bList of
+                [] ->
+                    Ok initialState
+
+                bHead :: bTail ->
+                    case reduce aHead bHead initialState of
+                        Err error ->
+                            Err error
+
+                        Ok stateAfterReducingHeads ->
+                            listFoldl2WhileOkFrom
+                                stateAfterReducingHeads
+                                aTail
+                                bTail
+                                reduce
 
 
 listFoldlWhileOkFromResult :
