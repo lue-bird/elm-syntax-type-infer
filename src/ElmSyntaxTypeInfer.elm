@@ -9441,11 +9441,6 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                 , range = everywhereRange
                                                                 }
                                                                 unificationSubstitutionsSoFar
-                                                                -- TODO partialTypeNewInstance could
-                                                                -- create accidental overlaps in the second
-                                                                -- cycle. We should explicitly
-                                                                -- check that for uses and disambiguate accordingly
-                                                                -- (seems too complicated)
                                                                 unified.substitutions
                                                         )
                                                         (typeUnify
@@ -11945,13 +11940,6 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                                                 |> rangeAsComparableIncludesRange
                                                                                     use.range
                                                                         then
-                                                                            -- TODO can create accidental overlaps
-                                                                            -- with variables in the existing use type
-                                                                            -- in a second cycle. We should explicitly
-                                                                            -- check that for uses and disambiguate accordingly
-                                                                            -- (seems too complicated)
-                                                                            -- or e.g. put the literal substitution/new let type
-                                                                            -- in the name
                                                                             let
                                                                                 ( _, inferredDeclarationTypeVariableName ) =
                                                                                     inferredDeclarationTypeVariable
