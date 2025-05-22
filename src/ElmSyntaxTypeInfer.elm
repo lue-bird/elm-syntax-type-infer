@@ -6231,7 +6231,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         )
                         letInTypedNodeInferred
                     )
-                    (substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression
+                    (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
                         typeContext
                         ((declaration0Inferred :: declaration1UpInferred)
                             |> listMapToFastDictsAndUnify
@@ -6340,7 +6340,7 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context intr
             )
 
 
-substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression :
+substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
@@ -6355,8 +6355,7 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression :
             (Expression (Type TypeVariableFromContext))
             (Type TypeVariableFromContext)
     -> Result String VariableSubstitutions
-substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
-    -- TODO don't reuse for top-level as they always use forall type vars
+substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     expressionTypedNode
         |> expressionTypedNodeUsesOfLocalReferences
             introducedDeclarations
@@ -6386,6 +6385,7 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression c
                                                             ( inferredDeclarationTypeVariableUsesRangeAsComparable, inferredDeclarationTypeVariableName ) =
                                                                 inferredDeclarationTypeVariable
                                                         in
+                                                        -- TODO(verify) instead, check if the variable reaches outside the let declaration
                                                         if
                                                             inferredDeclarationType.range
                                                                 |> rangeIncludesRangeAsComparable
@@ -6397,6 +6397,91 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression c
 
                                                         else
                                                             inferredDeclarationTypeVariable
+                                                    )
+                                    in
+                                    Result.andThen
+                                        (\useUnifiedWithNewLetTypeInstance ->
+                                            -- we need to check if the partialTpeNewInstance
+                                            -- is actually more strict then the already existing use type.
+                                            -- If we don't, this would run indefinitely: E.g.
+                                            -- a : number
+                                            -- b = round a
+                                            -- where a is already known as Float
+                                            -- when it is unified with the let `number`
+                                            if
+                                                typesAreEquallyStrict
+                                                    (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
+                                                    (useType |> typeContainedVariables)
+                                            then
+                                                Ok
+                                                    { equivalentVariables =
+                                                        equivalentVariableSetMerge
+                                                            soFarWithUses.equivalentVariables
+                                                            useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                    , variableToType = soFarWithUses.variableToType
+                                                    }
+
+                                            else
+                                                variableSubstitutionsMerge context
+                                                    soFarWithUses
+                                                    useUnifiedWithNewLetTypeInstance.substitutions
+                                        )
+                                        (typeUnify context
+                                            useType
+                                            newDeclarationTypeInstanceForUse
+                                        )
+                                )
+            )
+
+
+substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    }
+    ->
+        FastDict.Dict
+            String
+            { range : Elm.Syntax.Range.Range
+            , type_ : Type TypeVariableFromContext
+            }
+    ->
+        TypedNode
+            (Expression (Type TypeVariableFromContext))
+            (Type TypeVariableFromContext)
+    -> Result String VariableSubstitutions
+substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
+    expressionTypedNode
+        |> expressionTypedNodeUsesOfLocalReferences
+            introducedDeclarations
+        |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
+            (\declarationName usesInLambdaResult soFar ->
+                case introducedDeclarations |> FastDict.get declarationName of
+                    Nothing ->
+                        Err
+                            ("("
+                                ++ (context.range |> rangeToInfoString)
+                                ++ ") "
+                                ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
+                            )
+
+                    Just inferredDeclarationType ->
+                        usesInLambdaResult
+                            |> fastDictFoldlWhileOkFrom
+                                soFar
+                                (\useRangeAsComparable useType soFarWithUses ->
+                                    let
+                                        newDeclarationTypeInstanceForUse : Type TypeVariableFromContext
+                                        newDeclarationTypeInstanceForUse =
+                                            inferredDeclarationType.type_
+                                                |> typeMapVariables
+                                                    (\inferredDeclarationTypeVariable ->
+                                                        let
+                                                            ( _, inferredDeclarationTypeVariableName ) =
+                                                                inferredDeclarationTypeVariable
+                                                        in
+                                                        ( useRangeAsComparable
+                                                        , inferredDeclarationTypeVariableName
+                                                        )
                                                     )
                                     in
                                     Result.andThen
@@ -8606,7 +8691,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                             resultSubstitutions
                                     )
                                     (declarationInfo.result
-                                        |> substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression
+                                        |> substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression
                                             { declarationTypes = declarationTypes
                                             , range = declarationInfo |> valueOrFunctionDeclarationInfoRange
                                             }
