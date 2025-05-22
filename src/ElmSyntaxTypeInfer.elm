@@ -6312,7 +6312,7 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
 substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context parameterIntroducedTypeVariables expressionTypedNode =
     expressionTypedNode
         |> expressionTypedNodeUsesOfLocalReferences
-            (parameterIntroducedTypeVariables |> fastDictToFastSetFast)
+            parameterIntroducedTypeVariables
         |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
             (\variableName usesInLambdaResult soFar ->
                 case parameterIntroducedTypeVariables |> FastDict.get variableName of
@@ -6359,7 +6359,7 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression c
     -- TODO don't reuse for top-level as they always use forall type vars
     expressionTypedNode
         |> expressionTypedNodeUsesOfLocalReferences
-            (parameterIntroducedTypeVariables |> fastDictToFastSetFast)
+            parameterIntroducedTypeVariables
         |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
             (\declarationName usesInLambdaResult soFar ->
                 case parameterIntroducedTypeVariables |> FastDict.get declarationName of
@@ -8955,9 +8955,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                         allUnannotatedInferredDeclarationsUsesAfterCondensing =
                                             valueAndFunctionDeclarationsCondensed
                                                 |> valueAndFunctionDeclarationsUsesOfLocalReferences
-                                                    (moduleLevelPartiallyInferredDeclarations
-                                                        |> FastDict.map (\_ _ -> ())
-                                                    )
+                                                    moduleLevelPartiallyInferredDeclarations
 
                                         unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution :
                                             List
@@ -9129,9 +9127,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                         allPartiallyInferredDeclarationsAndUsesAfterSubstitution =
                                             valueAndFunctionDeclarationsSubstituted.declarations
                                                 |> valueAndFunctionDeclarationsUsesOfLocalReferences
-                                                    (moduleLevelPartiallyInferredDeclarations
-                                                        |> FastDict.map (\_ _ -> ())
-                                                    )
+                                                    moduleLevelPartiallyInferredDeclarations
 
                                         maybeSubstitutionOfPartiallyInferredDeclaration :
                                             Maybe
@@ -9623,7 +9619,7 @@ listMapToFastDictsAndUnify elementToSet elements =
 
 
 valueAndFunctionDeclarationsUsesOfLocalReferences :
-    FastSetFast String
+    FastDict.Dict String whatever_
     ->
         FastDict.Dict
             String
@@ -9650,7 +9646,7 @@ valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect infer
 
 
 expressionTypedNodeUsesOfLocalReferences :
-    FastSetFast String
+    FastDict.Dict String whatever_
     ->
         TypedNode
             (Expression (Type TypeVariableFromContext))
@@ -9849,7 +9845,7 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
 
 
 expressionLetInUsesOfLocalReferences :
-    FastSetFast String
+    FastDict.Dict String whatever_
     ->
         { declaration1Up :
             List
@@ -9889,7 +9885,7 @@ expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
 
 
 letDeclarationUsesOfLocalReferences :
-    FastSetFast String
+    FastDict.Dict String whatever_
     -> LetDeclaration (Type TypeVariableFromContext)
     ->
         FastDict.Dict
@@ -11550,7 +11546,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                         variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError : Result String VariableSubstitutions
                         variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError =
                             expressionTypedNodeUsesOfLocalReferences
-                                (updatedValueOrFunctionTypes |> FastDict.map (\_ _ -> ()))
+                                updatedValueOrFunctionTypes
                                 resultLetInNode
                                 |> fastDictFoldlWhileOkFrom
                                     variableSubstitutionsNone
@@ -12472,9 +12468,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                         variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError : Result String VariableSubstitutions
                         variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError =
                             expressionLetInUsesOfLocalReferences
-                                (moreConcreteDeclarationTypesToApplyToUses
-                                    |> FastDict.map (\_ _ -> ())
-                                )
+                                moreConcreteDeclarationTypesToApplyToUses
                                 condensedLetIn
                                 |> fastDictFoldlWhileOkFrom
                                     variableSubstitutionsNone
@@ -14742,13 +14736,6 @@ fastSetFastAny valueIsFound dict =
                     || state.left ()
                     || state.right ()
             )
-
-
-fastDictToFastSetFast :
-    FastDict.Dict comparableKey value_
-    -> FastSetFast comparableKey
-fastDictToFastSetFast fastDict =
-    fastDict |> FastDict.map (\_ _ -> ())
 
 
 listMapToFastDict :
