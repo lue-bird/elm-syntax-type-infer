@@ -6385,7 +6385,6 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                                             ( inferredDeclarationTypeVariableUsesRangeAsComparable, inferredDeclarationTypeVariableName ) =
                                                                 inferredDeclarationTypeVariable
                                                         in
-                                                        -- TODO(verify) instead, check if the variable reaches outside the let declaration
                                                         if
                                                             inferredDeclarationType.range
                                                                 |> rangeIncludesRangeAsComparable
