@@ -6309,13 +6309,13 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
             (Expression (Type TypeVariableFromContext))
             (Type TypeVariableFromContext)
     -> Result String VariableSubstitutions
-substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context parameterIntroducedTypeVariables expressionTypedNode =
+substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context introducedVariables expressionTypedNode =
     expressionTypedNode
         |> expressionTypedNodeUsesOfLocalReferences
-            parameterIntroducedTypeVariables
+            introducedVariables
         |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
             (\variableName usesInLambdaResult soFar ->
-                case parameterIntroducedTypeVariables |> FastDict.get variableName of
+                case introducedVariables |> FastDict.get variableName of
                     Nothing ->
                         Err
                             ("("
@@ -6355,14 +6355,14 @@ substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression :
             (Expression (Type TypeVariableFromContext))
             (Type TypeVariableFromContext)
     -> Result String VariableSubstitutions
-substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression context parameterIntroducedTypeVariables expressionTypedNode =
+substitutionsForInstanceUnifyingIntroducedDeclarationTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     -- TODO don't reuse for top-level as they always use forall type vars
     expressionTypedNode
         |> expressionTypedNodeUsesOfLocalReferences
-            parameterIntroducedTypeVariables
+            introducedDeclarations
         |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
             (\declarationName usesInLambdaResult soFar ->
-                case parameterIntroducedTypeVariables |> FastDict.get declarationName of
+                case introducedDeclarations |> FastDict.get declarationName of
                     Nothing ->
                         Err
                             ("("
@@ -6949,11 +6949,6 @@ locationAsComparableMax aLocationAsComparable bLocationAsComparable =
         ( aRow, Basics.max aColumn bColumn )
 
 
-{-| Attention: resulting `introducedTypeVariables`
-will not contain type variables introduced from a potential let destructuring pattern
-or let declaration type (annotated or not).
-These have to be tracked separately
--}
 letDeclarationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
