@@ -8963,7 +8963,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                     FastDict.Dict
                                                         RangeAsComparable
                                                         (Type TypeVariableFromContext)
-                                                , partiallyInferredDeclarationType : Type TypeVariableFromContext
+                                                , moreStrictInferredDeclarationType : Type TypeVariableFromContext
                                                 }
                                         unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution =
                                             allUnannotatedInferredDeclarationsUsesAfterCondensing
@@ -9006,7 +9006,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                                                 partialTypeVariableAmongEquivalentVariablesSoFar
 
                                                                             else
-                                                                                { partiallyInferredDeclarationType =
+                                                                                { moreStrictInferredDeclarationType =
                                                                                     inferredDeclarationCondensed.type_
                                                                                 , uses = uses
                                                                                 }
@@ -9034,7 +9034,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                             let
                                                                 partialTypeNewInstance : Type TypeVariableFromContext
                                                                 partialTypeNewInstance =
-                                                                    partialTypeVariableAmongEquivalentVariables.partiallyInferredDeclarationType
+                                                                    partialTypeVariableAmongEquivalentVariables.moreStrictInferredDeclarationType
                                                                         |> typeMapVariables
                                                                             (\( _, variableName ) ->
                                                                                 ( useRangeAsComparable
@@ -9152,8 +9152,8 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                                                     Just inferredDeclarationAfterSubstituting ->
                                                                         if
-                                                                            inferredDeclarationAfterSubstituting.type_
-                                                                                /= inferredDeclarationBeforeSubstituting.type_
+                                                                            inferredDeclarationBeforeSubstituting.type_
+                                                                                |> typeContainsVariable variableOfSubstitutionToApply
                                                                         then
                                                                             { uses = uses
                                                                             , partiallyInferredDeclarationType =
