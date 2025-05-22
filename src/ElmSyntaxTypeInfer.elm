@@ -7465,7 +7465,6 @@ operatorFunctionType :
             , leftType : Type TypeVariableFromContext
             , rightType : Type TypeVariableFromContext
             , resultType : Type TypeVariableFromContext
-            , introducedTypeVariables : FastSetFast TypeVariableFromContext
             }
 operatorFunctionType context operator =
     case operator of
@@ -7475,27 +7474,16 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = a
                 , rightType =
                     TypeNotVariable
@@ -7513,27 +7501,16 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType =
                     TypeNotVariable
                         (TypeFunction
@@ -7551,36 +7528,20 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
-                cVariable : TypeVariableFromContext
-                cVariable =
-                    ( rangeAsComparable, "c" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable cVariable
+                    TypeVariable ( rangeAsComparable, "c" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                        |> FastDict.insert cVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType =
                     TypeNotVariable
                         (TypeFunction
@@ -7610,36 +7571,20 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
-                cVariable : TypeVariableFromContext
-                cVariable =
-                    ( rangeAsComparable, "c" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable cVariable
+                    TypeVariable ( rangeAsComparable, "c" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                        |> FastDict.insert cVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType =
                     TypeNotVariable
                         (TypeFunction
@@ -7669,17 +7614,12 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                appendableVariable : TypeVariableFromContext
-                appendableVariable =
-                    ( rangeAsComparable, "appendable" )
-
                 appendable : Type TypeVariableFromContext
                 appendable =
-                    TypeVariable appendableVariable
+                    TypeVariable ( rangeAsComparable, "appendable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton appendableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = appendable
                 , rightType = appendable
                 , resultType = appendable
@@ -7687,17 +7627,12 @@ operatorFunctionType context operator =
 
         "==" ->
             let
-                equatableVariable : TypeVariableFromContext
-                equatableVariable =
-                    ( context.range |> rangeToAsComparable, "equatable" )
-
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable equatableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "equatable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton equatableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = equatable
                 , rightType = equatable
                 , resultType = typeBasicsBool
@@ -7705,17 +7640,12 @@ operatorFunctionType context operator =
 
         "/=" ->
             let
-                equatableVariable : TypeVariableFromContext
-                equatableVariable =
-                    ( context.range |> rangeToAsComparable, "equatable" )
-
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable equatableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "equatable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton equatableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = equatable
                 , rightType = equatable
                 , resultType = typeBasicsBool
@@ -7723,17 +7653,12 @@ operatorFunctionType context operator =
 
         "::" ->
             let
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( context.range |> rangeToAsComparable, "element" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "element" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton aVariable ()
-                , moduleOrigin = moduleNameList
+                { moduleOrigin = moduleNameList
                 , leftType = a
                 , rightType = typeListList a
                 , resultType = typeListList a
@@ -7741,17 +7666,12 @@ operatorFunctionType context operator =
 
         "*" ->
             let
-                numberVariable : TypeVariableFromContext
-                numberVariable =
-                    ( context.range |> rangeToAsComparable, "number" )
-
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable numberVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton numberVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = number
                 , rightType = number
                 , resultType = number
@@ -7759,17 +7679,12 @@ operatorFunctionType context operator =
 
         "+" ->
             let
-                numberVariable : TypeVariableFromContext
-                numberVariable =
-                    ( context.range |> rangeToAsComparable, "number" )
-
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable numberVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton numberVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = number
                 , rightType = number
                 , resultType = number
@@ -7777,17 +7692,12 @@ operatorFunctionType context operator =
 
         "-" ->
             let
-                numberVariable : TypeVariableFromContext
-                numberVariable =
-                    ( context.range |> rangeToAsComparable, "number" )
-
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable numberVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton numberVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = number
                 , rightType = number
                 , resultType = number
@@ -7798,17 +7708,12 @@ operatorFunctionType context operator =
 
         "^" ->
             let
-                numberVariable : TypeVariableFromContext
-                numberVariable =
-                    ( context.range |> rangeToAsComparable, "number" )
-
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable numberVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton numberVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = number
                 , rightType = number
                 , resultType = number
@@ -7816,17 +7721,12 @@ operatorFunctionType context operator =
 
         "<=" ->
             let
-                comparableVariable : TypeVariableFromContext
-                comparableVariable =
-                    ( context.range |> rangeToAsComparable, "comparable" )
-
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable comparableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton comparableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = comparable
                 , rightType = comparable
                 , resultType = typeBasicsBool
@@ -7834,17 +7734,12 @@ operatorFunctionType context operator =
 
         ">=" ->
             let
-                comparableVariable : TypeVariableFromContext
-                comparableVariable =
-                    ( context.range |> rangeToAsComparable, "comparable" )
-
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable comparableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton comparableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = comparable
                 , rightType = comparable
                 , resultType = typeBasicsBool
@@ -7852,17 +7747,12 @@ operatorFunctionType context operator =
 
         ">" ->
             let
-                comparableVariable : TypeVariableFromContext
-                comparableVariable =
-                    ( context.range |> rangeToAsComparable, "comparable" )
-
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable comparableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton comparableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = comparable
                 , rightType = comparable
                 , resultType = typeBasicsBool
@@ -7870,17 +7760,12 @@ operatorFunctionType context operator =
 
         "<" ->
             let
-                comparableVariable : TypeVariableFromContext
-                comparableVariable =
-                    ( context.range |> rangeToAsComparable, "comparable" )
-
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable comparableVariable
+                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
             in
             Ok
-                { introducedTypeVariables = FastDict.singleton comparableVariable ()
-                , moduleOrigin = moduleNameBasics
+                { moduleOrigin = moduleNameBasics
                 , leftType = comparable
                 , rightType = comparable
                 , resultType = typeBasicsBool
@@ -7904,44 +7789,23 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced then
                     let
-                        varContextVariable : TypeVariableFromContext
-                        varContextVariable =
-                            ( rangeAsComparable, "context" )
-
-                        problemVariable : TypeVariableFromContext
-                        problemVariable =
-                            ( rangeAsComparable, "problem" )
-
-                        keepVariable : TypeVariableFromContext
-                        keepVariable =
-                            ( rangeAsComparable, "keep" )
-
-                        ignoreVariable : TypeVariableFromContext
-                        ignoreVariable =
-                            ( rangeAsComparable, "ignore" )
-
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable varContextVariable
+                            TypeVariable ( rangeAsComparable, "context" )
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable problemVariable
+                            TypeVariable ( rangeAsComparable, "problem" )
 
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable keepVariable
+                            TypeVariable ( rangeAsComparable, "keep" )
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ignoreVariable
+                            TypeVariable ( rangeAsComparable, "ignore" )
                     in
-                    { introducedTypeVariables =
-                        FastDict.singleton varContextVariable ()
-                            |> FastDict.insert problemVariable ()
-                            |> FastDict.insert keepVariable ()
-                            |> FastDict.insert ignoreVariable ()
-                    , moduleOrigin = moduleNameParserAdvanced
+                    { moduleOrigin = moduleNameParserAdvanced
                     , leftType = typeParserAdvancedParser varContext problem keep
                     , rightType = typeParserAdvancedParser varContext problem ignore
                     , resultType = typeParserAdvancedParser varContext problem keep
@@ -7949,26 +7813,15 @@ operatorFunctionType context operator =
 
                  else
                     let
-                        keepVariable : TypeVariableFromContext
-                        keepVariable =
-                            ( rangeAsComparable, "keep" )
-
-                        ignoreVariable : TypeVariableFromContext
-                        ignoreVariable =
-                            ( rangeAsComparable, "ignore" )
-
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable keepVariable
+                            TypeVariable ( rangeAsComparable, "keep" )
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ignoreVariable
+                            TypeVariable ( rangeAsComparable, "ignore" )
                     in
-                    { introducedTypeVariables =
-                        FastDict.singleton keepVariable ()
-                            |> FastDict.insert ignoreVariable ()
-                    , moduleOrigin = moduleNameParser
+                    { moduleOrigin = moduleNameParser
                     , leftType = typeParserParser keep
                     , rightType = typeParserParser ignore
                     , resultType = typeParserParser keep
@@ -7984,44 +7837,23 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced then
                     let
-                        varContextVariable : TypeVariableFromContext
-                        varContextVariable =
-                            ( rangeAsComparable, "context" )
-
-                        problemVariable : TypeVariableFromContext
-                        problemVariable =
-                            ( rangeAsComparable, "problem" )
-
-                        aVariable : TypeVariableFromContext
-                        aVariable =
-                            ( rangeAsComparable, "a" )
-
-                        bVariable : TypeVariableFromContext
-                        bVariable =
-                            ( rangeAsComparable, "b" )
-
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable varContextVariable
+                            TypeVariable ( rangeAsComparable, "context" )
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable problemVariable
+                            TypeVariable ( rangeAsComparable, "problem" )
 
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable aVariable
+                            TypeVariable ( rangeAsComparable, "a" )
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable bVariable
+                            TypeVariable ( rangeAsComparable, "b" )
                     in
-                    { introducedTypeVariables =
-                        FastDict.singleton varContextVariable ()
-                            |> FastDict.insert problemVariable ()
-                            |> FastDict.insert aVariable ()
-                            |> FastDict.insert bVariable ()
-                    , moduleOrigin = moduleNameParserAdvanced
+                    { moduleOrigin = moduleNameParserAdvanced
                     , leftType =
                         typeParserAdvancedParser
                             varContext
@@ -8039,26 +7871,15 @@ operatorFunctionType context operator =
 
                  else
                     let
-                        aVariable : TypeVariableFromContext
-                        aVariable =
-                            ( rangeAsComparable, "a" )
-
-                        bVariable : TypeVariableFromContext
-                        bVariable =
-                            ( rangeAsComparable, "b" )
-
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable aVariable
+                            TypeVariable ( rangeAsComparable, "a" )
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable bVariable
+                            TypeVariable ( rangeAsComparable, "b" )
                     in
-                    { introducedTypeVariables =
-                        FastDict.singleton aVariable ()
-                            |> FastDict.insert bVariable ()
-                    , moduleOrigin = moduleNameParser
+                    { moduleOrigin = moduleNameParser
                     , leftType =
                         typeParserParser
                             (TypeNotVariable
@@ -8079,36 +7900,20 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
-                cVariable : TypeVariableFromContext
-                cVariable =
-                    ( rangeAsComparable, "c" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable cVariable
+                    TypeVariable ( rangeAsComparable, "c" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                        |> FastDict.insert cVariable ()
-                , moduleOrigin = moduleNameUrlParser
+                { moduleOrigin = moduleNameUrlParser
                 , leftType = typeUrlParserParser a b
                 , rightType = typeUrlParserParser b c
                 , resultType = typeUrlParserParser a c
@@ -8120,36 +7925,20 @@ operatorFunctionType context operator =
                 rangeAsComparable =
                     context.range |> rangeToAsComparable
 
-                aVariable : TypeVariableFromContext
-                aVariable =
-                    ( rangeAsComparable, "a" )
-
-                bVariable : TypeVariableFromContext
-                bVariable =
-                    ( rangeAsComparable, "b" )
-
-                queryVariable : TypeVariableFromContext
-                queryVariable =
-                    ( rangeAsComparable, "query" )
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable aVariable
+                    TypeVariable ( rangeAsComparable, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable bVariable
+                    TypeVariable ( rangeAsComparable, "b" )
 
                 query : Type TypeVariableFromContext
                 query =
-                    TypeVariable queryVariable
+                    TypeVariable ( rangeAsComparable, "query" )
             in
             Ok
-                { introducedTypeVariables =
-                    FastDict.singleton aVariable ()
-                        |> FastDict.insert bVariable ()
-                        |> FastDict.insert queryVariable ()
-                , moduleOrigin = moduleNameUrlParser
+                { moduleOrigin = moduleNameUrlParser
                 , leftType =
                     typeUrlParserParser
                         a
@@ -8178,16 +7967,14 @@ operatorFunctionType context operator =
 okIdivOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSetFast variable
-        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , leftType : Type variable
         , rightType : Type variable
         , resultType : Type variable
         }
 okIdivOperatorInfo =
     Ok
-        { introducedTypeVariables = FastDict.empty
-        , moduleOrigin = moduleNameBasics
+        { moduleOrigin = moduleNameBasics
         , leftType = typeBasicsInt
         , rightType = typeBasicsInt
         , resultType = typeBasicsInt
@@ -8197,16 +7984,14 @@ okIdivOperatorInfo =
 okFdivOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSetFast variable
-        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , leftType : Type variable
         , rightType : Type variable
         , resultType : Type variable
         }
 okFdivOperatorInfo =
     Ok
-        { introducedTypeVariables = FastDict.empty
-        , moduleOrigin = moduleNameBasics
+        { moduleOrigin = moduleNameBasics
         , leftType = typeBasicsFloat
         , rightType = typeBasicsFloat
         , resultType = typeBasicsFloat
@@ -8216,16 +8001,14 @@ okFdivOperatorInfo =
 okOrOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSetFast variable
-        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , leftType : Type variable
         , rightType : Type variable
         , resultType : Type variable
         }
 okOrOperatorInfo =
     Ok
-        { introducedTypeVariables = FastDict.empty
-        , moduleOrigin = moduleNameBasics
+        { moduleOrigin = moduleNameBasics
         , leftType = typeBasicsBool
         , rightType = typeBasicsBool
         , resultType = typeBasicsBool
@@ -8235,16 +8018,14 @@ okOrOperatorInfo =
 okAndOperatorInfo :
     Result
         error_
-        { introducedTypeVariables : FastSetFast variable
-        , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , leftType : Type variable
         , rightType : Type variable
         , resultType : Type variable
         }
 okAndOperatorInfo =
     Ok
-        { introducedTypeVariables = FastDict.empty
-        , moduleOrigin = moduleNameBasics
+        { moduleOrigin = moduleNameBasics
         , leftType = typeBasicsBool
         , rightType = typeBasicsBool
         , resultType = typeBasicsBool
