@@ -9129,49 +9129,89 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                 |> valueAndFunctionDeclarationsUsesOfLocalReferences
                                                     moduleLevelPartiallyInferredDeclarations
 
-                                        maybeSubstitutionOfPartiallyInferredDeclaration :
-                                            Maybe
+                                        substitutionsOfPartiallyInferredDeclarationUses :
+                                            List
                                                 { uses :
                                                     FastDict.Dict
                                                         RangeAsComparable
                                                         (Type TypeVariableFromContext)
                                                 , partiallyInferredDeclarationType : Type TypeVariableFromContext
                                                 }
-                                        maybeSubstitutionOfPartiallyInferredDeclaration =
-                                            -- TODO must be a list instead, substitution could cover multiple
+                                        substitutionsOfPartiallyInferredDeclarationUses =
                                             allPartiallyInferredDeclarationsAndUsesAfterSubstitution
-                                                |> fastDictMapAndSmallestJust
-                                                    (\unannotatedInferredDeclarationName uses ->
+                                                |> FastDict.foldl
+                                                    (\unannotatedInferredDeclarationName uses soFar ->
                                                         case moduleLevelPartiallyInferredDeclarations |> FastDict.get unannotatedInferredDeclarationName of
                                                             Nothing ->
-                                                                Nothing
+                                                                soFar
 
                                                             Just inferredDeclarationBeforeSubstituting ->
                                                                 case valueAndFunctionDeclarationsSubstituted.declarations |> FastDict.get unannotatedInferredDeclarationName of
                                                                     Nothing ->
-                                                                        Nothing
+                                                                        soFar
 
                                                                     Just inferredDeclarationAfterSubstituting ->
                                                                         if
                                                                             inferredDeclarationAfterSubstituting.type_
                                                                                 /= inferredDeclarationBeforeSubstituting.type_
                                                                         then
-                                                                            Just
-                                                                                { uses = uses
-                                                                                , partiallyInferredDeclarationType =
-                                                                                    inferredDeclarationAfterSubstituting.type_
-                                                                                }
+                                                                            { uses = uses
+                                                                            , partiallyInferredDeclarationType =
+                                                                                inferredDeclarationAfterSubstituting.type_
+                                                                            }
+                                                                                :: soFar
 
                                                                         else
-                                                                            Nothing
+                                                                            soFar
+                                                    )
+                                                    []
+
+                                        updatePartiallyInferredSubstitutionsOrError : Result String VariableSubstitutions
+                                        updatePartiallyInferredSubstitutionsOrError =
+                                            substitutionsOfPartiallyInferredDeclarationUses
+                                                |> listFoldlWhileOkFrom
+                                                    variableSubstitutionsNone
+                                                    (\substitutionOfPartiallyInferredDeclaration substitutionsSoFar ->
+                                                        substitutionOfPartiallyInferredDeclaration.uses
+                                                            |> fastDictFoldlWhileOkFrom
+                                                                substitutionsSoFar
+                                                                (\useRangeAsComparable useType unificationSubstitutionsWithUsesSoFar ->
+                                                                    let
+                                                                        partialTypeNewInstance : Type TypeVariableFromContext
+                                                                        partialTypeNewInstance =
+                                                                            substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
+                                                                                |> typeMapVariables
+                                                                                    (\( _, variableName ) ->
+                                                                                        ( useRangeAsComparable
+                                                                                        , variableName
+                                                                                        )
+                                                                                    )
+                                                                    in
+                                                                    Result.andThen
+                                                                        (\unified ->
+                                                                            variableSubstitutionsMerge
+                                                                                everywhereTypeContext
+                                                                                unificationSubstitutionsWithUsesSoFar
+                                                                                unified.substitutions
+                                                                        )
+                                                                        (typeUnify
+                                                                            everywhereTypeContext
+                                                                            partialTypeNewInstance
+                                                                            useType
+                                                                        )
+                                                                )
                                                     )
                                     in
-                                    case maybeSubstitutionOfPartiallyInferredDeclaration of
-                                        Nothing ->
+                                    case updatePartiallyInferredSubstitutionsOrError of
+                                        Err error ->
+                                            Err error
+
+                                        Ok updatePartiallyInferredSubstitutions ->
                                             case
-                                                variableSubstitutionsMerge
+                                                variableSubstitutionsMerge3
                                                     everywhereTypeContext
                                                     valueAndFunctionDeclarationsSubstituted.substitutions
+                                                    updatePartiallyInferredSubstitutions
                                                     remainingVariableToTypeAndSubstitutions
                                             of
                                                 Err error ->
@@ -9183,60 +9223,6 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                         , substitutions = substitutionsAfterSubstitution
                                                         }
                                                         valueAndFunctionDeclarationsSubstituted.declarations
-
-                                        Just substitutionOfPartiallyInferredDeclaration ->
-                                            let
-                                                updatePartiallyInferredSubstitutionsOrError : Result String VariableSubstitutions
-                                                updatePartiallyInferredSubstitutionsOrError =
-                                                    substitutionOfPartiallyInferredDeclaration.uses
-                                                        |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
-                                                            (\useRangeAsComparable useType unificationSubstitutionsSoFar ->
-                                                                let
-                                                                    partialTypeNewInstance : Type TypeVariableFromContext
-                                                                    partialTypeNewInstance =
-                                                                        substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
-                                                                            |> typeMapVariables
-                                                                                (\( _, variableName ) ->
-                                                                                    ( useRangeAsComparable
-                                                                                    , variableName
-                                                                                    )
-                                                                                )
-                                                                in
-                                                                Result.andThen
-                                                                    (\unified ->
-                                                                        variableSubstitutionsMerge
-                                                                            everywhereTypeContext
-                                                                            unificationSubstitutionsSoFar
-                                                                            unified.substitutions
-                                                                    )
-                                                                    (typeUnify
-                                                                        everywhereTypeContext
-                                                                        partialTypeNewInstance
-                                                                        useType
-                                                                    )
-                                                            )
-                                            in
-                                            case updatePartiallyInferredSubstitutionsOrError of
-                                                Err error ->
-                                                    Err error
-
-                                                Ok updatePartiallyInferredSubstitutions ->
-                                                    case
-                                                        variableSubstitutionsMerge3
-                                                            everywhereTypeContext
-                                                            valueAndFunctionDeclarationsSubstituted.substitutions
-                                                            updatePartiallyInferredSubstitutions
-                                                            remainingVariableToTypeAndSubstitutions
-                                                    of
-                                                        Err error ->
-                                                            Err error
-
-                                                        Ok substitutionsAfterSubstitution ->
-                                                            valueAndFunctionDeclarationsApplySubstitutions
-                                                                { declarationTypes = state.declarationTypes
-                                                                , substitutions = substitutionsAfterSubstitution
-                                                                }
-                                                                valueAndFunctionDeclarationsSubstituted.declarations
 
 
 partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty :
