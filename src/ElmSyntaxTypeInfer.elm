@@ -663,22 +663,40 @@ typeNotVariableContainedVariables typeNotVariable =
                     (FastDict.singleton typeRecordExtension.recordVariable ())
 
 
+typeVariableFromContextEquals : TypeVariableFromContext -> TypeVariableFromContext -> Bool
+typeVariableFromContextEquals ( aRangeAsComparable, aName ) ( bRangeAsComparable, bName ) =
+    (aName == bName)
+        && rangeAsComparableEquals aRangeAsComparable bRangeAsComparable
+
+
+rangeAsComparableEquals : RangeAsComparable -> RangeAsComparable -> Bool
+rangeAsComparableEquals ( aStart, aEnd ) ( bStart, bEnd ) =
+    locationAsComparableEquals aStart bStart
+        && locationAsComparableEquals aEnd bEnd
+
+
+locationAsComparableEquals : LocationAsComparable -> LocationAsComparable -> Bool
+locationAsComparableEquals ( aRow, aColumn ) ( bRow, bColumn ) =
+    (aRow - bRow == 0)
+        && (aColumn - bColumn == 0)
+
+
 typeContainsVariable :
-    comparableTypeVariable
-    -> Type comparableTypeVariable
+    TypeVariableFromContext
+    -> Type TypeVariableFromContext
     -> Bool
 typeContainsVariable variableToCheckFor type_ =
     case type_ of
         TypeVariable variable ->
-            variableToCheckFor == variable
+            typeVariableFromContextEquals variableToCheckFor variable
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableContainsVariable variableToCheckFor typeNotVariable
 
 
 typeNotVariableContainsVariable :
-    comparableTypeVariable
-    -> TypeNotVariable comparableTypeVariable
+    TypeVariableFromContext
+    -> TypeNotVariable TypeVariableFromContext
     -> Bool
 typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
     case typeNotVariable of
@@ -713,7 +731,9 @@ typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
                     )
 
         TypeRecordExtension typeRecordExtension ->
-            (typeRecordExtension.recordVariable == variableToCheckFor)
+            typeVariableFromContextEquals
+                typeRecordExtension.recordVariable
+                variableToCheckFor
                 || (typeRecordExtension.fields
                         |> fastDictAny
                             (\value ->
@@ -1452,7 +1472,7 @@ typeSubstituteVariable context replacement type_ =
                     type_
                         |> typeMapVariables
                             (\variable ->
-                                if variable == replacement.variable then
+                                if typeVariableFromContextEquals variable replacement.variable then
                                     argumentVariable
 
                                 else
@@ -1465,7 +1485,7 @@ typeSubstituteVariable context replacement type_ =
             type_
                 |> typeSubstituteVariableByNotVariable context
                     (\variable ->
-                        if variable == replacement.variable then
+                        if typeVariableFromContextEquals variable replacement.variable then
                             Just argumentNotVariable
 
                         else
@@ -6962,7 +6982,7 @@ rangeIncludesRangeAsComparable startToCheckForAsComparable baseRange =
     in
     if
         (baseRange.start.row < toCheckForInnerStartRow)
-            || ((baseRange.start.row == toCheckForInnerStartRow)
+            || ((baseRange.start.row - toCheckForInnerStartRow == 0)
                     && (baseRange.start.column <= toCheckForInnerStartColumn)
                )
     then
@@ -6971,7 +6991,7 @@ rangeIncludesRangeAsComparable startToCheckForAsComparable baseRange =
                 toCheckForInnerEndAsComparable
         in
         (baseRange.end.row > toCheckForInnerEndRow)
-            || ((baseRange.end.row == toCheckForInnerEndRow)
+            || ((baseRange.end.row - toCheckForInnerEndRow == 0)
                     && (baseRange.end.column >= toCheckForInnerEndColumn)
                )
 
@@ -7474,8 +7494,8 @@ infixOperationApproximateOperatorRange infixOperation =
         operatorLength =
             infixOperation.operator |> String.length
     in
-    if infixOperation.leftEnd.row == infixOperation.rightStart.row then
-        if infixOperation.leftEnd.column + operatorLength == infixOperation.rightStart.column then
+    if infixOperation.leftEnd.row - infixOperation.rightStart.row == 0 then
+        if (infixOperation.leftEnd.column + operatorLength) - infixOperation.rightStart.column == 0 then
             -- x+y
             { start =
                 { row = infixOperation.rightStart.row
@@ -9255,7 +9275,7 @@ variableSubstitutionsFrom2EquivalentVariables :
     -> TypeVariableFromContext
     -> VariableSubstitutions
 variableSubstitutionsFrom2EquivalentVariables variableToReplace replacementVariable =
-    if variableToReplace == replacementVariable then
+    if typeVariableFromContextEquals variableToReplace replacementVariable then
         variableSubstitutionsNone
 
     else
@@ -12595,8 +12615,7 @@ typesAreEquallyStrict :
     -> FastSetFast TypeVariableFromContext
     -> Bool
 typesAreEquallyStrict aType bType =
-    (aType |> FastDict.size)
-        == (bType |> FastDict.size)
+    ((aType |> FastDict.size) - (bType |> FastDict.size) == 0)
         && ((aType
                 |> fastSetFastToListHighestToLowestAndMap
                     (\( _, aVariable ) ->
@@ -13200,7 +13219,7 @@ substitutionsVariableToTypeApplyInto context remainingVariableToTypeToApply vari
                         TypeVariableFromContext
                         -> Maybe (TypeNotVariable TypeVariableFromContext)
                     variableToTypeSubstitutionToApplyNext variable =
-                        if variable == variableToSubstituteNext then
+                        if typeVariableFromContextEquals variable variableToSubstituteNext then
                             Just typeToSubstituteByNext
 
                         else
