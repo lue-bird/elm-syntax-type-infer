@@ -6138,12 +6138,10 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
 
                             Elm.Syntax.Expression.LetFunction letValueOrFunctionDeclaration ->
                                 let
-                                    name : String
-                                    name =
+                                    (Elm.Syntax.Node.Node _ name) =
                                         letValueOrFunctionDeclaration.declaration
                                             |> Elm.Syntax.Node.value
                                             |> .name
-                                            |> Elm.Syntax.Node.value
 
                                     letDeclarationRangeAsComparable : RangeAsComparable
                                     letDeclarationRangeAsComparable =
@@ -6156,30 +6154,34 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                         |> FastDict.insert name
                                             { range = letDeclarationRange
                                             , type_ =
-                                                case
-                                                    letValueOrFunctionDeclaration.signature
-                                                        |> Maybe.andThen
-                                                            (\(Elm.Syntax.Node.Node _ signature) ->
-                                                                signature.typeAnnotation
-                                                                    |> Elm.Syntax.Node.value
-                                                                    |> syntaxToType context.moduleOriginLookup
-                                                                    |> Result.toMaybe
-                                                            )
-                                                of
-                                                    Just type_ ->
-                                                        type_
-                                                            |> typeMapVariables
-                                                                (\variable ->
-                                                                    ( letDeclarationRangeAsComparable
-                                                                    , variable
-                                                                    )
-                                                                )
-
+                                                case letValueOrFunctionDeclaration.signature of
                                                     Nothing ->
                                                         TypeVariable
                                                             ( letDeclarationRangeAsComparable
                                                             , name
                                                             )
+
+                                                    Just (Elm.Syntax.Node.Node _ signature) ->
+                                                        case
+                                                            signature.typeAnnotation
+                                                                |> Elm.Syntax.Node.value
+                                                                |> syntaxToType context.moduleOriginLookup
+                                                        of
+                                                            Ok type_ ->
+                                                                type_
+                                                                    |> typeMapVariables
+                                                                        (\variable ->
+                                                                            ( letDeclarationRangeAsComparable
+                                                                            , variable
+                                                                            )
+                                                                        )
+
+                                                            Err _ ->
+                                                                -- error will be bubbled up later
+                                                                TypeVariable
+                                                                    ( letDeclarationRangeAsComparable
+                                                                    , name
+                                                                    )
                                             }
                                 }
                     )
