@@ -13206,57 +13206,38 @@ substitutionsVariableToTypeApplyInto context remainingVariableToTypeToApply vari
                         else
                             Nothing
                 in
-                case
-                    soFar.variableToType
-                        |> fastDictFoldlWhileOkFrom
-                            { variableToType = FastDict.empty
-                            , newSubstitutions = variableSubstitutionsNone
-                            }
-                            (\remainingVariable remainingReplacementTypeNotVariable variableToTypeSubstitutedSoFar ->
-                                Result.andThen
-                                    (\replacementTypeSubstituted ->
-                                        Result.map
-                                            (\newSubstituionsSoFarWithCurrent ->
-                                                { newSubstitutions = newSubstituionsSoFarWithCurrent
-                                                , variableToType =
-                                                    variableToTypeSubstitutedSoFar.variableToType
-                                                        |> FastDict.insert remainingVariable
-                                                            replacementTypeSubstituted.type_
-                                                }
-                                            )
-                                            (variableSubstitutionsMerge context
-                                                variableToTypeSubstitutedSoFar.newSubstitutions
-                                                { equivalentVariables =
-                                                    replacementTypeSubstituted.substitutions.equivalentVariables
-                                                , variableToType =
-                                                    replacementTypeSubstituted.substitutions.variableToType
-                                                }
-                                            )
-                                    )
-                                    (remainingReplacementTypeNotVariable
-                                        |> typeNotVariableSubstituteVariableByNotVariable
-                                            context
-                                            variableToTypeSubstitutionToApplyNext
-                                    )
-                            )
-                of
-                    Err error ->
-                        Err error
-
-                    Ok variableToTypeSubstituted ->
-                        case
-                            variableSubstitutionsMerge context
-                                variableToTypeSubstituted.newSubstitutions
-                                soFar.newSubstitutions
-                        of
-                            Err error ->
-                                Err error
-
-                            Ok newSubstitutionsWithAfterSubstitution ->
-                                Ok
-                                    { variableToType = variableToTypeSubstituted.variableToType
-                                    , newSubstitutions = newSubstitutionsWithAfterSubstitution
-                                    }
+                soFar.variableToType
+                    |> fastDictFoldlWhileOkFrom
+                        { variableToType = FastDict.empty
+                        , newSubstitutions = soFar.newSubstitutions
+                        }
+                        (\remainingVariable remainingReplacementTypeNotVariable variableToTypeSubstitutedSoFar ->
+                            Result.andThen
+                                (\replacementTypeSubstituted ->
+                                    Result.map
+                                        (\newSubstituionsSoFarWithCurrent ->
+                                            { newSubstitutions = newSubstituionsSoFarWithCurrent
+                                            , variableToType =
+                                                variableToTypeSubstitutedSoFar.variableToType
+                                                    |> FastDict.insert remainingVariable
+                                                        replacementTypeSubstituted.type_
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge context
+                                            variableToTypeSubstitutedSoFar.newSubstitutions
+                                            { equivalentVariables =
+                                                replacementTypeSubstituted.substitutions.equivalentVariables
+                                            , variableToType =
+                                                replacementTypeSubstituted.substitutions.variableToType
+                                            }
+                                        )
+                                )
+                                (remainingReplacementTypeNotVariable
+                                    |> typeNotVariableSubstituteVariableByNotVariable
+                                        context
+                                        variableToTypeSubstitutionToApplyNext
+                                )
+                        )
             )
 
 
