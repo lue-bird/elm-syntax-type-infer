@@ -6101,216 +6101,209 @@ expressionLetInTypeInfer :
                 (Type TypeVariableFromContext)
             )
 expressionLetInTypeInfer context syntaxExpressionLetIn =
-    let
-        acrossLetInIncludingContextSoFar :
-            { introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
-            , introducedDeclarationTypes :
-                FastDict.Dict
-                    String
-                    { type_ : Type TypeVariableFromContext
-                    , range : Elm.Syntax.Range.Range
-                    }
-            }
-        acrossLetInIncludingContextSoFar =
-            (syntaxExpressionLetIn.declaration0 :: syntaxExpressionLetIn.declaration1Up)
-                |> List.foldl
-                    (\(Elm.Syntax.Node.Node letDeclarationRange letDeclaration) soFar ->
-                        case letDeclaration of
-                            Elm.Syntax.Expression.LetDestructuring patternNode _ ->
-                                case
-                                    patternNode
-                                        |> patternTypeInfer
-                                            { declarationTypes = context.declarationTypes
-                                            , moduleOriginLookup = context.moduleOriginLookup
-                                            }
-                                of
-                                    Err _ ->
-                                        soFar
+    Result.andThen
+        (\acrossLetInIncludingContextSoFar ->
+            resultAndThen3
+                (\declaration0Inferred declaration1UpInferred resultInferred ->
+                    let
+                        letInTypedNodeInferred :
+                            TypedNode
+                                (Expression (Type TypeVariableFromContext))
+                                (Type TypeVariableFromContext)
+                        letInTypedNodeInferred =
+                            { range = syntaxExpressionLetIn.fullRange
+                            , type_ = resultInferred.type_
+                            , value =
+                                ExpressionLetIn
+                                    { declaration0 = declaration0Inferred
+                                    , declaration1Up =
+                                        declaration1UpInferred
+                                    , result = resultInferred
+                                    }
+                            }
 
-                                    Ok patternInferred ->
-                                        { introducedDeclarationTypes =
-                                            soFar.introducedDeclarationTypes
-                                        , introducedExpressionVariables =
-                                            FastDict.union soFar.introducedExpressionVariables
-                                                (patternInferred |> patternTypedNodeIntroducedVariables)
+                        typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                        typeContext =
+                            { declarationTypes = context.declarationTypes
+                            , range = syntaxExpressionLetIn.fullRange
+                            }
+                    in
+                    Result.andThen
+                        (\fullSubstitutions ->
+                            letInTypedNodeInferred
+                                |> expressionTypedNodeApplyVariableSubstitutions
+                                    context.declarationTypes
+                                    fullSubstitutions
+                        )
+                        (resultAndThen2
+                            (\destructuringUseUnificationSubstitutions declarationUseUnificationSubstitutions ->
+                                variableSubstitutionsMerge
+                                    typeContext
+                                    destructuringUseUnificationSubstitutions
+                                    declarationUseUnificationSubstitutions
+                            )
+                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                typeContext
+                                ((declaration0Inferred :: declaration1UpInferred)
+                                    |> listMapToFastDictsAndUnify
+                                        (\declarationInferred ->
+                                            case declarationInferred.declaration of
+                                                LetDestructuring letDestructuring ->
+                                                    letDestructuring.pattern
+                                                        |> patternTypedNodeIntroducedVariables
+
+                                                LetValueOrFunctionDeclaration _ ->
+                                                    FastDict.empty
+                                        )
+                                )
+                                letInTypedNodeInferred
+                            )
+                            (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
+                                typeContext
+                                ((declaration0Inferred :: declaration1UpInferred)
+                                    |> listMapToFastDictsAndUnify
+                                        (\declarationInferred ->
+                                            case declarationInferred.declaration of
+                                                LetDestructuring _ ->
+                                                    FastDict.empty
+
+                                                LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
+                                                    case letValueOrFunctionDeclaration.signature of
+                                                        Just _ ->
+                                                            FastDict.empty
+
+                                                        Nothing ->
+                                                            FastDict.singleton
+                                                                letValueOrFunctionDeclaration.name
+                                                                { range = declarationInferred.range
+                                                                , type_ = letValueOrFunctionDeclaration.type_
+                                                                }
+                                        )
+                                )
+                                letInTypedNodeInferred
+                            )
+                        )
+                )
+                (syntaxExpressionLetIn.declaration0
+                    |> letDeclarationTypeInfer
+                        { locallyIntroducedExpressionVariables =
+                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
+                        , locallyIntroducedDeclarationTypes =
+                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
+                        , moduleOriginLookup = context.moduleOriginLookup
+                        , declarationTypes = context.declarationTypes
+                        }
+                )
+                (syntaxExpressionLetIn.declaration1Up
+                    |> listFoldrWhileOkFrom
+                        []
+                        (\letDeclarationNode soFar ->
+                            Result.map
+                                (\letDeclarationInferred ->
+                                    letDeclarationInferred :: soFar
+                                )
+                                (letDeclarationNode
+                                    |> letDeclarationTypeInfer
+                                        { locallyIntroducedExpressionVariables =
+                                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
+                                        , locallyIntroducedDeclarationTypes =
+                                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
+                                        , moduleOriginLookup = context.moduleOriginLookup
+                                        , declarationTypes = context.declarationTypes
                                         }
+                                )
+                        )
+                )
+                (syntaxExpressionLetIn.expression
+                    |> expressionTypeInfer
+                        { locallyIntroducedExpressionVariables =
+                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
+                        , moduleOriginLookup = context.moduleOriginLookup
+                        , declarationTypes = context.declarationTypes
+                        , locallyIntroducedDeclarationTypes =
+                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
+                        }
+                )
+        )
+        ((syntaxExpressionLetIn.declaration0 :: syntaxExpressionLetIn.declaration1Up)
+            |> listFoldlWhileOkFrom
+                { introducedExpressionVariables =
+                    context.locallyIntroducedExpressionVariables
+                , introducedDeclarationTypes =
+                    context.locallyIntroducedDeclarationTypes
+                }
+                (\(Elm.Syntax.Node.Node letDeclarationRange letDeclaration) soFar ->
+                    case letDeclaration of
+                        Elm.Syntax.Expression.LetDestructuring patternNode _ ->
+                            Result.map
+                                (\patternInferred ->
+                                    { introducedDeclarationTypes =
+                                        soFar.introducedDeclarationTypes
+                                    , introducedExpressionVariables =
+                                        FastDict.union soFar.introducedExpressionVariables
+                                            (patternInferred |> patternTypedNodeIntroducedVariables)
+                                    }
+                                )
+                                (patternNode
+                                    |> patternTypeInfer
+                                        { declarationTypes = context.declarationTypes
+                                        , moduleOriginLookup = context.moduleOriginLookup
+                                        }
+                                )
 
-                            Elm.Syntax.Expression.LetFunction letValueOrFunctionDeclaration ->
-                                let
-                                    (Elm.Syntax.Node.Node _ name) =
-                                        letValueOrFunctionDeclaration.declaration
-                                            |> Elm.Syntax.Node.value
-                                            |> .name
+                        Elm.Syntax.Expression.LetFunction letValueOrFunctionDeclaration ->
+                            let
+                                (Elm.Syntax.Node.Node _ name) =
+                                    letValueOrFunctionDeclaration.declaration
+                                        |> Elm.Syntax.Node.value
+                                        |> .name
 
-                                    letDeclarationRangeAsComparable : RangeAsComparable
-                                    letDeclarationRangeAsComparable =
-                                        letDeclarationRange |> rangeToAsComparable
-                                in
-                                { introducedExpressionVariables =
-                                    soFar.introducedExpressionVariables
-                                , introducedDeclarationTypes =
-                                    soFar.introducedDeclarationTypes
-                                        |> FastDict.insert name
-                                            { range = letDeclarationRange
-                                            , type_ =
-                                                case letValueOrFunctionDeclaration.signature of
-                                                    Nothing ->
+                                letDeclarationRangeAsComparable : RangeAsComparable
+                                letDeclarationRangeAsComparable =
+                                    letDeclarationRange |> rangeToAsComparable
+                            in
+                            case letValueOrFunctionDeclaration.signature of
+                                Nothing ->
+                                    Ok
+                                        { introducedExpressionVariables =
+                                            soFar.introducedExpressionVariables
+                                        , introducedDeclarationTypes =
+                                            soFar.introducedDeclarationTypes
+                                                |> FastDict.insert name
+                                                    { range = letDeclarationRange
+                                                    , type_ =
                                                         TypeVariable
                                                             ( letDeclarationRangeAsComparable
                                                             , name
                                                             )
+                                                    }
+                                        }
 
-                                                    Just (Elm.Syntax.Node.Node _ signature) ->
-                                                        case
-                                                            signature.typeAnnotation
-                                                                |> Elm.Syntax.Node.value
-                                                                |> syntaxToType context.moduleOriginLookup
-                                                        of
-                                                            Ok type_ ->
-                                                                type_
-                                                                    |> typeMapVariables
-                                                                        (\variable ->
-                                                                            ( letDeclarationRangeAsComparable
-                                                                            , variable
-                                                                            )
+                                Just (Elm.Syntax.Node.Node _ signature) ->
+                                    Result.map
+                                        (\type_ ->
+                                            { introducedExpressionVariables =
+                                                soFar.introducedExpressionVariables
+                                            , introducedDeclarationTypes =
+                                                soFar.introducedDeclarationTypes
+                                                    |> FastDict.insert name
+                                                        { range = letDeclarationRange
+                                                        , type_ =
+                                                            type_
+                                                                |> typeMapVariables
+                                                                    (\variable ->
+                                                                        ( letDeclarationRangeAsComparable
+                                                                        , variable
                                                                         )
-
-                                                            Err _ ->
-                                                                -- error will be bubbled up later
-                                                                TypeVariable
-                                                                    ( letDeclarationRangeAsComparable
-                                                                    , name
                                                                     )
-                                            }
-                                }
-                    )
-                    { introducedExpressionVariables =
-                        context.locallyIntroducedExpressionVariables
-                    , introducedDeclarationTypes =
-                        context.locallyIntroducedDeclarationTypes
-                    }
-    in
-    resultAndThen3
-        (\declaration0Inferred declaration1UpInferred resultInferred ->
-            let
-                letInTypedNodeInferred :
-                    TypedNode
-                        (Expression (Type TypeVariableFromContext))
-                        (Type TypeVariableFromContext)
-                letInTypedNodeInferred =
-                    { range = syntaxExpressionLetIn.fullRange
-                    , type_ = resultInferred.type_
-                    , value =
-                        ExpressionLetIn
-                            { declaration0 = declaration0Inferred
-                            , declaration1Up =
-                                declaration1UpInferred
-                            , result = resultInferred
-                            }
-                    }
-
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
-                typeContext =
-                    { declarationTypes = context.declarationTypes
-                    , range = syntaxExpressionLetIn.fullRange
-                    }
-            in
-            Result.andThen
-                (\fullSubstitutions ->
-                    letInTypedNodeInferred
-                        |> expressionTypedNodeApplyVariableSubstitutions
-                            context.declarationTypes
-                            fullSubstitutions
-                )
-                (resultAndThen2
-                    (\destructuringUseUnificationSubstitutions declarationUseUnificationSubstitutions ->
-                        variableSubstitutionsMerge
-                            typeContext
-                            destructuringUseUnificationSubstitutions
-                            declarationUseUnificationSubstitutions
-                    )
-                    (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
-                        typeContext
-                        ((declaration0Inferred :: declaration1UpInferred)
-                            |> listMapToFastDictsAndUnify
-                                (\declarationInferred ->
-                                    case declarationInferred.declaration of
-                                        LetDestructuring letDestructuring ->
-                                            letDestructuring.pattern
-                                                |> patternTypedNodeIntroducedVariables
-
-                                        LetValueOrFunctionDeclaration _ ->
-                                            FastDict.empty
-                                )
-                        )
-                        letInTypedNodeInferred
-                    )
-                    (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
-                        typeContext
-                        ((declaration0Inferred :: declaration1UpInferred)
-                            |> listMapToFastDictsAndUnify
-                                (\declarationInferred ->
-                                    case declarationInferred.declaration of
-                                        LetDestructuring _ ->
-                                            FastDict.empty
-
-                                        LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
-                                            case letValueOrFunctionDeclaration.signature of
-                                                Just _ ->
-                                                    FastDict.empty
-
-                                                Nothing ->
-                                                    FastDict.singleton
-                                                        letValueOrFunctionDeclaration.name
-                                                        { range = declarationInferred.range
-                                                        , type_ = letValueOrFunctionDeclaration.type_
                                                         }
-                                )
-                        )
-                        letInTypedNodeInferred
-                    )
+                                            }
+                                        )
+                                        (signature.typeAnnotation
+                                            |> Elm.Syntax.Node.value
+                                            |> syntaxToType context.moduleOriginLookup
+                                        )
                 )
-        )
-        (syntaxExpressionLetIn.declaration0
-            |> letDeclarationTypeInfer
-                { locallyIntroducedExpressionVariables =
-                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                , locallyIntroducedDeclarationTypes =
-                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                , moduleOriginLookup = context.moduleOriginLookup
-                , declarationTypes = context.declarationTypes
-                }
-        )
-        (syntaxExpressionLetIn.declaration1Up
-            |> listFoldrWhileOkFrom
-                []
-                (\letDeclarationNode soFar ->
-                    Result.map
-                        (\letDeclarationInferred ->
-                            letDeclarationInferred :: soFar
-                        )
-                        (letDeclarationNode
-                            |> letDeclarationTypeInfer
-                                { locallyIntroducedExpressionVariables =
-                                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                                , locallyIntroducedDeclarationTypes =
-                                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                                , moduleOriginLookup = context.moduleOriginLookup
-                                , declarationTypes = context.declarationTypes
-                                }
-                        )
-                )
-        )
-        (syntaxExpressionLetIn.expression
-            |> expressionTypeInfer
-                { locallyIntroducedExpressionVariables =
-                    acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                , moduleOriginLookup = context.moduleOriginLookup
-                , declarationTypes = context.declarationTypes
-                , locallyIntroducedDeclarationTypes =
-                    acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                }
         )
 
 
