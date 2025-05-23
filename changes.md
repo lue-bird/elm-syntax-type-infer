@@ -6,11 +6,11 @@ considering
 optimization ideas
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
+- represent LocationAsComparable as row + startColumn * 2^24 to save memory
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration
 - faster (by doing more steps at once)
-- correctly track let non-forall type variables in an edge case
 
 #### 1.0.9
 - correctly infer imported record type alias constructor
