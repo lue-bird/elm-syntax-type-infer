@@ -439,6 +439,16 @@ typeMapVariablesAndCollectResultingVariables variableMap type_ =
             }
 
 
+typeUnitContainedVariablesEmpty :
+    { type_ : TypeNotVariable comparableChangedVariable
+    , containedVariables : FastSetFast comparableChangedVariable
+    }
+typeUnitContainedVariablesEmpty =
+    { type_ = TypeUnit
+    , containedVariables = FastDict.empty
+    }
+
+
 typeNotVariableMapVariablesAndCollectResultingVariables :
     (variable -> comparableChangedVariable)
     -> TypeNotVariable variable
@@ -449,9 +459,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables :
 typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
-            { type_ = TypeUnit
-            , containedVariables = FastDict.empty
-            }
+            typeUnitContainedVariablesEmpty
 
         TypeFunction typeFunction ->
             let
@@ -540,7 +548,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                                         argumentMapped.containedVariables
                                 }
                             )
-                            { types = [], containedVariables = FastDict.empty }
+                            typedListEmptyContainedVariablesEmpty
             in
             { type_ =
                 TypeConstruct
@@ -601,6 +609,14 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                         )
                         (FastDict.singleton recordVariableMapped ())
             }
+
+
+typedListEmptyContainedVariablesEmpty :
+    { types : List (Type comparableChangedVariable)
+    , containedVariables : FastSetFast comparableChangedVariable
+    }
+typedListEmptyContainedVariablesEmpty =
+    { types = [], containedVariables = FastDict.empty }
 
 
 typeContainedVariables :
@@ -3353,7 +3369,7 @@ variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes repla
     if replacementTypeNotVariable |> typeNotVariableContainsVariable replacementVariable then
         if replacementTypeNotVariable |> typeNotVariableIsEquivalentToTypeVariable declarationTypes then
             -- is ok when type is an identity type alias
-            Ok variableSubstitutionsNone
+            okVariableSubstitutionsNone
 
         else
             Err
@@ -3371,6 +3387,11 @@ variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes repla
                 FastDict.singleton replacementVariable
                     replacementTypeNotVariable
             }
+
+
+okVariableSubstitutionsNone : Result error_ VariableSubstitutions
+okVariableSubstitutionsNone =
+    Ok variableSubstitutionsNone
 
 
 typeNotVariableUnify :
@@ -11699,8 +11720,13 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                         )
 
                  else
-                    Ok Nothing
+                    okNothing
                 )
+
+
+okNothing : Result error_ (Maybe value_)
+okNothing =
+    Ok Nothing
 
 
 expressionTypedNodeCondenseTypeVariables :
@@ -11744,6 +11770,19 @@ expressionTypedNodeCondenseTypeVariables declarationTypes typeVariableChange exp
                 }
 
 
+okExpressionUnitSubstitutionsNone :
+    Result
+        String
+        { expression : Expression (Type TypeVariableFromContext)
+        , substitutions : VariableSubstitutions
+        }
+okExpressionUnitSubstitutionsNone =
+    Ok
+        { expression = ExpressionUnit
+        , substitutions = variableSubstitutionsNone
+        }
+
+
 expressionCondenseTypeVariables :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
@@ -11760,10 +11799,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
     -- IGNORE TCO
     case expression of
         ExpressionUnit ->
-            Ok
-                { expression = ExpressionUnit
-                , substitutions = variableSubstitutionsNone
-                }
+            okExpressionUnitSubstitutionsNone
 
         ExpressionFloat floatValue ->
             Ok
@@ -12417,10 +12453,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                 )
                 (expressionLetIn.declaration1Up
                     |> listFoldrWhileOkFrom
-                        { nodes = []
-                        , substitutions = variableSubstitutionsNone
-                        , moreConcreteTypesToApplyToUses = FastDict.empty
-                        }
+                        nodesListEmptySubstitutionsNoneMoreConcreteTypesToApplyToUsesDictEmpty
                         (\letDeclarationAndRange soFar ->
                             Result.andThen
                                 (\condensedLetDeclaration ->
@@ -12456,6 +12489,18 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                 )
                         )
                 )
+
+
+nodesListEmptySubstitutionsNoneMoreConcreteTypesToApplyToUsesDictEmpty :
+    { nodes : List node_
+    , substitutions : VariableSubstitutions
+    , moreConcreteTypesToApplyToUses : FastDict.Dict name_ declaration_
+    }
+nodesListEmptySubstitutionsNoneMoreConcreteTypesToApplyToUsesDictEmpty =
+    { nodes = []
+    , substitutions = variableSubstitutionsNone
+    , moreConcreteTypesToApplyToUses = FastDict.empty
+    }
 
 
 letDeclarationCondenseTypeVariables :
