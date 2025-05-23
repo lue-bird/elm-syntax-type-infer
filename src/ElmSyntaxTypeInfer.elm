@@ -13924,10 +13924,10 @@ equivalentVariablesCreateCondensedVariable set =
                 (\unified ->
                     case unified.maybeConstraint of
                         Nothing ->
-                            variable0
+                            ( unified.overarchingRange, variable0Name )
 
                         Just unifiedConstraint ->
-                            ( variable0UseRangeAsComparable
+                            ( unified.overarchingRange
                             , unifiedConstraint |> typeVariableConstraintToString
                             )
                 )
