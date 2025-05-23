@@ -1464,9 +1464,13 @@ typeSubstituteVariable context replacement type_ =
         TypeNotVariable argumentNotVariable ->
             type_
                 |> typeSubstituteVariableByNotVariable context
-                    { variable = replacement.variable
-                    , type_ = argumentNotVariable
-                    }
+                    (\variable ->
+                        if variable == replacement.variable then
+                            Just argumentNotVariable
+
+                        else
+                            Nothing
+                    )
 
 
 typeApplyVariableSubstitutions :
@@ -1475,12 +1479,7 @@ typeApplyVariableSubstitutions :
     }
     -> VariableSubstitutions
     -> Type TypeVariableFromContext
-    ->
-        Result
-            String
-            (Type
-                TypeVariableFromContext
-            )
+    -> Result String (Type TypeVariableFromContext)
 typeApplyVariableSubstitutions context substitutions originalType =
     case substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
@@ -1518,49 +1517,42 @@ typeApplyVariableSubstitutions context substitutions originalType =
                                 )
 
         [] ->
-            case substitutions.variableToType |> FastDict.popMin of
-                Nothing ->
-                    Ok originalType
+            if substitutions.variableToType |> FastDict.isEmpty then
+                Ok originalType
 
-                Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
-                    let
-                        variableToTypeSubstitutionToApplyNext :
-                            { variable : TypeVariableFromContext
-                            , type_ : TypeNotVariable TypeVariableFromContext
-                            }
-                        variableToTypeSubstitutionToApplyNext =
-                            { variable = variableToSubstituteNext, type_ = typeToSubstituteByNext }
-                    in
-                    case
-                        originalType
-                            |> typeSubstituteVariableByNotVariable context
-                                variableToTypeSubstitutionToApplyNext
-                    of
-                        Err error ->
-                            Err error
+            else
+                case
+                    substitutions.variableToType
+                        |> substitutionsVariableToTypeApplyOverItself context
+                of
+                    Err error ->
+                        Err error
 
-                        Ok typeWithVariableToTypeSubstitutionApplied ->
-                            case
-                                remainingVariableToTypeSubstitutions
-                                    |> variableToTypeSubstitutionsSubstituteVariableByNotVariable context
-                                        variableToTypeSubstitutionToApplyNext
-                            of
-                                Err error ->
-                                    Err error
+                    Ok variableToTypeSubstitutedOverItself ->
+                        case
+                            originalType
+                                |> typeSubstituteVariableByNotVariable context
+                                    (\variable ->
+                                        variableToTypeSubstitutedOverItself.variableToType
+                                            |> FastDict.get variable
+                                    )
+                        of
+                            Err error ->
+                                Err error
 
-                                Ok remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied ->
-                                    case
-                                        variableSubstitutionsMerge context
-                                            typeWithVariableToTypeSubstitutionApplied.substitutions
-                                            remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied
-                                    of
-                                        Err error ->
-                                            Err error
+                            Ok typeWithVariableToTypeSubstitutionApplied ->
+                                case
+                                    variableSubstitutionsMerge context
+                                        variableToTypeSubstitutedOverItself.newSubstitutions
+                                        typeWithVariableToTypeSubstitutionApplied.substitutions
+                                of
+                                    Err error ->
+                                        Err error
 
-                                        Ok fullRemainingSubstitutions ->
-                                            typeApplyVariableSubstitutions context
-                                                fullRemainingSubstitutions
-                                                typeWithVariableToTypeSubstitutionApplied.type_
+                                    Ok fullRemainingSubstitutions ->
+                                        typeApplyVariableSubstitutions context
+                                            fullRemainingSubstitutions
+                                            typeWithVariableToTypeSubstitutionApplied.type_
 
 
 typeSubstituteVariableByNotVariable :
@@ -1568,9 +1560,9 @@ typeSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     -> Type TypeVariableFromContext
     ->
         Result
@@ -1582,94 +1574,92 @@ typeSubstituteVariableByNotVariable context replacement type_ =
     -- IGNORE TCO
     case type_ of
         TypeVariable typeVariable ->
-            if typeVariable == replacement.variable then
-                case replacement.variable |> typeVariableIgnoringContext |> typeVariableConstraint of
-                    Nothing ->
-                        Ok
-                            { type_ = TypeNotVariable replacement.type_
-                            , substitutions = variableSubstitutionsNone
-                            }
+            case replacement typeVariable of
+                Nothing ->
+                    Ok { type_ = type_, substitutions = variableSubstitutionsNone }
 
-                    Just constraint ->
-                        case constraint of
-                            TypeVariableConstraintNumber ->
-                                if
-                                    replacement.type_
-                                        |> typeNotVariableIsNumber context.declarationTypes
-                                then
-                                    Ok
-                                        { type_ = TypeNotVariable replacement.type_
-                                        , substitutions = variableSubstitutionsNone
-                                        }
+                Just replacementType ->
+                    case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+                        Nothing ->
+                            Ok
+                                { type_ = TypeNotVariable replacementType
+                                , substitutions = variableSubstitutionsNone
+                                }
 
-                                else
-                                    Err
-                                        ("("
-                                            ++ (context.range |> rangeToInfoString)
-                                            ++ ") "
-                                            ++ "cannot unify number type variable with types other than Int/Float, found: "
-                                            ++ (replacement.type_ |> typeNotVariableToInfoString)
-                                        )
+                        Just constraint ->
+                            case constraint of
+                                TypeVariableConstraintNumber ->
+                                    if
+                                        replacementType
+                                            |> typeNotVariableIsNumber context.declarationTypes
+                                    then
+                                        Ok
+                                            { type_ = TypeNotVariable replacementType
+                                            , substitutions = variableSubstitutionsNone
+                                            }
 
-                            TypeVariableConstraintAppendable ->
-                                if
-                                    replacement.type_
-                                        |> typeNotVariableIsAppendable context.declarationTypes
-                                then
-                                    Ok
-                                        { type_ = TypeNotVariable replacement.type_
-                                        , substitutions = variableSubstitutionsNone
-                                        }
+                                    else
+                                        Err
+                                            ("("
+                                                ++ (context.range |> rangeToInfoString)
+                                                ++ ") "
+                                                ++ "cannot unify number type variable with types other than Int/Float, found: "
+                                                ++ (replacementType |> typeNotVariableToInfoString)
+                                            )
 
-                                else
-                                    Err
-                                        ("("
-                                            ++ (context.range |> rangeToInfoString)
-                                            ++ ") "
-                                            ++ "cannot unify appendable type variable with types other than String/List _"
-                                        )
+                                TypeVariableConstraintAppendable ->
+                                    if
+                                        replacementType
+                                            |> typeNotVariableIsAppendable context.declarationTypes
+                                    then
+                                        Ok
+                                            { type_ = TypeNotVariable replacementType
+                                            , substitutions = variableSubstitutionsNone
+                                            }
 
-                            TypeVariableConstraintComparable ->
-                                if
-                                    replacement.type_
-                                        |> typeNotVariableIsComparable context.declarationTypes
-                                then
-                                    Ok
-                                        { type_ = TypeNotVariable replacement.type_
-                                        , substitutions = variableSubstitutionsNone
-                                        }
+                                    else
+                                        Err
+                                            ("("
+                                                ++ (context.range |> rangeToInfoString)
+                                                ++ ") "
+                                                ++ "cannot unify appendable type variable with types other than String/List _"
+                                            )
 
-                                else
-                                    Err
-                                        ("("
-                                            ++ (context.range |> rangeToInfoString)
-                                            ++ ") "
-                                            ++ "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
-                                        )
+                                TypeVariableConstraintComparable ->
+                                    if
+                                        replacementType
+                                            |> typeNotVariableIsComparable context.declarationTypes
+                                    then
+                                        Ok
+                                            { type_ = TypeNotVariable replacementType
+                                            , substitutions = variableSubstitutionsNone
+                                            }
 
-                            TypeVariableConstraintCompappend ->
-                                if
-                                    replacement.type_
-                                        |> typeNotVariableIsCompappend context.declarationTypes
-                                then
-                                    Ok
-                                        { type_ = TypeNotVariable replacement.type_
-                                        , substitutions = variableSubstitutionsNone
-                                        }
+                                    else
+                                        Err
+                                            ("("
+                                                ++ (context.range |> rangeToInfoString)
+                                                ++ ") "
+                                                ++ "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
+                                            )
 
-                                else
-                                    Err
-                                        ("("
-                                            ++ (context.range |> rangeToInfoString)
-                                            ++ ") "
-                                            ++ "cannot unify compappend type variable with types other than String/List of comparable"
-                                        )
+                                TypeVariableConstraintCompappend ->
+                                    if
+                                        replacementType
+                                            |> typeNotVariableIsCompappend context.declarationTypes
+                                    then
+                                        Ok
+                                            { type_ = TypeNotVariable replacementType
+                                            , substitutions = variableSubstitutionsNone
+                                            }
 
-            else
-                Ok
-                    { type_ = TypeVariable typeVariable
-                    , substitutions = variableSubstitutionsNone
-                    }
+                                    else
+                                        Err
+                                            ("("
+                                                ++ (context.range |> rangeToInfoString)
+                                                ++ ") "
+                                                ++ "cannot unify compappend type variable with types other than String/List of comparable"
+                                            )
 
         TypeNotVariable typeNotVariable ->
             Result.map
@@ -1783,9 +1773,9 @@ typeNotVariableSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     -> TypeNotVariable TypeVariableFromContext
     ->
         Result
@@ -1932,181 +1922,182 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeRecordExtension typeRecordExtension ->
             Result.andThen
                 (\fieldsSubstituted ->
-                    if typeRecordExtension.recordVariable /= replacement.variable then
-                        Ok
-                            { substitutions = fieldsSubstituted.substitutions
-                            , type_ =
-                                TypeRecordExtension
-                                    { recordVariable = typeRecordExtension.recordVariable
-                                    , fields = fieldsSubstituted.types
-                                    }
-                            }
-
-                    else
-                        case replacement.type_ of
-                            TypeRecord replacementRecordFields ->
-                                Result.map
-                                    (\fieldsMerged ->
-                                        { substitutions = fieldsMerged.substitutions
-                                        , type_ = TypeRecord fieldsMerged.types
+                    case replacement typeRecordExtension.recordVariable of
+                        Nothing ->
+                            Ok
+                                { substitutions = fieldsSubstituted.substitutions
+                                , type_ =
+                                    TypeRecordExtension
+                                        { recordVariable = typeRecordExtension.recordVariable
+                                        , fields = fieldsSubstituted.types
                                         }
-                                    )
-                                    (FastDict.merge
-                                        (\name value soFarOrError ->
-                                            Result.map
-                                                (\soFar ->
-                                                    { substitutions = soFar.substitutions
-                                                    , types = soFar.types |> FastDict.insert name value
-                                                    }
-                                                )
-                                                soFarOrError
-                                        )
-                                        (\name valueSubstituted valueReplacement soFarOrError ->
-                                            Result.andThen
-                                                (\soFar ->
-                                                    Result.andThen
-                                                        (\valueUnified ->
-                                                            Result.map
-                                                                (\fullSubstitutions ->
-                                                                    { substitutions = fullSubstitutions
-                                                                    , types =
-                                                                        soFar.types
-                                                                            |> FastDict.insert name valueUnified.type_
-                                                                    }
-                                                                )
-                                                                (variableSubstitutionsMerge context
-                                                                    soFar.substitutions
-                                                                    valueUnified.substitutions
-                                                                )
-                                                        )
-                                                        (typeUnify context
-                                                            valueSubstituted
-                                                            valueReplacement
-                                                        )
-                                                )
-                                                soFarOrError
-                                        )
-                                        (\name value soFarOrError ->
-                                            Result.map
-                                                (\soFar ->
-                                                    { substitutions = soFar.substitutions
-                                                    , types = soFar.types |> FastDict.insert name value
-                                                    }
-                                                )
-                                                soFarOrError
-                                        )
-                                        fieldsSubstituted.types
-                                        replacementRecordFields
-                                        (Ok
-                                            { substitutions = fieldsSubstituted.substitutions
-                                            , types = FastDict.empty
+                                }
+
+                        Just recordVariableReplacementTypeNotVariable ->
+                            case recordVariableReplacementTypeNotVariable of
+                                TypeRecord replacementRecordFields ->
+                                    Result.map
+                                        (\fieldsMerged ->
+                                            { substitutions = fieldsMerged.substitutions
+                                            , type_ = TypeRecord fieldsMerged.types
                                             }
                                         )
-                                    )
-
-                            TypeRecordExtension replacementRecordExtension ->
-                                Result.map
-                                    (\fieldsMerged ->
-                                        { substitutions = fieldsMerged.substitutions
-                                        , type_ =
-                                            TypeRecordExtension
-                                                { recordVariable = replacementRecordExtension.recordVariable
-                                                , fields = fieldsMerged.types
+                                        (FastDict.merge
+                                            (\name value soFarOrError ->
+                                                Result.map
+                                                    (\soFar ->
+                                                        { substitutions = soFar.substitutions
+                                                        , types = soFar.types |> FastDict.insert name value
+                                                        }
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            (\name valueSubstituted valueReplacement soFarOrError ->
+                                                Result.andThen
+                                                    (\soFar ->
+                                                        Result.andThen
+                                                            (\valueUnified ->
+                                                                Result.map
+                                                                    (\fullSubstitutions ->
+                                                                        { substitutions = fullSubstitutions
+                                                                        , types =
+                                                                            soFar.types
+                                                                                |> FastDict.insert name valueUnified.type_
+                                                                        }
+                                                                    )
+                                                                    (variableSubstitutionsMerge context
+                                                                        soFar.substitutions
+                                                                        valueUnified.substitutions
+                                                                    )
+                                                            )
+                                                            (typeUnify context
+                                                                valueSubstituted
+                                                                valueReplacement
+                                                            )
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            (\name value soFarOrError ->
+                                                Result.map
+                                                    (\soFar ->
+                                                        { substitutions = soFar.substitutions
+                                                        , types = soFar.types |> FastDict.insert name value
+                                                        }
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            fieldsSubstituted.types
+                                            replacementRecordFields
+                                            (Ok
+                                                { substitutions = fieldsSubstituted.substitutions
+                                                , types = FastDict.empty
                                                 }
-                                        }
-                                    )
-                                    (FastDict.merge
-                                        (\name value soFarOrError ->
-                                            Result.map
-                                                (\soFar ->
-                                                    { substitutions = soFar.substitutions
-                                                    , types = soFar.types |> FastDict.insert name value
+                                            )
+                                        )
+
+                                TypeRecordExtension replacementRecordExtension ->
+                                    Result.map
+                                        (\fieldsMerged ->
+                                            { substitutions = fieldsMerged.substitutions
+                                            , type_ =
+                                                TypeRecordExtension
+                                                    { recordVariable = replacementRecordExtension.recordVariable
+                                                    , fields = fieldsMerged.types
                                                     }
-                                                )
-                                                soFarOrError
-                                        )
-                                        (\name valueSubstituted valueReplacement soFarOrError ->
-                                            Result.andThen
-                                                (\soFar ->
-                                                    Result.andThen
-                                                        (\valueUnified ->
-                                                            Result.map
-                                                                (\fullSubstitutions ->
-                                                                    { substitutions = fullSubstitutions
-                                                                    , types =
-                                                                        soFar.types
-                                                                            |> FastDict.insert name valueUnified.type_
-                                                                    }
-                                                                )
-                                                                (variableSubstitutionsMerge context
-                                                                    soFar.substitutions
-                                                                    valueUnified.substitutions
-                                                                )
-                                                        )
-                                                        (typeUnify context
-                                                            valueSubstituted
-                                                            valueReplacement
-                                                        )
-                                                )
-                                                soFarOrError
-                                        )
-                                        (\name value soFarOrError ->
-                                            Result.map
-                                                (\soFar ->
-                                                    { substitutions = soFar.substitutions
-                                                    , types = soFar.types |> FastDict.insert name value
-                                                    }
-                                                )
-                                                soFarOrError
-                                        )
-                                        fieldsSubstituted.types
-                                        replacementRecordExtension.fields
-                                        (Ok
-                                            { substitutions = fieldsSubstituted.substitutions
-                                            , types = FastDict.empty
                                             }
                                         )
-                                    )
+                                        (FastDict.merge
+                                            (\name value soFarOrError ->
+                                                Result.map
+                                                    (\soFar ->
+                                                        { substitutions = soFar.substitutions
+                                                        , types = soFar.types |> FastDict.insert name value
+                                                        }
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            (\name valueSubstituted valueReplacement soFarOrError ->
+                                                Result.andThen
+                                                    (\soFar ->
+                                                        Result.andThen
+                                                            (\valueUnified ->
+                                                                Result.map
+                                                                    (\fullSubstitutions ->
+                                                                        { substitutions = fullSubstitutions
+                                                                        , types =
+                                                                            soFar.types
+                                                                                |> FastDict.insert name valueUnified.type_
+                                                                        }
+                                                                    )
+                                                                    (variableSubstitutionsMerge context
+                                                                        soFar.substitutions
+                                                                        valueUnified.substitutions
+                                                                    )
+                                                            )
+                                                            (typeUnify context
+                                                                valueSubstituted
+                                                                valueReplacement
+                                                            )
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            (\name value soFarOrError ->
+                                                Result.map
+                                                    (\soFar ->
+                                                        { substitutions = soFar.substitutions
+                                                        , types = soFar.types |> FastDict.insert name value
+                                                        }
+                                                    )
+                                                    soFarOrError
+                                            )
+                                            fieldsSubstituted.types
+                                            replacementRecordExtension.fields
+                                            (Ok
+                                                { substitutions = fieldsSubstituted.substitutions
+                                                , types = FastDict.empty
+                                                }
+                                            )
+                                        )
 
-                            TypeUnit ->
-                                Err
-                                    ("("
-                                        ++ (context.range |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ "cannot unify record extension type variable with types other than record/record extension"
-                                    )
+                                TypeUnit ->
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify record extension type variable with types other than record/record extension"
+                                        )
 
-                            TypeConstruct _ ->
-                                Err
-                                    ("("
-                                        ++ (context.range |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ "cannot unify record extension type variable with types other than record/record extension"
-                                    )
+                                TypeConstruct _ ->
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify record extension type variable with types other than record/record extension"
+                                        )
 
-                            TypeTuple _ ->
-                                Err
-                                    ("("
-                                        ++ (context.range |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ "cannot unify record extension type variable with types other than record/record extension"
-                                    )
+                                TypeTuple _ ->
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify record extension type variable with types other than record/record extension"
+                                        )
 
-                            TypeTriple _ ->
-                                Err
-                                    ("("
-                                        ++ (context.range |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ "cannot unify record extension type variable with types other than record/record extension"
-                                    )
+                                TypeTriple _ ->
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify record extension type variable with types other than record/record extension"
+                                        )
 
-                            TypeFunction _ ->
-                                Err
-                                    ("("
-                                        ++ (context.range |> rangeToInfoString)
-                                        ++ ") "
-                                        ++ "cannot unify record extension type variable with types other than record/record extension"
-                                    )
+                                TypeFunction _ ->
+                                    Err
+                                        ("("
+                                            ++ (context.range |> rangeToInfoString)
+                                            ++ ") "
+                                            ++ "cannot unify record extension type variable with types other than record/record extension"
+                                        )
                 )
                 (typeRecordExtension.fields
                     |> fastDictFoldlWhileOkFrom
@@ -8940,11 +8931,15 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                 Just ( ( variableOfSubstitutionToApply, typeNotVariableOfSubstitutionToApply ), remainingVariableToType ) ->
                     let
-                        substitutionToApply : { variable : TypeVariableFromContext, type_ : TypeNotVariable TypeVariableFromContext }
-                        substitutionToApply =
-                            { variable = variableOfSubstitutionToApply
-                            , type_ = typeNotVariableOfSubstitutionToApply
-                            }
+                        substitutionToApply :
+                            TypeVariableFromContext
+                            -> Maybe (TypeNotVariable TypeVariableFromContext)
+                        substitutionToApply variable =
+                            if variable == variableOfSubstitutionToApply then
+                                Just typeNotVariableOfSubstitutionToApply
+
+                            else
+                                Nothing
                     in
                     case
                         valueAndFunctionDeclarationsSoFar
@@ -10143,9 +10138,9 @@ fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     ->
         FastDict.Dict
             String
@@ -10223,9 +10218,9 @@ variableToTypeSubstitutionsSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     -> FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
     -> Result String VariableSubstitutions
 variableToTypeSubstitutionsSubstituteVariableByNotVariable context variableToTypeSubstitutionToApply variableToTypeSubstitutions =
@@ -10337,9 +10332,9 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
 valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
     ->
         Result
@@ -10494,9 +10489,9 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
 expressionTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     ->
         TypedNode
             (Expression (Type TypeVariableFromContext))
@@ -11537,9 +11532,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
 letDeclarationSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     ->
         { range : Elm.Syntax.Range.Range
         , declaration : LetDeclaration (Type TypeVariableFromContext)
@@ -11700,7 +11695,20 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (if letValueOrFunction.type_ |> typeContainsVariable replacement.variable then
+                (if
+                    letValueOrFunction.type_
+                        |> -- TODO optiize check
+                           typeContainedVariables
+                        |> fastSetFastAny
+                            (\variable ->
+                                case replacement variable of
+                                    Nothing ->
+                                        False
+
+                                    Just _ ->
+                                        True
+                            )
+                 then
                     Result.map Just
                         (letValueOrFunction.type_
                             |> typeSubstituteVariableByNotVariable
@@ -13036,51 +13044,42 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                                                 condensedExpressionTypedNode.node
 
         [] ->
-            case substitutions.variableToType |> FastDict.popMin of
-                Nothing ->
-                    Ok expressionTypedNode
+            if substitutions.variableToType |> FastDict.isEmpty then
+                Ok expressionTypedNode
 
-                Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
-                    let
-                        variableToTypeSubstitutionToApplyNext :
-                            { variable : TypeVariableFromContext
-                            , type_ : TypeNotVariable TypeVariableFromContext
-                            }
-                        variableToTypeSubstitutionToApplyNext =
-                            { variable = variableToSubstituteNext, type_ = typeToSubstituteByNext }
-                    in
-                    case
-                        expressionTypedNode
-                            |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
-                                variableToTypeSubstitutionToApplyNext
-                    of
-                        Err error ->
-                            Err error
+            else
+                case
+                    substitutions.variableToType
+                        |> substitutionsVariableToTypeApplyOverItself typeContext
+                of
+                    Err error ->
+                        Err error
 
-                        Ok expressionTypedNodeWithVariableToTypeSubstitutionApplied ->
-                            case
-                                remainingVariableToTypeSubstitutions
-                                    |> variableToTypeSubstitutionsSubstituteVariableByNotVariable
-                                        typeContext
-                                        variableToTypeSubstitutionToApplyNext
-                            of
-                                Err error ->
-                                    Err error
+                    Ok variableToTypeSubstitutedOverItself ->
+                        case
+                            expressionTypedNode
+                                |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    (\variable ->
+                                        variableToTypeSubstitutedOverItself.variableToType
+                                            |> FastDict.get variable
+                                    )
+                        of
+                            Err error ->
+                                Err error
 
-                                Ok remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied ->
-                                    case
-                                        variableSubstitutionsMerge
-                                            typeContext
-                                            expressionTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
-                                            remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied
-                                    of
-                                        Err error ->
-                                            Err error
+                            Ok expressionTypedNodeWithVariableToTypeSubstitutionApplied ->
+                                case
+                                    variableSubstitutionsMerge typeContext
+                                        variableToTypeSubstitutedOverItself.newSubstitutions
+                                        expressionTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
+                                of
+                                    Err error ->
+                                        Err error
 
-                                        Ok fullRemainingSubstitutions ->
-                                            expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                                fullRemainingSubstitutions
-                                                expressionTypedNodeWithVariableToTypeSubstitutionApplied.node
+                                    Ok fullRemainingSubstitutions ->
+                                        expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                            fullRemainingSubstitutions
+                                            expressionTypedNodeWithVariableToTypeSubstitutionApplied.node
 
 
 patternTypedNodeApplyVariableSubstitutions :
@@ -13142,59 +13141,166 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
                                 )
 
         [] ->
-            case substitutions.variableToType |> FastDict.popMin of
-                Nothing ->
-                    Ok patternTypedNode
+            if substitutions.variableToType |> FastDict.isEmpty then
+                Ok patternTypedNode
 
-                Just ( ( variableToSubstituteNext, typeToSubstituteByNext ), remainingVariableToTypeSubstitutions ) ->
-                    let
-                        variableToTypeSubstitutionToApplyNext :
-                            { variable : TypeVariableFromContext
-                            , type_ : TypeNotVariable TypeVariableFromContext
+            else
+                case
+                    substitutions.variableToType
+                        |> substitutionsVariableToTypeApplyOverItself typeContext
+                of
+                    Err error ->
+                        Err error
+
+                    Ok variableToTypeSubstitutedOverItself ->
+                        case
+                            patternTypedNode
+                                |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
+                                    (\variable ->
+                                        variableToTypeSubstitutedOverItself.variableToType
+                                            |> FastDict.get variable
+                                    )
+                        of
+                            Err error ->
+                                Err error
+
+                            Ok patternTypedNodeWithVariableToTypeSubstitutionApplied ->
+                                case
+                                    variableSubstitutionsMerge typeContext
+                                        variableToTypeSubstitutedOverItself.newSubstitutions
+                                        patternTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
+                                of
+                                    Err error ->
+                                        Err error
+
+                                    Ok remainingSubstitutions ->
+                                        patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                            remainingSubstitutions
+                                            patternTypedNodeWithVariableToTypeSubstitutionApplied.node
+
+
+substitutionsVariableToTypeApplyOverItself :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    }
+    ->
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
+    ->
+        Result
+            String
+            { variableToType :
+                FastDict.Dict
+                    TypeVariableFromContext
+                    (TypeNotVariable TypeVariableFromContext)
+            , newSubstitutions : VariableSubstitutions
+            }
+substitutionsVariableToTypeApplyOverItself context variableToType =
+    substitutionsVariableToTypeApplyInto context
+        variableToType
+        variableToType
+
+
+substitutionsVariableToTypeApplyInto :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    }
+    ->
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
+    ->
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
+    ->
+        Result
+            String
+            { variableToType :
+                FastDict.Dict
+                    TypeVariableFromContext
+                    (TypeNotVariable TypeVariableFromContext)
+            , newSubstitutions : VariableSubstitutions
+            }
+substitutionsVariableToTypeApplyInto context remainingVariableToTypeToApply variableToTypeInitial =
+    remainingVariableToTypeToApply
+        |> fastDictFoldlWhileOkFrom
+            { variableToType = variableToTypeInitial
+            , newSubstitutions = variableSubstitutionsNone
+            }
+            (\variableToSubstituteNext typeToSubstituteByNext soFar ->
+                let
+                    variableToTypeSubstitutionToApplyNext :
+                        TypeVariableFromContext
+                        -> Maybe (TypeNotVariable TypeVariableFromContext)
+                    variableToTypeSubstitutionToApplyNext variable =
+                        if variable == variableToSubstituteNext then
+                            Just typeToSubstituteByNext
+
+                        else
+                            Nothing
+                in
+                case
+                    soFar.variableToType
+                        |> fastDictFoldlWhileOkFrom
+                            { variableToType = FastDict.empty
+                            , newSubstitutions = variableSubstitutionsNone
                             }
-                        variableToTypeSubstitutionToApplyNext =
-                            { variable = variableToSubstituteNext, type_ = typeToSubstituteByNext }
-                    in
-                    case
-                        patternTypedNode
-                            |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
-                                variableToTypeSubstitutionToApplyNext
-                    of
-                        Err error ->
-                            Err error
+                            (\remainingVariable remainingReplacementTypeNotVariable variableToTypeSubstitutedSoFar ->
+                                Result.andThen
+                                    (\replacementTypeSubstituted ->
+                                        Result.map
+                                            (\newSubstituionsSoFarWithCurrent ->
+                                                { newSubstitutions = newSubstituionsSoFarWithCurrent
+                                                , variableToType =
+                                                    variableToTypeSubstitutedSoFar.variableToType
+                                                        |> FastDict.insert remainingVariable
+                                                            replacementTypeSubstituted.type_
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge context
+                                                variableToTypeSubstitutedSoFar.newSubstitutions
+                                                { equivalentVariables =
+                                                    replacementTypeSubstituted.substitutions.equivalentVariables
+                                                , variableToType =
+                                                    replacementTypeSubstituted.substitutions.variableToType
+                                                }
+                                            )
+                                    )
+                                    (remainingReplacementTypeNotVariable
+                                        |> typeNotVariableSubstituteVariableByNotVariable
+                                            context
+                                            variableToTypeSubstitutionToApplyNext
+                                    )
+                            )
+                of
+                    Err error ->
+                        Err error
 
-                        Ok patternTypedNodeWithVariableToTypeSubstitutionApplied ->
-                            case
-                                remainingVariableToTypeSubstitutions
-                                    |> variableToTypeSubstitutionsSubstituteVariableByNotVariable
-                                        typeContext
-                                        variableToTypeSubstitutionToApplyNext
-                            of
-                                Err error ->
-                                    Err error
+                    Ok variableToTypeSubstituted ->
+                        case
+                            variableSubstitutionsMerge context
+                                variableToTypeSubstituted.newSubstitutions
+                                soFar.newSubstitutions
+                        of
+                            Err error ->
+                                Err error
 
-                                Ok remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied ->
-                                    case
-                                        variableSubstitutionsMerge
-                                            typeContext
-                                            patternTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
-                                            remainingVariableToTypeSubstitutionsWithVariableToTypeSubstitutionApplied
-                                    of
-                                        Err error ->
-                                            Err error
-
-                                        Ok fullRemainingSubstitutions ->
-                                            patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                                fullRemainingSubstitutions
-                                                patternTypedNodeWithVariableToTypeSubstitutionApplied.node
+                            Ok newSubstitutionsWithAfterSubstitution ->
+                                Ok
+                                    { variableToType = variableToTypeSubstituted.variableToType
+                                    , newSubstitutions = newSubstitutionsWithAfterSubstitution
+                                    }
+            )
 
 
 patternTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        { variable : TypeVariableFromContext
-        , type_ : TypeNotVariable TypeVariableFromContext
-        }
+        (TypeVariableFromContext
+         -> Maybe (TypeNotVariable TypeVariableFromContext)
+        )
     ->
         TypedNode
             (Pattern (Type TypeVariableFromContext))

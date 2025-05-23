@@ -9,6 +9,7 @@ optimization ideas
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration
+- faster (by doing more steps at once)
 
 #### 1.0.9
 - correctly infer imported record type alias constructor
