@@ -770,7 +770,7 @@ type alias ModuleOriginLookup =
 
 
 {-| Calculate valid mappings of qualifications + name
-to origin module based on a module's imports.
+to origin module based on a module's imports, see [`ModuleOriginLookup`](#ModuleOriginLookup).
 
 Requires all exposed [`ModuleTypes`](#ModuleTypes)
 so we can resolve `exposing (..)` and `ChoiceType(..)`.
