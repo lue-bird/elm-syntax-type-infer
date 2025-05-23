@@ -845,10 +845,10 @@ importsToModuleOriginLookup modulesTypes imports =
                                 moduleTypes.choiceTypes
                                     |> FastDict.foldl
                                         (\choiceTypeName _ variantNamesSoFar ->
-                                            FastDict.insert
-                                                ( moduleAliasOrFullName, choiceTypeName )
-                                                syntaxImport.moduleName
-                                                variantNamesSoFar
+                                            variantNamesSoFar
+                                                |> FastDict.insert
+                                                    ( moduleAliasOrFullName, choiceTypeName )
+                                                    syntaxImport.moduleName
                                         )
                                         (moduleTypes.typeAliases
                                             |> FastDict.foldl
@@ -872,10 +872,10 @@ importsToModuleOriginLookup modulesTypes imports =
                                             choiceType.variants
                                                 |> FastDict.foldl
                                                     (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
-                                                        FastDict.insert
-                                                            ( moduleAliasOrFullName, variantName )
-                                                            syntaxImport.moduleName
-                                                            soFarAndVariantNamesOfCurrentChoiceType
+                                                        soFarAndVariantNamesOfCurrentChoiceType
+                                                            |> FastDict.insert
+                                                                ( moduleAliasOrFullName, variantName )
+                                                                syntaxImport.moduleName
                                                     )
                                                     variantNamesSoFar
                                         )
@@ -912,9 +912,9 @@ importsToModuleOriginLookup modulesTypes imports =
                             syntaxImport.referenceExposes
                                 |> List.foldl
                                     (\expose referencesSoFarAndImportExposed ->
-                                        FastDict.insert ( [], expose )
-                                            syntaxImport.moduleName
-                                            referencesSoFarAndImportExposed
+                                        referencesSoFarAndImportExposed
+                                            |> FastDict.insert ( [], expose )
+                                                syntaxImport.moduleName
                                     )
                                     soFar.references
                                 |> FastDict.union
@@ -923,9 +923,9 @@ importsToModuleOriginLookup modulesTypes imports =
                             syntaxImport.typeExposes
                                 |> List.foldl
                                     (\expose typeConstructsSoFarAndImportExposed ->
-                                        FastDict.insert ( [], expose )
-                                            syntaxImport.moduleName
-                                            typeConstructsSoFarAndImportExposed
+                                        typeConstructsSoFarAndImportExposed
+                                            |> FastDict.insert ( [], expose )
+                                                syntaxImport.moduleName
                                     )
                                     soFar.typeConstructs
                                 |> FastDict.union
@@ -2001,7 +2001,9 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                                                 Result.map
                                                     (\soFar ->
                                                         { substitutions = soFar.substitutions
-                                                        , types = soFar.types |> FastDict.insert name value
+                                                        , types =
+                                                            soFar.types
+                                                                |> FastDict.insert name value
                                                         }
                                                     )
                                                     soFarOrError
