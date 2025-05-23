@@ -6937,7 +6937,7 @@ expressionReferenceTypeInfer context expressionReference =
 type alias RangeAsComparable =
     ( -- start
       LocationAsComparable
-    , --end
+    , -- end
       LocationAsComparable
     )
 
@@ -6945,7 +6945,7 @@ type alias RangeAsComparable =
 type alias LocationAsComparable =
     ( -- row
       Int
-    , --column
+    , -- column
       Int
     )
 
