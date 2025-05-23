@@ -15,7 +15,7 @@ import Html
 main =
     Browser.sandbox
         { init =
-            List.repeat 3 ()
+            List.repeat 2000 ()
                 |> List.foldl
                     (\() () ->
                         let
@@ -96,7 +96,8 @@ parsedModuleDeclarations =
 
 exampleModuleSource : String
 exampleModuleSource =
-    unicodeModuleSource
+    -- unicodeModuleSource
+    printModuleSource
 
 
 unicodeModuleSource : String
