@@ -8,9 +8,9 @@ optimization ideas
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - represent LocationAsComparable as row + startColumn * 2^24 to save memory
 
-#### 1.0.10
+#### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration
-- faster (by doing more steps at once)
+- faster (TODO in real world situation it was actually 4x slower, investigate!)
 
 #### 1.0.9
 - correctly infer imported record type alias constructor
