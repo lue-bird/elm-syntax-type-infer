@@ -11591,49 +11591,51 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
         LetValueOrFunctionDeclaration letValueOrFunction ->
             resultAndThen3
                 (\parametersSubstituted resultSubstituted typeMaybeSubstituted ->
-                    case ( typeMaybeSubstituted, letValueOrFunction.signature ) of
-                        ( Just typeSubstituted, Just signature ) ->
-                            Err
-                                ("the let value/function annotation type ("
-                                    ++ (signature.range |> rangeToInfoString)
-                                    ++ ") is too loose. It is annotated as "
-                                    ++ (letValueOrFunction.type_ |> typeToInfoString)
-                                    ++ " but should be at least as strict as "
-                                    ++ (typeSubstituted.type_ |> typeToInfoString)
-                                )
+                    case typeMaybeSubstituted of
+                        Just typeSubstituted ->
+                            case letValueOrFunction.signature of
+                                Just signature ->
+                                    Err
+                                        ("the let value/function annotation type ("
+                                            ++ (signature.range |> rangeToInfoString)
+                                            ++ ") is too loose. It is annotated as "
+                                            ++ (letValueOrFunction.type_ |> typeToInfoString)
+                                            ++ " but should be at least as strict as "
+                                            ++ (typeSubstituted.type_ |> typeToInfoString)
+                                        )
 
-                        ( Just typeSubstituted, Nothing ) ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
-                                    , updatedValueOrFunctionType =
-                                        Just
-                                            { name = letValueOrFunction.name
-                                            , range = letDeclarationAndRange.range
-                                            , type_ = typeSubstituted.type_
-                                            }
-                                    , node =
-                                        { range = letDeclarationAndRange.range
-                                        , declaration =
-                                            LetValueOrFunctionDeclaration
-                                                { parameters = parametersSubstituted.nodes
-                                                , result = resultSubstituted.node
-                                                , type_ = typeSubstituted.type_
-                                                , signature = letValueOrFunction.signature
-                                                , nameRange = letValueOrFunction.nameRange
-                                                , name = letValueOrFunction.name
+                                Nothing ->
+                                    Result.map
+                                        (\fullSubstitutions ->
+                                            { substitutions = fullSubstitutions
+                                            , updatedValueOrFunctionType =
+                                                Just
+                                                    { name = letValueOrFunction.name
+                                                    , range = letDeclarationAndRange.range
+                                                    , type_ = typeSubstituted.type_
+                                                    }
+                                            , node =
+                                                { range = letDeclarationAndRange.range
+                                                , declaration =
+                                                    LetValueOrFunctionDeclaration
+                                                        { parameters = parametersSubstituted.nodes
+                                                        , result = resultSubstituted.node
+                                                        , type_ = typeSubstituted.type_
+                                                        , signature = letValueOrFunction.signature
+                                                        , nameRange = letValueOrFunction.nameRange
+                                                        , name = letValueOrFunction.name
+                                                        }
                                                 }
-                                        }
-                                    }
-                                )
-                                (variableSubstitutionsMerge3
-                                    typeContext
-                                    parametersSubstituted.substitutions
-                                    resultSubstituted.substitutions
-                                    typeSubstituted.substitutions
-                                )
+                                            }
+                                        )
+                                        (variableSubstitutionsMerge3
+                                            typeContext
+                                            parametersSubstituted.substitutions
+                                            resultSubstituted.substitutions
+                                            typeSubstituted.substitutions
+                                        )
 
-                        ( Nothing, _ ) ->
+                        Nothing ->
                             Result.map
                                 (\fullSubstitutions ->
                                     { substitutions = fullSubstitutions
