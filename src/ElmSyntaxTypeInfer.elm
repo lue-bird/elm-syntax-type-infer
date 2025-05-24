@@ -27,7 +27,6 @@ If you are interested in exposing helpers like `expressionMapType`,
 
 -}
 
-import Dict
 import Elm.Docs
 import Elm.Syntax.Declaration
 import Elm.Syntax.Exposing
@@ -14579,41 +14578,30 @@ typeVariablesFromContextToDisambiguationLookup :
     FastSetFast TypeVariableFromContext
     -> FastDict.Dict TypeVariableFromContext String
 typeVariablesFromContextToDisambiguationLookup variables =
-    typeVariablesFromContextToDisambiguationLookupInto FastDict.empty variables
+    variables
+        |> FastDict.foldl
+            (\variable () soFar ->
+                let
+                    ( _, name ) =
+                        variable
 
+                    alreadyExists : String -> Bool
+                    alreadyExists toDisambiguate =
+                        soFar
+                            |> fastDictAny
+                                (\diambiguatedVariableSoFar ->
+                                    diambiguatedVariableSoFar == toDisambiguate
+                                )
 
-typeVariablesFromContextToDisambiguationLookupInto :
-    FastDict.Dict TypeVariableFromContext String
-    -> FastSetFast TypeVariableFromContext
-    -> FastDict.Dict TypeVariableFromContext String
-typeVariablesFromContextToDisambiguationLookupInto soFar variables =
-    case variables |> FastDict.popMin of
-        Nothing ->
-            soFar
-
-        Just ( ( variable, () ), remainingVariables ) ->
-            let
-                ( _, name ) =
-                    variable
-
-                alreadyExists : String -> Bool
-                alreadyExists toDisambiguate =
-                    soFar
-                        |> fastDictAny
-                            (\soFarVariableAsString ->
-                                soFarVariableAsString == toDisambiguate
-                            )
-
-                variableAsDisambiguatedString : String
-                variableAsDisambiguatedString =
-                    name |> nameDisambiguateBy alreadyExists
-            in
-            typeVariablesFromContextToDisambiguationLookupInto
-                (soFar
+                    variableAsDisambiguatedString : String
+                    variableAsDisambiguatedString =
+                        name |> nameDisambiguateBy alreadyExists
+                in
+                soFar
                     |> FastDict.insert variable
                         variableAsDisambiguatedString
-                )
-                remainingVariables
+            )
+            FastDict.empty
 
 
 nameDisambiguateBy : (String -> Bool) -> String -> String
