@@ -10,7 +10,7 @@ optimization ideas
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration
-- faster (TODO in real world situation it was actually 4x slower, investigate!)
+- faster (TODO in real world situation it was actually 2x slower, investigate!)
 
 #### 1.0.9
 - correctly infer imported record type alias constructor
