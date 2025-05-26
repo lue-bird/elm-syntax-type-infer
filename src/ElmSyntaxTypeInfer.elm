@@ -9171,34 +9171,23 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                         allPartiallyInferredDeclarationsAndUsesAfterSubstitution
                                             |> FastDict.foldl
                                                 (\unannotatedInferredDeclarationName uses soFar ->
-                                                    case moduleLevelPartiallyInferredDeclarations |> FastDict.get unannotatedInferredDeclarationName of
+                                                    case valueAndFunctionDeclarationsSubstituted.declarations |> FastDict.get unannotatedInferredDeclarationName of
                                                         Nothing ->
                                                             soFar
 
-                                                        Just inferredDeclarationBeforeSubstituting ->
-                                                            case valueAndFunctionDeclarationsSubstituted.declarations |> FastDict.get unannotatedInferredDeclarationName of
-                                                                Nothing ->
-                                                                    soFar
+                                                        Just inferredDeclarationAfterSubstituting ->
+                                                            if
+                                                                valueAndFunctionDeclarationsSubstituted.unchangedDeclarations
+                                                                    |> FastDict.member unannotatedInferredDeclarationName
+                                                            then
+                                                                { uses = uses
+                                                                , partiallyInferredDeclarationType =
+                                                                    inferredDeclarationAfterSubstituting.type_
+                                                                }
+                                                                    :: soFar
 
-                                                                Just inferredDeclarationAfterSubstituting ->
-                                                                    if
-                                                                        inferredDeclarationBeforeSubstituting.type_
-                                                                            |> -- TODO optimize check
-                                                                               typeContainedVariables
-                                                                            |> fastSetFastAny
-                                                                                (\inferredDeclarationBeforeSubstitutingTypeVariable ->
-                                                                                    variableToTypeSubstitutedOverItself
-                                                                                        |> FastDict.member inferredDeclarationBeforeSubstitutingTypeVariable
-                                                                                )
-                                                                    then
-                                                                        { uses = uses
-                                                                        , partiallyInferredDeclarationType =
-                                                                            inferredDeclarationAfterSubstituting.type_
-                                                                        }
-                                                                            :: soFar
-
-                                                                    else
-                                                                        soFar
+                                                            else
+                                                                soFar
                                                 )
                                                 []
 
@@ -10328,24 +10317,26 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { allUnchanged : Bool
-            , declarations :
+            { declarations :
                 FastDict.Dict
                     String
                     (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+            , unchangedDeclarations : FastSetFast String
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     valueAndFunctionDeclarationsToApplySubstitutionTo
         |> fastDictFoldlWhileOkFrom
-            substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue
+            substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty
             (\declarationName declarationToSubstituteIn soFar ->
                 Result.andThen
                     (\declarationSubstituted ->
                         if declarationSubstituted.unchanged then
                             Ok
-                                { allUnchanged = soFar.allUnchanged
-                                , substitutions = soFar.substitutions
+                                { substitutions = soFar.substitutions
+                                , unchangedDeclarations =
+                                    soFar.unchangedDeclarations
+                                        |> FastDict.insert declarationName ()
                                 , declarations =
                                     FastDict.insert declarationName
                                         declarationToSubstituteIn
@@ -10355,8 +10346,9 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes sub
                         else
                             Result.map
                                 (\fullSubstitutions ->
-                                    { allUnchanged = False
-                                    , substitutions = fullSubstitutions
+                                    { substitutions = fullSubstitutions
+                                    , unchangedDeclarations =
+                                        soFar.unchangedDeclarations
                                     , declarations =
                                         FastDict.insert declarationName
                                             declarationSubstituted.declaration
@@ -10396,15 +10388,15 @@ everywhereRange =
     }
 
 
-substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue :
-    { allUnchanged : Bool
-    , substitutions : VariableSubstitutions
+substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty :
+    { substitutions : VariableSubstitutions
     , declarations : FastDict.Dict String declarationInfo_
+    , unchangedDeclarations : FastSetFast String
     }
-substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue =
-    { allUnchanged = True
-    , substitutions = variableSubstitutionsNone
+substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty =
+    { substitutions = variableSubstitutionsNone
     , declarations = FastDict.empty
+    , unchangedDeclarations = FastDict.empty
     }
 
 
