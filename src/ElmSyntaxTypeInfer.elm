@@ -2307,16 +2307,6 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                 )
 
 
-substitutionsNoneTypesDictEmpty :
-    { substitutions : VariableSubstitutions
-    , types : FastDict.Dict String (Type TypeVariableFromContext)
-    }
-substitutionsNoneTypesDictEmpty =
-    { substitutions = variableSubstitutionsNone
-    , types = FastDict.empty
-    }
-
-
 substitutionsNoneTypesDictEmptyAllUnchangedTrue :
     { allUnchanged : Bool
     , substitutions : VariableSubstitutions
@@ -2732,42 +2722,85 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
 
                 Just originAliasDeclaration ->
                     let
-                        prefix : String
-                        prefix =
-                            "parameter"
-                                ++ (typeConstructToExpand.moduleOrigin |> String.concat)
-                                ++ typeConstructToExpand.name
-                    in
-                    List.map2
-                        (\parameterName argument ->
-                            { variable =
-                                ( context.range |> rangeToAsComparable
-                                , prefix ++ (parameterName |> stringFirstCharToUpper)
-                                )
-                            , type_ = argument
+                        substitutionsToApplyToOriginAliasType :
+                            { parameterToVariable : FastDict.Dict String TypeVariableFromContext
+                            , parameterToTypeNotVariable : FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
                             }
-                        )
-                        originAliasDeclaration.parameters
-                        typeConstructToExpand.arguments
-                        |> -- TODO substitute all at once
-                           listFoldlWhileOkFrom
-                            (originAliasDeclaration.type_
+                        substitutionsToApplyToOriginAliasType =
+                            listFoldl2From
+                                parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty
+                                originAliasDeclaration.parameters
+                                typeConstructToExpand.arguments
+                                (\parameterName argument soFar ->
+                                    case argument of
+                                        TypeVariable argumentVariable ->
+                                            { parameterToVariable =
+                                                soFar.parameterToVariable
+                                                    |> FastDict.insert parameterName argumentVariable
+                                            , parameterToTypeNotVariable = soFar.parameterToTypeNotVariable
+                                            }
+
+                                        TypeNotVariable argumentTypeNotVariable ->
+                                            { parameterToVariable = soFar.parameterToVariable
+                                            , parameterToTypeNotVariable =
+                                                soFar.parameterToTypeNotVariable
+                                                    |> FastDict.insert
+                                                        ( rangeAsComparableEmpty, parameterName )
+                                                        argumentTypeNotVariable
+                                            }
+                                )
+
+                        aliasTypeWithVariableArgumentsFilledIn : Type TypeVariableFromContext
+                        aliasTypeWithVariableArgumentsFilledIn =
+                            originAliasDeclaration.type_
                                 |> typeMapVariables
-                                    (\aliasVariable ->
-                                        ( context.range |> rangeToAsComparable
-                                        , prefix ++ (aliasVariable |> stringFirstCharToUpper)
-                                        )
+                                    (\parameterName ->
+                                        case
+                                            substitutionsToApplyToOriginAliasType.parameterToVariable
+                                                |> FastDict.get parameterName
+                                        of
+                                            Just variable ->
+                                                variable
+
+                                            Nothing ->
+                                                ( rangeAsComparableEmpty, parameterName )
                                     )
-                            )
-                            (\substitution typeSoFar ->
-                                typeSoFar
-                                    |> typeApplyVariableSubstitutions context
-                                        (variableSubstitutionsFromVariableToType
-                                            substitution.variable
-                                            substitution.type_
-                                        )
-                            )
-                        |> Result.toMaybe
+                    in
+                    if
+                        substitutionsToApplyToOriginAliasType.parameterToTypeNotVariable
+                            |> FastDict.isEmpty
+                    then
+                        Just aliasTypeWithVariableArgumentsFilledIn
+
+                    else
+                        case
+                            aliasTypeWithVariableArgumentsFilledIn
+                                |> typeSubstituteVariableByNotVariable context
+                                    (\variable ->
+                                        substitutionsToApplyToOriginAliasType.parameterToTypeNotVariable
+                                            |> FastDict.get variable
+                                    )
+                        of
+                            Ok typeAliasWithSomeVariablesSubstitutedByTypes ->
+                                Just typeAliasWithSomeVariablesSubstitutedByTypes.type_
+
+                            Err _ ->
+                                Nothing
+
+
+parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty :
+    { parameterToVariable : FastDict.Dict String TypeVariableFromContext
+    , parameterToTypeNotVariable : FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    }
+parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty =
+    { parameterToVariable = FastDict.empty
+    , parameterToTypeNotVariable = FastDict.empty
+    }
+
+
+rangeAsComparableEmpty : RangeAsComparable
+rangeAsComparableEmpty =
+    ( ( 0, 0 ), ( 0, 0 ) )
 
 
 {-| All you need to turn a generic type with variables
@@ -15179,6 +15212,30 @@ listMapToFastDict elementToKeyValue list =
                 soFar |> FastDict.insert keyValue.key keyValue.value
             )
             FastDict.empty
+
+
+listFoldl2From :
+    state
+    -> List a
+    -> List b
+    -> (a -> b -> state -> state)
+    -> state
+listFoldl2From initialState aList bList reduce =
+    case aList of
+        [] ->
+            initialState
+
+        aHead :: aTail ->
+            case bList of
+                [] ->
+                    initialState
+
+                bHead :: bTail ->
+                    listFoldl2From
+                        (reduce aHead bHead initialState)
+                        aTail
+                        bTail
+                        reduce
 
 
 listFoldl2WhileOkFrom :
