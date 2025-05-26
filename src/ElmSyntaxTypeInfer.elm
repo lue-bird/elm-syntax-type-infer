@@ -1507,6 +1507,12 @@ typeSubstituteVariable context replacement type_ =
                         else
                             Nothing
                     )
+                |> Result.map
+                    (\substituted ->
+                        { type_ = substituted.type_
+                        , substitutions = substituted.substitutions
+                        }
+                    )
 
 
 typeApplyVariableSubstitutions :
@@ -1577,9 +1583,13 @@ typeApplyVariableSubstitutions context substitutions originalType =
                                 Err error
 
                             Ok typeWithVariableToTypeSubstitutionApplied ->
-                                typeApplyVariableSubstitutions context
-                                    typeWithVariableToTypeSubstitutionApplied.substitutions
-                                    typeWithVariableToTypeSubstitutionApplied.type_
+                                if typeWithVariableToTypeSubstitutionApplied.unchanged then
+                                    Ok originalType
+
+                                else
+                                    typeApplyVariableSubstitutions context
+                                        typeWithVariableToTypeSubstitutionApplied.substitutions
+                                        typeWithVariableToTypeSubstitutionApplied.type_
 
 
 typeSubstituteVariableByNotVariable :
@@ -1594,7 +1604,8 @@ typeSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { unchanged : Bool
+            , type_ : Type TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeSubstituteVariableByNotVariable context replacement type_ =
@@ -1603,17 +1614,23 @@ typeSubstituteVariableByNotVariable context replacement type_ =
         TypeVariable typeVariable ->
             case replacement typeVariable of
                 Nothing ->
-                    Ok { type_ = type_, substitutions = variableSubstitutionsNone }
+                    Ok
+                        { unchanged = True
+                        , type_ = type_
+                        , substitutions = variableSubstitutionsNone
+                        }
 
                 Just replacementType ->
                     case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
                         Nothing ->
                             Ok
-                                { type_ = TypeNotVariable replacementType
+                                { unchanged = False
+                                , type_ = TypeNotVariable replacementType
                                 , substitutions = variableSubstitutionsNone
                                 }
 
                         Just constraint ->
+                            -- TODO: instead check these when creating/suggesting the substitution!
                             case constraint of
                                 TypeVariableConstraintNumber ->
                                     if
@@ -1621,7 +1638,8 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                             |> typeNotVariableIsNumber context.declarationTypes
                                     then
                                         Ok
-                                            { type_ = TypeNotVariable replacementType
+                                            { unchanged = False
+                                            , type_ = TypeNotVariable replacementType
                                             , substitutions = variableSubstitutionsNone
                                             }
 
@@ -1640,7 +1658,8 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                             |> typeNotVariableIsAppendable context.declarationTypes
                                     then
                                         Ok
-                                            { type_ = TypeNotVariable replacementType
+                                            { unchanged = False
+                                            , type_ = TypeNotVariable replacementType
                                             , substitutions = variableSubstitutionsNone
                                             }
 
@@ -1658,7 +1677,8 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                             |> typeNotVariableIsComparable context.declarationTypes
                                     then
                                         Ok
-                                            { type_ = TypeNotVariable replacementType
+                                            { unchanged = False
+                                            , type_ = TypeNotVariable replacementType
                                             , substitutions = variableSubstitutionsNone
                                             }
 
@@ -1676,7 +1696,8 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                             |> typeNotVariableIsCompappend context.declarationTypes
                                     then
                                         Ok
-                                            { type_ = TypeNotVariable replacementType
+                                            { unchanged = False
+                                            , type_ = TypeNotVariable replacementType
                                             , substitutions = variableSubstitutionsNone
                                             }
 
@@ -1689,16 +1710,20 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                             )
 
         TypeNotVariable typeNotVariable ->
-            Result.map
-                (\typeAndSubstitutions ->
-                    { type_ = TypeNotVariable typeAndSubstitutions.type_
-                    , substitutions = typeAndSubstitutions.substitutions
-                    }
-                )
-                (typeNotVariable
+            case
+                typeNotVariable
                     |> typeNotVariableSubstituteVariableByNotVariable context
                         replacement
-                )
+            of
+                Err error ->
+                    Err error
+
+                Ok typeNotVariableSubstituted ->
+                    Ok
+                        { unchanged = typeNotVariableSubstituted.unchanged
+                        , type_ = TypeNotVariable typeNotVariableSubstituted.type_
+                        , substitutions = typeNotVariableSubstituted.substitutions
+                        }
 
 
 typeToInfoString : Type TypeVariableFromContext -> String
@@ -1807,69 +1832,110 @@ typeNotVariableSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { type_ : TypeNotVariable TypeVariableFromContext
+            { unchanged : Bool
+            , type_ : TypeNotVariable TypeVariableFromContext
             , substitutions : VariableSubstitutions
             }
 typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
-            okTypeNotVariableUnitSubstitutionsNone
+            Ok
+                { unchanged = True
+                , type_ = typeNotVariable
+                , substitutions = variableSubstitutionsNone
+                }
 
         TypeConstruct typeChoiceConstruct ->
-            Result.map
-                (\argumentsSubstituted ->
-                    { type_ =
-                        TypeConstruct
-                            { moduleOrigin = typeChoiceConstruct.moduleOrigin
-                            , name = typeChoiceConstruct.name
-                            , arguments = argumentsSubstituted.arguments
+            case typeChoiceConstruct.arguments of
+                [] ->
+                    Ok
+                        { unchanged = True
+                        , type_ = typeNotVariable
+                        , substitutions = variableSubstitutionsNone
+                        }
+
+                argument0 :: argument1Up ->
+                    Result.map
+                        (\argumentsSubstituted ->
+                            { unchanged = argumentsSubstituted.allUnchanged
+                            , type_ =
+                                if argumentsSubstituted.allUnchanged then
+                                    typeNotVariable
+
+                                else
+                                    TypeConstruct
+                                        { moduleOrigin = typeChoiceConstruct.moduleOrigin
+                                        , name = typeChoiceConstruct.name
+                                        , arguments = argumentsSubstituted.arguments
+                                        }
+                            , substitutions = argumentsSubstituted.substitutions
                             }
-                    , substitutions = argumentsSubstituted.substitutions
-                    }
-                )
-                (typeChoiceConstruct.arguments
-                    |> listFoldrWhileOkFrom
-                        argumentsListEmptySubstitutionsNone
-                        (\argument soFar ->
-                            Result.andThen
-                                (\argumentSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithArgument ->
-                                            { arguments =
-                                                argumentSubstituted.type_
-                                                    :: soFar.arguments
-                                            , substitutions = substitutionsWithArgument
-                                            }
+                        )
+                        ((argument0 :: argument1Up)
+                            |> listFoldrWhileOkFrom
+                                { allUnchanged = True
+                                , arguments = []
+                                , substitutions = variableSubstitutionsNone
+                                }
+                                (\argument soFar ->
+                                    Result.andThen
+                                        (\argumentSubstituted ->
+                                            if argumentSubstituted.unchanged then
+                                                Ok
+                                                    { allUnchanged = soFar.allUnchanged
+                                                    , arguments =
+                                                        argument :: soFar.arguments
+                                                    , substitutions = variableSubstitutionsNone
+                                                    }
+
+                                            else
+                                                Result.map
+                                                    (\substitutionsWithArgument ->
+                                                        { allUnchanged = False
+                                                        , arguments =
+                                                            argumentSubstituted.type_
+                                                                :: soFar.arguments
+                                                        , substitutions = substitutionsWithArgument
+                                                        }
+                                                    )
+                                                    (variableSubstitutionsMerge context
+                                                        argumentSubstituted.substitutions
+                                                        soFar.substitutions
+                                                    )
                                         )
-                                        (variableSubstitutionsMerge context
-                                            argumentSubstituted.substitutions
-                                            soFar.substitutions
+                                        (argument
+                                            |> typeSubstituteVariableByNotVariable context
+                                                replacement
                                         )
-                                )
-                                (argument
-                                    |> typeSubstituteVariableByNotVariable context
-                                        replacement
                                 )
                         )
-                )
 
         TypeTuple typeTuple ->
             resultAndThen2
                 (\part0Substituted part1Substituted ->
-                    Result.map
-                        (\substitutionsPart01 ->
-                            { type_ =
-                                TypeTuple
-                                    { part0 = part0Substituted.type_
-                                    , part1 = part1Substituted.type_
-                                    }
-                            , substitutions = substitutionsPart01
+                    if part0Substituted.unchanged && part1Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , type_ = typeNotVariable
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge context
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\substitutionsPart01 ->
+                                { unchanged = False
+                                , type_ =
+                                    TypeTuple
+                                        { part0 = part0Substituted.type_
+                                        , part1 = part1Substituted.type_
+                                        }
+                                , substitutions = substitutionsPart01
+                                }
+                            )
+                            (variableSubstitutionsMerge context
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                            )
                 )
                 (typeTuple.part0
                     |> typeSubstituteVariableByNotVariable context
@@ -1883,22 +1949,31 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeTriple typeTriple ->
             resultAndThen3
                 (\part0Substituted part1Substituted part2Substituted ->
-                    Result.map
-                        (\substitutionsPart01 ->
-                            { type_ =
-                                TypeTriple
-                                    { part0 = part0Substituted.type_
-                                    , part1 = part1Substituted.type_
-                                    , part2 = part2Substituted.type_
-                                    }
-                            , substitutions = substitutionsPart01
+                    if part0Substituted.unchanged && part1Substituted.unchanged && part2Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , type_ = typeNotVariable
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge3 context
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                            part2Substituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\substitutionsPart01 ->
+                                { unchanged = False
+                                , type_ =
+                                    TypeTriple
+                                        { part0 = part0Substituted.type_
+                                        , part1 = part1Substituted.type_
+                                        , part2 = part2Substituted.type_
+                                        }
+                                , substitutions = substitutionsPart01
+                                }
+                            )
+                            (variableSubstitutionsMerge3 context
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                                part2Substituted.substitutions
+                            )
                 )
                 (typeTriple.part0
                     |> typeSubstituteVariableByNotVariable context
@@ -1916,28 +1991,47 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeRecord typeRecordFields ->
             Result.map
                 (\fieldsSubstituted ->
-                    { substitutions = fieldsSubstituted.substitutions
-                    , type_ = TypeRecord fieldsSubstituted.types
-                    }
+                    if fieldsSubstituted.allUnchanged then
+                        { unchanged = True
+                        , type_ = typeNotVariable
+                        , substitutions = variableSubstitutionsNone
+                        }
+
+                    else
+                        { unchanged = False
+                        , substitutions = fieldsSubstituted.substitutions
+                        , type_ = TypeRecord fieldsSubstituted.types
+                        }
                 )
                 (typeRecordFields
                     |> fastDictFoldlWhileOkFrom
-                        substitutionsNoneTypesDictEmpty
+                        substitutionsNoneTypesDictEmptyAllUnchangedTrue
                         (\fieldName fieldValue soFar ->
                             Result.andThen
                                 (\valueSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithValue ->
-                                            { substitutions = substitutionsWithValue
+                                    if valueSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , types =
                                                 soFar.types
-                                                    |> FastDict.insert fieldName valueSubstituted.type_
+                                                    |> FastDict.insert fieldName fieldValue
                                             }
-                                        )
-                                        (variableSubstitutionsMerge context
-                                            valueSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsWithValue ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsWithValue
+                                                , types =
+                                                    soFar.types
+                                                        |> FastDict.insert fieldName valueSubstituted.type_
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge context
+                                                valueSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (fieldValue
                                     |> typeSubstituteVariableByNotVariable context
@@ -1951,21 +2045,31 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                 (\fieldsSubstituted ->
                     case replacement typeRecordExtension.recordVariable of
                         Nothing ->
-                            Ok
-                                { substitutions = fieldsSubstituted.substitutions
-                                , type_ =
-                                    TypeRecordExtension
-                                        { recordVariable = typeRecordExtension.recordVariable
-                                        , fields = fieldsSubstituted.types
-                                        }
-                                }
+                            if fieldsSubstituted.allUnchanged then
+                                Ok
+                                    { unchanged = True
+                                    , type_ = typeNotVariable
+                                    , substitutions = variableSubstitutionsNone
+                                    }
+
+                            else
+                                Ok
+                                    { unchanged = False
+                                    , substitutions = fieldsSubstituted.substitutions
+                                    , type_ =
+                                        TypeRecordExtension
+                                            { recordVariable = typeRecordExtension.recordVariable
+                                            , fields = fieldsSubstituted.types
+                                            }
+                                    }
 
                         Just recordVariableReplacementTypeNotVariable ->
                             case recordVariableReplacementTypeNotVariable of
                                 TypeRecord replacementRecordFields ->
                                     Result.map
                                         (\fieldsMerged ->
-                                            { substitutions = fieldsMerged.substitutions
+                                            { unchanged = False
+                                            , substitutions = fieldsMerged.substitutions
                                             , type_ = TypeRecord fieldsMerged.types
                                             }
                                         )
@@ -2027,7 +2131,8 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                                 TypeRecordExtension replacementRecordExtension ->
                                     Result.map
                                         (\fieldsMerged ->
-                                            { substitutions = fieldsMerged.substitutions
+                                            { unchanged = False
+                                            , substitutions = fieldsMerged.substitutions
                                             , type_ =
                                                 TypeRecordExtension
                                                     { recordVariable = replacementRecordExtension.recordVariable
@@ -2130,22 +2235,33 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                 )
                 (typeRecordExtension.fields
                     |> fastDictFoldlWhileOkFrom
-                        substitutionsNoneTypesDictEmpty
+                        substitutionsNoneTypesDictEmptyAllUnchangedTrue
                         (\fieldName fieldValue soFar ->
                             Result.andThen
                                 (\valueSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithValue ->
-                                            { substitutions = substitutionsWithValue
+                                    if valueSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , types =
                                                 soFar.types
-                                                    |> FastDict.insert fieldName valueSubstituted.type_
+                                                    |> FastDict.insert fieldName fieldValue
                                             }
-                                        )
-                                        (variableSubstitutionsMerge context
-                                            soFar.substitutions
-                                            valueSubstituted.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsWithValue ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsWithValue
+                                                , types =
+                                                    soFar.types
+                                                        |> FastDict.insert fieldName valueSubstituted.type_
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge context
+                                                valueSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (fieldValue
                                     |> typeSubstituteVariableByNotVariable context
@@ -2157,20 +2273,29 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeFunction typeFunction ->
             resultAndThen2
                 (\inputSubstituted outputSubstituted ->
-                    Result.map
-                        (\substitutionsInputOutput ->
-                            { type_ =
-                                TypeFunction
-                                    { input = inputSubstituted.type_
-                                    , output = outputSubstituted.type_
-                                    }
-                            , substitutions = substitutionsInputOutput
+                    if inputSubstituted.unchanged && outputSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , type_ = typeNotVariable
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge context
-                            inputSubstituted.substitutions
-                            outputSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\substitutionsInputOutput ->
+                                { unchanged = False
+                                , type_ =
+                                    TypeFunction
+                                        { input = inputSubstituted.type_
+                                        , output = outputSubstituted.type_
+                                        }
+                                , substitutions = substitutionsInputOutput
+                                }
+                            )
+                            (variableSubstitutionsMerge context
+                                inputSubstituted.substitutions
+                                outputSubstituted.substitutions
+                            )
                 )
                 (typeFunction.input
                     |> typeSubstituteVariableByNotVariable context
@@ -2182,25 +2307,24 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
                 )
 
 
-okTypeNotVariableUnitSubstitutionsNone :
-    Result
-        error_
-        { type_ : TypeNotVariable TypeVariableFromContext
-        , substitutions : VariableSubstitutions
-        }
-okTypeNotVariableUnitSubstitutionsNone =
-    Ok
-        { type_ = TypeUnit
-        , substitutions = variableSubstitutionsNone
-        }
-
-
 substitutionsNoneTypesDictEmpty :
     { substitutions : VariableSubstitutions
     , types : FastDict.Dict String (Type TypeVariableFromContext)
     }
 substitutionsNoneTypesDictEmpty =
     { substitutions = variableSubstitutionsNone
+    , types = FastDict.empty
+    }
+
+
+substitutionsNoneTypesDictEmptyAllUnchangedTrue :
+    { allUnchanged : Bool
+    , substitutions : VariableSubstitutions
+    , types : FastDict.Dict String (Type TypeVariableFromContext)
+    }
+substitutionsNoneTypesDictEmptyAllUnchangedTrue =
+    { allUnchanged = True
+    , substitutions = variableSubstitutionsNone
     , types = FastDict.empty
     }
 
@@ -2625,7 +2749,8 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                         )
                         originAliasDeclaration.parameters
                         typeConstructToExpand.arguments
-                        |> listFoldlWhileOkFrom
+                        |> -- TODO substitute all at once
+                           listFoldlWhileOkFrom
                             (originAliasDeclaration.type_
                                 |> typeMapVariables
                                     (\aliasVariable ->
@@ -3858,16 +3983,6 @@ typeNotVariableUnify context a bNotVariable =
                             ++ " cannot be unified with types other than function: "
                             ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
                         )
-
-
-argumentsListEmptySubstitutionsNone :
-    { arguments : List argument_
-    , substitutions : VariableSubstitutions
-    }
-argumentsListEmptySubstitutionsNone =
-    { arguments = []
-    , substitutions = variableSubstitutionsNone
-    }
 
 
 argumentsReverseListEmptySubstitutionsNone :
@@ -5189,7 +5304,8 @@ patternVariantTypeInfer context patternVariant =
                             (\valueTypeUnified ->
                                 Result.map2
                                     (\resultTypeAfterUnification valueInferredAfterUnification ->
-                                        { resultType = resultTypeAfterUnification
+                                        { resultType =
+                                            resultTypeAfterUnification
                                         , valuesReverse =
                                             valueInferredAfterUnification
                                                 :: soFar.valuesReverse
@@ -8537,30 +8653,36 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                     )
 
                             Just (Elm.Syntax.Node.Node signatureRange signature) ->
-                                Result.andThen
-                                    (\resultInferred ->
-                                        let
-                                            inferredFullType : Type TypeVariableFromContext
-                                            inferredFullType =
-                                                parametersInferred.nodes
-                                                    |> List.foldr
-                                                        (\parameterTypedNode typeSoFar ->
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = parameterTypedNode.type_
-                                                                    , output = typeSoFar
-                                                                    }
-                                                                )
-                                                        )
-                                                        resultInferred.type_
+                                case
+                                    acrossValueAndFunctionDeclarationsToInfer.annotated
+                                        |> FastDict.get name
+                                of
+                                    Nothing ->
+                                        Err
+                                            ("bug in elm-syntax-type-infer: failed to retrieve annotation type for "
+                                                ++ name
+                                            )
 
-                                            fullType : Type TypeVariableFromContext
-                                            fullType =
-                                                case
-                                                    acrossValueAndFunctionDeclarationsToInfer.annotated
-                                                        |> FastDict.get name
-                                                of
-                                                    Just annotationType ->
+                                    Just annotationType ->
+                                        Result.andThen
+                                            (\resultInferred ->
+                                                let
+                                                    inferredFullType : Type TypeVariableFromContext
+                                                    inferredFullType =
+                                                        parametersInferred.nodes
+                                                            |> List.foldr
+                                                                (\parameterTypedNode typeSoFar ->
+                                                                    TypeNotVariable
+                                                                        (TypeFunction
+                                                                            { input = parameterTypedNode.type_
+                                                                            , output = typeSoFar
+                                                                            }
+                                                                        )
+                                                                )
+                                                                resultInferred.type_
+
+                                                    fullType : Type TypeVariableFromContext
+                                                    fullType =
                                                         annotationType
                                                             |> typeMapVariables
                                                                 (\variable ->
@@ -8569,82 +8691,79 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                     , variable
                                                                     )
                                                                 )
-
-                                                    Nothing ->
-                                                        inferredFullType
-                                        in
-                                        resultAndThen2
-                                            (\inferredDeclarationTypeUnifiedWithAnnotation substitutionsFromUnifyingParameterVariablesWithUses ->
-                                                Result.andThen
-                                                    (\fullSubstitutions ->
-                                                        Result.map3
-                                                            (\typeSubstituted resultSubstituted parametersSubstituted ->
-                                                                soFar
-                                                                    |> FastDict.insert name
-                                                                        { nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                                        , documentation = maybeDocumentationAndRange
-                                                                        , signature =
-                                                                            Just
-                                                                                { range = signatureRange
-                                                                                , nameRange = signature.name |> Elm.Syntax.Node.range
-                                                                                , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
-                                                                                , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
+                                                in
+                                                resultAndThen2
+                                                    (\inferredDeclarationTypeUnifiedWithAnnotation substitutionsFromUnifyingParameterVariablesWithUses ->
+                                                        Result.andThen
+                                                            (\fullSubstitutions ->
+                                                                Result.map3
+                                                                    (\typeSubstituted resultSubstituted parametersSubstituted ->
+                                                                        soFar
+                                                                            |> FastDict.insert name
+                                                                                { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                                                , documentation = maybeDocumentationAndRange
+                                                                                , signature =
+                                                                                    Just
+                                                                                        { range = signatureRange
+                                                                                        , nameRange = signature.name |> Elm.Syntax.Node.range
+                                                                                        , annotationType = signature.typeAnnotation |> Elm.Syntax.Node.value
+                                                                                        , annotationTypeRange = signature.typeAnnotation |> Elm.Syntax.Node.range
+                                                                                        }
+                                                                                , result = resultSubstituted
+                                                                                , type_ = typeSubstituted
+                                                                                , parameters = parametersSubstituted
                                                                                 }
-                                                                        , result = resultSubstituted
-                                                                        , type_ = typeSubstituted
-                                                                        , parameters = parametersSubstituted
-                                                                        }
-                                                            )
-                                                            (fullType
-                                                                |> typeApplyVariableSubstitutions
-                                                                    typeContext
-                                                                    fullSubstitutions
-                                                            )
-                                                            (resultInferred
-                                                                |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                                                    fullSubstitutions
-                                                            )
-                                                            (parametersInferred.nodes
-                                                                |> listFoldrWhileOkFrom []
-                                                                    (\parameterInferred parametersSubstitutedSoFar ->
-                                                                        Result.map
-                                                                            (\parameterSubstituted ->
-                                                                                parameterSubstituted :: parametersSubstitutedSoFar
-                                                                            )
-                                                                            (parameterInferred
-                                                                                |> patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                                                                    fullSubstitutions
+                                                                    )
+                                                                    (fullType
+                                                                        |> typeApplyVariableSubstitutions
+                                                                            typeContext
+                                                                            fullSubstitutions
+                                                                    )
+                                                                    (resultInferred
+                                                                        |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                            fullSubstitutions
+                                                                    )
+                                                                    (parametersInferred.nodes
+                                                                        |> listFoldrWhileOkFrom []
+                                                                            (\parameterInferred parametersSubstitutedSoFar ->
+                                                                                Result.map
+                                                                                    (\parameterSubstituted ->
+                                                                                        parameterSubstituted :: parametersSubstitutedSoFar
+                                                                                    )
+                                                                                    (parameterInferred
+                                                                                        |> patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                                                                            fullSubstitutions
+                                                                                    )
                                                                             )
                                                                     )
                                                             )
+                                                            (variableSubstitutionsMerge
+                                                                typeContext
+                                                                substitutionsFromUnifyingParameterVariablesWithUses
+                                                                inferredDeclarationTypeUnifiedWithAnnotation.substitutions
+                                                            )
                                                     )
-                                                    (variableSubstitutionsMerge
+                                                    (typeUnify typeContext
+                                                        fullType
+                                                        inferredFullType
+                                                    )
+                                                    (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
                                                         typeContext
-                                                        substitutionsFromUnifyingParameterVariablesWithUses
-                                                        inferredDeclarationTypeUnifiedWithAnnotation.substitutions
+                                                        parametersInferred.introducedExpressionVariables
+                                                        resultInferred
                                                     )
                                             )
-                                            (typeUnify typeContext
-                                                fullType
-                                                inferredFullType
+                                            (implementation.expression
+                                                |> expressionTypeInfer
+                                                    { declarationTypes = declarationTypes
+                                                    , locallyIntroducedExpressionVariables =
+                                                        parametersInferred.nodes
+                                                            |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
+                                                    , locallyIntroducedDeclarationTypes =
+                                                        acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                                    , moduleOriginLookup = moduleOriginLookup
+                                                    }
                                             )
-                                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
-                                                typeContext
-                                                parametersInferred.introducedExpressionVariables
-                                                resultInferred
-                                            )
-                                    )
-                                    (implementation.expression
-                                        |> expressionTypeInfer
-                                            { declarationTypes = declarationTypes
-                                            , locallyIntroducedExpressionVariables =
-                                                parametersInferred.nodes
-                                                    |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
-                                            , locallyIntroducedDeclarationTypes =
-                                                acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
-                                            , moduleOriginLookup = moduleOriginLookup
-                                            }
-                                    )
                     )
                     (implementation.arguments
                         |> parameterPatternsTypeInfer
@@ -10176,7 +10295,8 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { declarations :
+            { allUnchanged : Bool
+            , declarations :
                 FastDict.Dict
                     String
                     (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
@@ -10185,26 +10305,38 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     valueAndFunctionDeclarationsToApplySubstitutionTo
         |> fastDictFoldlWhileOkFrom
-            substitutionsNoneDeclarationsDictEmpty
+            substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue
             (\declarationName declarationToSubstituteIn soFar ->
                 Result.andThen
                     (\declarationSubstituted ->
-                        Result.map
-                            (\fullSubstitutions ->
-                                { substitutions = fullSubstitutions
+                        if declarationSubstituted.unchanged then
+                            Ok
+                                { allUnchanged = soFar.allUnchanged
+                                , substitutions = soFar.substitutions
                                 , declarations =
                                     FastDict.insert declarationName
-                                        declarationSubstituted.declaration
+                                        declarationToSubstituteIn
                                         soFar.declarations
                                 }
-                            )
-                            (variableSubstitutionsMerge
-                                { declarationTypes = declarationTypes
-                                , range = everywhereRange
-                                }
-                                soFar.substitutions
-                                declarationSubstituted.substitutions
-                            )
+
+                        else
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { allUnchanged = False
+                                    , substitutions = fullSubstitutions
+                                    , declarations =
+                                        FastDict.insert declarationName
+                                            declarationSubstituted.declaration
+                                            soFar.declarations
+                                    }
+                                )
+                                (variableSubstitutionsMerge
+                                    { declarationTypes = declarationTypes
+                                    , range = everywhereRange
+                                    }
+                                    soFar.substitutions
+                                    declarationSubstituted.substitutions
+                                )
                     )
                     (declarationToSubstituteIn
                         |> valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable
@@ -10231,12 +10363,14 @@ everywhereRange =
     }
 
 
-substitutionsNoneDeclarationsDictEmpty :
-    { substitutions : VariableSubstitutions
+substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue :
+    { allUnchanged : Bool
+    , substitutions : VariableSubstitutions
     , declarations : FastDict.Dict String declarationInfo_
     }
-substitutionsNoneDeclarationsDictEmpty =
-    { substitutions = variableSubstitutionsNone
+substitutionsNoneDeclarationsDictEmptyAllUnchangedTrue =
+    { allUnchanged = True
+    , substitutions = variableSubstitutionsNone
     , declarations = FastDict.empty
     }
 
@@ -10332,7 +10466,8 @@ valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { declaration : ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+            { unchanged : Bool
+            , declaration : ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
             , substitutions : VariableSubstitutions
             }
 valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable declarationTypes replacement declarationValueOrFunctionSoFar =
@@ -10344,48 +10479,67 @@ valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable declarationTypes r
             }
     in
     resultAndThen3
-        (\parametersInferred resultInferred typeInferred ->
-            Result.map
-                (\fullSubstitutions ->
-                    { declaration =
-                        { nameRange = declarationValueOrFunctionSoFar.nameRange
-                        , documentation = declarationValueOrFunctionSoFar.documentation
-                        , signature = declarationValueOrFunctionSoFar.signature
-                        , parameters = parametersInferred.nodes
-                        , result = resultInferred.node
-                        , type_ =
-                            -- reconstructing the function at the end is faster
-                            typeInferred.type_
-                        }
-                    , substitutions = fullSubstitutions
+        (\typeSubstituted parametersSubstituted resultSubstituted ->
+            if typeSubstituted.unchanged && parametersSubstituted.allUnchanged && resultSubstituted.unchanged then
+                Ok
+                    { unchanged = True
+                    , declaration = declarationValueOrFunctionSoFar
+                    , substitutions = parametersSubstituted.substitutions
                     }
-                )
-                (variableSubstitutionsMerge3
-                    typeContext
-                    parametersInferred.substitutions
-                    resultInferred.substitutions
-                    typeInferred.substitutions
-                )
+
+            else
+                Result.map
+                    (\fullSubstitutions ->
+                        { unchanged = False
+                        , declaration =
+                            { nameRange = declarationValueOrFunctionSoFar.nameRange
+                            , documentation = declarationValueOrFunctionSoFar.documentation
+                            , signature = declarationValueOrFunctionSoFar.signature
+                            , parameters = parametersSubstituted.nodes
+                            , result = resultSubstituted.node
+                            , type_ = typeSubstituted.type_
+                            }
+                        , substitutions = fullSubstitutions
+                        }
+                    )
+                    (variableSubstitutionsMerge3 typeContext
+                        parametersSubstituted.substitutions
+                        resultSubstituted.substitutions
+                        typeSubstituted.substitutions
+                    )
+        )
+        (declarationValueOrFunctionSoFar.type_
+            |> typeSubstituteVariableByNotVariable typeContext
+                replacement
         )
         (declarationValueOrFunctionSoFar.parameters
             |> listFoldrWhileOkFrom
-                substitutionsNoneNodesEmpty
+                substitutionsNoneNodesEmptyAllUnchangedTrue
                 (\patternTypedNode soFar ->
                     Result.andThen
                         (\patternSubstituted ->
-                            Result.map
-                                (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
+                            if patternSubstituted.unchanged then
+                                Ok
+                                    { allUnchanged = soFar.allUnchanged
+                                    , substitutions = soFar.substitutions
                                     , nodes =
-                                        patternSubstituted.node
-                                            :: soFar.nodes
+                                        patternTypedNode :: soFar.nodes
                                     }
-                                )
-                                (variableSubstitutionsMerge
-                                    typeContext
-                                    patternSubstituted.substitutions
-                                    soFar.substitutions
-                                )
+
+                            else
+                                Result.map
+                                    (\fullSubstitutions ->
+                                        { allUnchanged = False
+                                        , substitutions = fullSubstitutions
+                                        , nodes =
+                                            patternSubstituted.node
+                                                :: soFar.nodes
+                                        }
+                                    )
+                                    (variableSubstitutionsMerge typeContext
+                                        patternSubstituted.substitutions
+                                        soFar.substitutions
+                                    )
                         )
                         (patternTypedNode
                             |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10395,11 +10549,6 @@ valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable declarationTypes r
         )
         (declarationValueOrFunctionSoFar.result
             |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
-                replacement
-        )
-        (declarationValueOrFunctionSoFar.type_
-            |> typeSubstituteVariableByNotVariable
-                typeContext
                 replacement
         )
 
@@ -10492,7 +10641,8 @@ expressionTypedNodeSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { substitutions : VariableSubstitutions
+            { unchanged : Bool
+            , substitutions : VariableSubstitutions
             , node :
                 TypedNode
                     (Expression (Type TypeVariableFromContext))
@@ -10503,38 +10653,50 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
     case expressionTypedNode.value of
         ExpressionUnit ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = expressionTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         ExpressionFloat _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = expressionTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         ExpressionChar _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = expressionTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         ExpressionString _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = expressionTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         ExpressionInteger integer ->
             Result.map
                 (\typeSubstituted ->
-                    { substitutions = typeSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionInteger integer
-                        , type_ = typeSubstituted.type_
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionInteger integer
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10547,13 +10709,21 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionReference reference ->
             Result.map
                 (\typeSubstituted ->
-                    { substitutions = typeSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionReference reference
-                        , type_ = typeSubstituted.type_
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionReference reference
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10566,13 +10736,48 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionOperatorFunction symbol ->
             Result.map
                 (\typeSubstituted ->
-                    { substitutions = typeSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionOperatorFunction symbol
-                        , type_ = typeSubstituted.type_
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionOperatorFunction symbol
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
+                )
+                (expressionTypedNode.type_
+                    |> typeSubstituteVariableByNotVariable
+                        { declarationTypes = declarationTypes
+                        , range = expressionTypedNode.range
+                        }
+                        replacement
+                )
+
+        ExpressionRecordAccessFunction field ->
+            Result.map
+                (\typeSubstituted ->
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
+                        }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionRecordAccessFunction field
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10585,13 +10790,21 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionNegation negated ->
             Result.map
                 (\negatedSubstituted ->
-                    { substitutions = negatedSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionNegation negatedSubstituted.node
-                        , type_ = negatedSubstituted.node.type_
+                    if negatedSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = negatedSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionNegation negatedSubstituted.node
+                            , type_ = negatedSubstituted.node.type_
+                            }
+                        }
                 )
                 (negated
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10601,13 +10814,21 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionParenthesized inParens ->
             Result.map
                 (\inParensSubstituted ->
-                    { substitutions = inParensSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionParenthesized inParensSubstituted.node
-                        , type_ = inParensSubstituted.node.type_
+                    if inParensSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = inParensSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionParenthesized inParensSubstituted.node
+                            , type_ = inParensSubstituted.node.type_
+                            }
+                        }
                 )
                 (inParens
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10624,26 +10845,35 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen2
                 (\typeSubstituted recordSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionRecordAccess
-                                        { fieldName = recordAccess.fieldName
-                                        , fieldNameRange = recordAccess.fieldNameRange
-                                        , record = recordSubstituted.node
-                                        }
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && recordSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            typeSubstituted.substitutions
-                            recordSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionRecordAccess
+                                            { fieldName = recordAccess.fieldName
+                                            , fieldNameRange = recordAccess.fieldNameRange
+                                            , record = recordSubstituted.node
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge
+                                typeContext
+                                typeSubstituted.substitutions
+                                recordSubstituted.substitutions
+                            )
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10652,25 +10882,6 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (recordAccess.record
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
-                        replacement
-                )
-
-        ExpressionRecordAccessFunction field ->
-            Result.map
-                (\typeSubstituted ->
-                    { substitutions = typeSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value = ExpressionRecordAccessFunction field
-                        , type_ = typeSubstituted.type_
-                        }
-                    }
-                )
-                (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable
-                        { declarationTypes = declarationTypes
-                        , range = expressionTypedNode.range
-                        }
                         replacement
                 )
 
@@ -10684,47 +10895,54 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen3
                 (\typeSubstituted leftSubstituted rightSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionInfixOperation
-                                        { operator =
-                                            { symbol = expressionInfixOperation.operator.symbol
-                                            , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
-                                            , type_ =
-                                                TypeNotVariable
-                                                    (TypeFunction
-                                                        { input = leftSubstituted.node.type_
-                                                        , output =
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = rightSubstituted.node.type_
-                                                                    , output = typeSubstituted.type_
-                                                                    }
-                                                                )
-                                                        }
-                                                    )
-                                            }
-                                        , left = leftSubstituted.node
-                                        , right = rightSubstituted.node
-                                        }
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && leftSubstituted.unchanged && rightSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge3
-                            typeContext
-                            leftSubstituted.substitutions
-                            rightSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionInfixOperation
+                                            { operator =
+                                                { symbol = expressionInfixOperation.operator.symbol
+                                                , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
+                                                , type_ =
+                                                    TypeNotVariable
+                                                        (TypeFunction
+                                                            { input = leftSubstituted.node.type_
+                                                            , output =
+                                                                TypeNotVariable
+                                                                    (TypeFunction
+                                                                        { input = rightSubstituted.node.type_
+                                                                        , output = typeSubstituted.type_
+                                                                        }
+                                                                    )
+                                                            }
+                                                        )
+                                                }
+                                            , left = leftSubstituted.node
+                                            , right = rightSubstituted.node
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge3 typeContext
+                                leftSubstituted.substitutions
+                                rightSubstituted.substitutions
+                                typeSubstituted.substitutions
+                            )
                 )
                 (expressionTypedNode.type_
-                    |> typeSubstituteVariableByNotVariable
-                        typeContext
+                    |> typeSubstituteVariableByNotVariable typeContext
                         replacement
                 )
                 (expressionInfixOperation.left
@@ -10739,33 +10957,42 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionTuple expressionTuple ->
             resultAndThen2
                 (\part0Substituted part1Substituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionTuple
-                                        { part0 = part0Substituted.node
-                                        , part1 = part1Substituted.node
-                                        }
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeTuple
-                                            { part0 = part0Substituted.node.type_
-                                            , part1 = part1Substituted.node.type_
+                    if part0Substituted.unchanged && part1Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionTuple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
                                             }
-                                        )
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeTuple
+                                                { part0 = part0Substituted.node.type_
+                                                , part1 = part1Substituted.node.type_
+                                                }
+                                            )
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge
-                            { declarationTypes = declarationTypes
-                            , range = expressionTypedNode.range
-                            }
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge
+                                { declarationTypes = declarationTypes
+                                , range = expressionTypedNode.range
+                                }
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                            )
                 )
                 (expressionTuple.part0
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10779,36 +11006,45 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionTriple expressionTriple ->
             resultAndThen3
                 (\part0Substituted part1Substituted part2Substituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionTriple
-                                        { part0 = part0Substituted.node
-                                        , part1 = part1Substituted.node
-                                        , part2 = part2Substituted.node
-                                        }
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeTriple
-                                            { part0 = part0Substituted.node.type_
-                                            , part1 = part1Substituted.node.type_
-                                            , part2 = part2Substituted.node.type_
+                    if part0Substituted.unchanged && part1Substituted.unchanged && part2Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionTriple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            , part2 = part2Substituted.node
                                             }
-                                        )
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeTriple
+                                                { part0 = part0Substituted.node.type_
+                                                , part1 = part1Substituted.node.type_
+                                                , part2 = part2Substituted.node.type_
+                                                }
+                                            )
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge3
-                            { declarationTypes = declarationTypes
-                            , range = expressionTypedNode.range
-                            }
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                            part2Substituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge3
+                                { declarationTypes = declarationTypes
+                                , range = expressionTypedNode.range
+                                }
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                                part2Substituted.substitutions
+                            )
                 )
                 (expressionTriple.part0
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10826,29 +11062,38 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
         ExpressionIfThenElse expressionIfThenElse ->
             resultAndThen3
                 (\conditionSubstituted onTrueSubstituted onFalseSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionIfThenElse
-                                        { condition = conditionSubstituted.node
-                                        , onTrue = onTrueSubstituted.node
-                                        , onFalse = onFalseSubstituted.node
-                                        }
-                                , type_ = onTrueSubstituted.node.type_
+                    if conditionSubstituted.unchanged && onTrueSubstituted.unchanged && onFalseSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionIfThenElse
+                                            { condition = conditionSubstituted.node
+                                            , onTrue = onTrueSubstituted.node
+                                            , onFalse = onFalseSubstituted.node
+                                            }
+                                    , type_ = onTrueSubstituted.node.type_
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge3
-                            { declarationTypes = declarationTypes
-                            , range = expressionTypedNode.range
-                            }
-                            conditionSubstituted.substitutions
-                            onTrueSubstituted.substitutions
-                            onFalseSubstituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge3
+                                { declarationTypes = declarationTypes
+                                , range = expressionTypedNode.range
+                                }
+                                conditionSubstituted.substitutions
+                                onTrueSubstituted.substitutions
+                                onFalseSubstituted.substitutions
+                            )
                 )
                 (expressionIfThenElse.condition
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10873,23 +11118,31 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen2
                 (\typeSubstituted elementsSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionList
-                                        elementsSubstituted.nodes
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && elementsSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            elementsSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionList
+                                            elementsSubstituted.nodes
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge typeContext
+                                elementsSubstituted.substitutions
+                                typeSubstituted.substitutions
+                            )
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10898,23 +11151,32 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionListElements
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\elementNode soFar ->
                             Result.andThen
                                 (\elementSubstituted ->
-                                    Result.map
-                                        (\substitutionsSoFarWithElement ->
-                                            { substitutions = substitutionsSoFarWithElement
-                                            , nodes =
-                                                elementSubstituted.node
-                                                    :: soFar.nodes
+                                    if elementSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = elementNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            elementSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsSoFarWithElement ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsSoFarWithElement
+                                                , nodes =
+                                                    elementSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                elementSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (elementNode
                                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -10933,28 +11195,37 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen4
                 (\typeSubstituted calledSubstituted argument0Substituted argument1UpSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionCall
-                                        { called = calledSubstituted.node
-                                        , argument0 = argument0Substituted.node
-                                        , argument1Up = argument1UpSubstituted.nodes
-                                        }
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && calledSubstituted.unchanged && argument0Substituted.unchanged && argument1UpSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge4
-                            typeContext
-                            calledSubstituted.substitutions
-                            argument0Substituted.substitutions
-                            argument1UpSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionCall
+                                            { called = calledSubstituted.node
+                                            , argument0 = argument0Substituted.node
+                                            , argument1Up = argument1UpSubstituted.nodes
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge4
+                                typeContext
+                                calledSubstituted.substitutions
+                                argument0Substituted.substitutions
+                                argument1UpSubstituted.substitutions
+                                typeSubstituted.substitutions
+                            )
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -10971,23 +11242,33 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionCall.argument1Up
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\argumentNode soFar ->
                             Result.andThen
                                 (\argumentSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
+                                    if argumentSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , nodes =
-                                                argumentSubstituted.node
-                                                    :: soFar.nodes
+                                                argumentNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            argumentSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , nodes =
+                                                    argumentSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                argumentSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (argumentNode
                                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11006,50 +11287,67 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             Result.map
                 (\fieldsSubstituted ->
-                    { substitutions = fieldsSubstituted.substitutions
-                    , node =
-                        { range = expressionTypedNode.range
-                        , value =
-                            ExpressionRecord fieldsSubstituted.nodes
-                        , type_ =
-                            TypeNotVariable
-                                (TypeRecord
-                                    (fieldsSubstituted.nodes
-                                        |> List.foldl
-                                            (\fieldSubstituted soFar ->
-                                                soFar
-                                                    |> FastDict.insert fieldSubstituted.name
-                                                        fieldSubstituted.value.type_
-                                            )
-                                            FastDict.empty
-                                    )
-                                )
+                    if fieldsSubstituted.allUnchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = fieldsSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value =
+                                ExpressionRecord fieldsSubstituted.nodes
+                            , type_ =
+                                TypeNotVariable
+                                    (TypeRecord
+                                        (fieldsSubstituted.nodes
+                                            |> List.foldl
+                                                (\fieldSubstituted soFar ->
+                                                    soFar
+                                                        |> FastDict.insert fieldSubstituted.name
+                                                            fieldSubstituted.value.type_
+                                                )
+                                                FastDict.empty
+                                        )
+                                    )
+                            }
+                        }
                 )
                 (expressionRecordFields
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\fieldNode soFar ->
                             Result.andThen
                                 (\fieldValueSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
-                                            , nodes =
-                                                { range = fieldNode.range
-                                                , name = fieldNode.name
-                                                , nameRange = fieldNode.nameRange
-                                                , value = fieldValueSubstituted.node
-                                                }
-                                                    :: soFar.nodes
+                                    if fieldValueSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = fieldNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            fieldValueSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , nodes =
+                                                    { range = fieldNode.range
+                                                    , name = fieldNode.name
+                                                    , nameRange = fieldNode.nameRange
+                                                    , value = fieldValueSubstituted.node
+                                                    }
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                fieldValueSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (fieldNode.value
                                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11068,31 +11366,39 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen3
                 (\typeSubstituted field0Substituted field1UpSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionRecordUpdate
-                                        { recordVariable =
-                                            { value = expressionRecordUpdate.recordVariable.value
-                                            , range = expressionRecordUpdate.recordVariable.range
-                                            , type_ = typeSubstituted.type_
-                                            }
-                                        , field0 = field0Substituted.node
-                                        , field1Up = field1UpSubstituted.nodes
-                                        }
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && field0Substituted.unchanged && field1UpSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge3
-                            typeContext
-                            field0Substituted.substitutions
-                            field1UpSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionRecordUpdate
+                                            { recordVariable =
+                                                { value = expressionRecordUpdate.recordVariable.value
+                                                , range = expressionRecordUpdate.recordVariable.range
+                                                , type_ = typeSubstituted.type_
+                                                }
+                                            , field0 = field0Substituted.node
+                                            , field1Up = field1UpSubstituted.nodes
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge3 typeContext
+                                field0Substituted.substitutions
+                                field1UpSubstituted.substitutions
+                                typeSubstituted.substitutions
+                            )
                 )
                 (expressionTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -11101,14 +11407,22 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (Result.map
                     (\fieldValueSubstituted ->
-                        { substitutions = fieldValueSubstituted.substitutions
-                        , node =
-                            { range = expressionRecordUpdate.field0.range
-                            , name = expressionRecordUpdate.field0.name
-                            , nameRange = expressionRecordUpdate.field0.nameRange
-                            , value = fieldValueSubstituted.node
+                        if fieldValueSubstituted.unchanged then
+                            { unchanged = True
+                            , node = expressionRecordUpdate.field0
+                            , substitutions = variableSubstitutionsNone
                             }
-                        }
+
+                        else
+                            { unchanged = False
+                            , substitutions = fieldValueSubstituted.substitutions
+                            , node =
+                                { range = expressionRecordUpdate.field0.range
+                                , name = expressionRecordUpdate.field0.name
+                                , nameRange = expressionRecordUpdate.field0.nameRange
+                                , value = fieldValueSubstituted.node
+                                }
+                            }
                     )
                     (expressionRecordUpdate.field0.value
                         |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11117,27 +11431,36 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionRecordUpdate.field1Up
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\fieldNode soFar ->
                             Result.andThen
                                 (\fieldValueSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
-                                            , nodes =
-                                                { range = fieldNode.range
-                                                , name = fieldNode.name
-                                                , nameRange = fieldNode.nameRange
-                                                , value = fieldValueSubstituted.node
-                                                }
-                                                    :: soFar.nodes
+                                    if fieldValueSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = fieldNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            fieldValueSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , nodes =
+                                                    { range = fieldNode.range
+                                                    , name = fieldNode.name
+                                                    , nameRange = fieldNode.nameRange
+                                                    , value = fieldValueSubstituted.node
+                                                    }
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                fieldValueSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (fieldNode.value
                                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11156,44 +11479,53 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen3
                 (\parameter0Substituted parameter1UpSubstituted resultSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionLambda
-                                        { parameter0 = parameter0Substituted.node
-                                        , parameter1Up = parameter1UpSubstituted.nodes
-                                        , result = resultSubstituted.node
-                                        }
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeFunction
-                                            { input = parameter0Substituted.node.type_
-                                            , output =
-                                                parameter1UpSubstituted.nodes
-                                                    |> List.foldr
-                                                        (\argumentTypedNode output ->
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = argumentTypedNode.type_
-                                                                    , output = output
-                                                                    }
-                                                                )
-                                                        )
-                                                        resultSubstituted.node.type_
-                                            }
-                                        )
-                                }
+                    if parameter0Substituted.unchanged && parameter1UpSubstituted.allUnchanged && resultSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge3
-                            typeContext
-                            parameter0Substituted.substitutions
-                            parameter1UpSubstituted.substitutions
-                            resultSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionLambda
+                                            { parameter0 = parameter0Substituted.node
+                                            , parameter1Up = parameter1UpSubstituted.nodes
+                                            , result = resultSubstituted.node
+                                            }
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeFunction
+                                                { input = parameter0Substituted.node.type_
+                                                , output =
+                                                    parameter1UpSubstituted.nodes
+                                                        |> List.foldr
+                                                            (\argumentTypedNode output ->
+                                                                TypeNotVariable
+                                                                    (TypeFunction
+                                                                        { input = argumentTypedNode.type_
+                                                                        , output = output
+                                                                        }
+                                                                    )
+                                                            )
+                                                            resultSubstituted.node.type_
+                                                }
+                                            )
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge3
+                                typeContext
+                                parameter0Substituted.substitutions
+                                parameter1UpSubstituted.substitutions
+                                resultSubstituted.substitutions
+                            )
                 )
                 (expressionLambda.parameter0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11201,23 +11533,32 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionLambda.parameter1Up
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\parameterNode soFar ->
                             Result.andThen
-                                (\argumentSubstituted ->
-                                    Result.map
-                                        (\substitutionsSoFarWithParameter ->
-                                            { substitutions = substitutionsSoFarWithParameter
+                                (\parameterSubstituted ->
+                                    if parameterSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , nodes =
-                                                argumentSubstituted.node
-                                                    :: soFar.nodes
+                                                parameterNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            argumentSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsSoFarWithParameter ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsSoFarWithParameter
+                                                , nodes =
+                                                    parameterSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge typeContext
+                                                parameterSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (parameterNode
                                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11240,28 +11581,35 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen3
                 (\matchedSubstituted case0Substituted case1UpSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = expressionTypedNode.range
-                                , value =
-                                    ExpressionCaseOf
-                                        { case0 = case0Substituted.node
-                                        , case1Up =
-                                            case1UpSubstituted.nodes
-                                        , matchedExpression = matchedSubstituted.node
-                                        }
-                                , type_ = case0Substituted.node.result.type_
-                                }
+                    if matchedSubstituted.unchanged && case0Substituted.unchanged && case1UpSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge3
-                            typeContext
-                            matchedSubstituted.substitutions
-                            case0Substituted.substitutions
-                            case1UpSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = expressionTypedNode.range
+                                    , value =
+                                        ExpressionCaseOf
+                                            { case0 = case0Substituted.node
+                                            , case1Up = case1UpSubstituted.nodes
+                                            , matchedExpression = matchedSubstituted.node
+                                            }
+                                    , type_ = case0Substituted.node.result.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge3 typeContext
+                                matchedSubstituted.substitutions
+                                case0Substituted.substitutions
+                                case1UpSubstituted.substitutions
+                            )
                 )
                 (expressionCaseOf.matchedExpression
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11269,25 +11617,34 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (resultAndThen2
                     (\patternSubstituted resultSubstituted ->
-                        Result.map
-                            (\fullSubstitutions ->
-                                { substitutions = fullSubstitutions
-                                , node =
-                                    { pattern = patternSubstituted.node
-                                    , result = resultSubstituted.node
-                                    }
+                        if patternSubstituted.unchanged && resultSubstituted.unchanged then
+                            Ok
+                                { unchanged = True
+                                , node = expressionCaseOf.case0
+                                , substitutions = variableSubstitutionsNone
                                 }
-                            )
-                            (variableSubstitutionsMerge
-                                { declarationTypes = declarationTypes
-                                , range =
-                                    { start = expressionCaseOf.case0.pattern.range.start
-                                    , end = expressionCaseOf.case0.result.range.end
+
+                        else
+                            Result.map
+                                (\fullSubstitutions ->
+                                    { unchanged = False
+                                    , substitutions = fullSubstitutions
+                                    , node =
+                                        { pattern = patternSubstituted.node
+                                        , result = resultSubstituted.node
+                                        }
                                     }
-                                }
-                                patternSubstituted.substitutions
-                                resultSubstituted.substitutions
-                            )
+                                )
+                                (variableSubstitutionsMerge
+                                    { declarationTypes = declarationTypes
+                                    , range =
+                                        { start = expressionCaseOf.case0.pattern.range.start
+                                        , end = expressionCaseOf.case0.result.range.end
+                                        }
+                                    }
+                                    patternSubstituted.substitutions
+                                    resultSubstituted.substitutions
+                                )
                     )
                     (expressionCaseOf.case0.pattern
                         |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11300,26 +11657,34 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionCaseOf.case1Up
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\case_ soFar ->
                             resultAndThen2
                                 (\patternSubstituted resultSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
-                                            , nodes =
-                                                { pattern = patternSubstituted.node
-                                                , result = resultSubstituted.node
-                                                }
-                                                    :: soFar.nodes
+                                    if resultSubstituted.unchanged && patternSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = case_ :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge3
-                                            typeContext
-                                            patternSubstituted.substitutions
-                                            resultSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , nodes =
+                                                    { pattern = patternSubstituted.node
+                                                    , result = resultSubstituted.node
+                                                    }
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge3 typeContext
+                                                patternSubstituted.substitutions
+                                                resultSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (case_.pattern
                                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11342,138 +11707,147 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
             in
             resultAndThen3
                 (\declaration0Substituted declaration1UpSubstituted resultSubstituted ->
-                    let
-                        resultLetInNode :
-                            TypedNode
-                                (Expression (Type TypeVariableFromContext))
-                                (Type TypeVariableFromContext)
-                        resultLetInNode =
-                            { range = expressionTypedNode.range
-                            , value =
-                                ExpressionLetIn
-                                    { declaration0 =
-                                        declaration0Substituted.node
-                                    , declaration1Up = declaration1UpSubstituted.nodes
-                                    , result = resultSubstituted.node
-                                    }
-                            , type_ = resultSubstituted.node.type_
+                    if declaration0Substituted.unchanged && declaration1UpSubstituted.allUnchanged && resultSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = expressionTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
 
-                        updatedValueOrFunctionTypes :
-                            FastDict.Dict
-                                String
-                                { range : Elm.Syntax.Range.Range
-                                , type_ : Type TypeVariableFromContext
-                                }
-                        updatedValueOrFunctionTypes =
-                            case declaration0Substituted.updatedValueOrFunctionType of
-                                Nothing ->
-                                    declaration1UpSubstituted.updatedValueOrFunctionTypes
-
-                                Just declaration0UpdatedValueOrFunctionType ->
-                                    FastDict.insert declaration0UpdatedValueOrFunctionType.name
-                                        { range = declaration0UpdatedValueOrFunctionType.range
-                                        , type_ = declaration0UpdatedValueOrFunctionType.type_
+                    else
+                        let
+                            resultLetInNode :
+                                TypedNode
+                                    (Expression (Type TypeVariableFromContext))
+                                    (Type TypeVariableFromContext)
+                            resultLetInNode =
+                                { range = expressionTypedNode.range
+                                , value =
+                                    ExpressionLetIn
+                                        { declaration0 =
+                                            declaration0Substituted.node
+                                        , declaration1Up = declaration1UpSubstituted.nodes
+                                        , result = resultSubstituted.node
                                         }
+                                , type_ = resultSubstituted.node.type_
+                                }
+
+                            updatedValueOrFunctionTypes :
+                                FastDict.Dict
+                                    String
+                                    { range : Elm.Syntax.Range.Range
+                                    , type_ : Type TypeVariableFromContext
+                                    }
+                            updatedValueOrFunctionTypes =
+                                case declaration0Substituted.updatedValueOrFunctionType of
+                                    Nothing ->
                                         declaration1UpSubstituted.updatedValueOrFunctionTypes
 
-                        variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError : Result String VariableSubstitutions
-                        variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError =
-                            expressionTypedNodeUsesOfLocalReferences
-                                updatedValueOrFunctionTypes
-                                resultLetInNode
-                                |> fastDictFoldlWhileOkFrom
-                                    variableSubstitutionsNone
-                                    (\inferredLetDeclarationName uses soFar ->
-                                        case updatedValueOrFunctionTypes |> FastDict.get inferredLetDeclarationName of
-                                            Nothing ->
-                                                Err
-                                                    ("("
-                                                        ++ (expressionTypedNode.range |> rangeToInfoString)
-                                                        ++ ") "
-                                                        ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
-                                                    )
+                                    Just declaration0UpdatedValueOrFunctionType ->
+                                        FastDict.insert declaration0UpdatedValueOrFunctionType.name
+                                            { range = declaration0UpdatedValueOrFunctionType.range
+                                            , type_ = declaration0UpdatedValueOrFunctionType.type_
+                                            }
+                                            declaration1UpSubstituted.updatedValueOrFunctionTypes
 
-                                            Just inferredDeclarationType ->
-                                                uses
-                                                    |> fastDictFoldlWhileOkFrom
-                                                        soFar
-                                                        (\useRangeAsComparable useType soFarWithUses ->
-                                                            let
-                                                                letDeclarationTypeNewInstanceForUse : Type TypeVariableFromContext
-                                                                letDeclarationTypeNewInstanceForUse =
-                                                                    inferredDeclarationType.type_
-                                                                        |> typeMapVariables
-                                                                            (\inferredDeclarationTypeVariable ->
-                                                                                if
-                                                                                    inferredDeclarationType.range
-                                                                                        |> rangeIncludesRangeAsComparable
-                                                                                            useRangeAsComparable
-                                                                                then
-                                                                                    let
-                                                                                        ( _, inferredDeclarationTypeVariableName ) =
-                                                                                            inferredDeclarationTypeVariable
-                                                                                    in
-                                                                                    ( useRangeAsComparable
-                                                                                    , inferredDeclarationTypeVariableName
-                                                                                    )
-
-                                                                                else
-                                                                                    inferredDeclarationTypeVariable
-                                                                            )
-                                                            in
-                                                            Result.andThen
-                                                                (\useUnifiedWithNewLetTypeInstance ->
-                                                                    -- we need to check if the partialTpeNewInstance
-                                                                    -- is actually more strict then the already existing use type.
-                                                                    -- If we don't, this would run indefinitely: E.g.
-                                                                    -- a : number
-                                                                    -- b = round a
-                                                                    -- where a is already known as Float
-                                                                    -- when it is unified with the let `number`
-                                                                    if
-                                                                        typesAreEquallyStrict
-                                                                            (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
-                                                                            (useType |> typeContainedVariables)
-                                                                    then
-                                                                        Ok
-                                                                            { equivalentVariables =
-                                                                                equivalentVariableSetMerge
-                                                                                    soFarWithUses.equivalentVariables
-                                                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                                            , variableToType = soFarWithUses.variableToType
-                                                                            }
-
-                                                                    else
-                                                                        variableSubstitutionsMerge
-                                                                            typeContext
-                                                                            soFarWithUses
-                                                                            useUnifiedWithNewLetTypeInstance.substitutions
-                                                                )
-                                                                (typeUnify typeContext
-                                                                    useType
-                                                                    letDeclarationTypeNewInstanceForUse
-                                                                )
+                            variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError : Result String VariableSubstitutions
+                            variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError =
+                                expressionTypedNodeUsesOfLocalReferences
+                                    updatedValueOrFunctionTypes
+                                    resultLetInNode
+                                    |> fastDictFoldlWhileOkFrom
+                                        variableSubstitutionsNone
+                                        (\inferredLetDeclarationName uses soFar ->
+                                            case updatedValueOrFunctionTypes |> FastDict.get inferredLetDeclarationName of
+                                                Nothing ->
+                                                    Err
+                                                        ("("
+                                                            ++ (expressionTypedNode.range |> rangeToInfoString)
+                                                            ++ ") "
+                                                            ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
                                                         )
-                                    )
-                    in
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node = resultLetInNode
-                            }
-                        )
-                        (Result.andThen
-                            (\variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes ->
-                                variableSubstitutionsMerge4
-                                    typeContext
-                                    declaration0Substituted.substitutions
-                                    declaration1UpSubstituted.substitutions
-                                    resultSubstituted.substitutions
-                                    variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes
+
+                                                Just inferredDeclarationType ->
+                                                    uses
+                                                        |> fastDictFoldlWhileOkFrom
+                                                            soFar
+                                                            (\useRangeAsComparable useType soFarWithUses ->
+                                                                let
+                                                                    letDeclarationTypeNewInstanceForUse : Type TypeVariableFromContext
+                                                                    letDeclarationTypeNewInstanceForUse =
+                                                                        inferredDeclarationType.type_
+                                                                            |> typeMapVariables
+                                                                                (\inferredDeclarationTypeVariable ->
+                                                                                    if
+                                                                                        inferredDeclarationType.range
+                                                                                            |> rangeIncludesRangeAsComparable
+                                                                                                useRangeAsComparable
+                                                                                    then
+                                                                                        let
+                                                                                            ( _, inferredDeclarationTypeVariableName ) =
+                                                                                                inferredDeclarationTypeVariable
+                                                                                        in
+                                                                                        ( useRangeAsComparable
+                                                                                        , inferredDeclarationTypeVariableName
+                                                                                        )
+
+                                                                                    else
+                                                                                        inferredDeclarationTypeVariable
+                                                                                )
+                                                                in
+                                                                Result.andThen
+                                                                    (\useUnifiedWithNewLetTypeInstance ->
+                                                                        -- we need to check if the partialTpeNewInstance
+                                                                        -- is actually more strict then the already existing use type.
+                                                                        -- If we don't, this would run indefinitely: E.g.
+                                                                        -- a : number
+                                                                        -- b = round a
+                                                                        -- where a is already known as Float
+                                                                        -- when it is unified with the let `number`
+                                                                        if
+                                                                            typesAreEquallyStrict
+                                                                                (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
+                                                                                (useType |> typeContainedVariables)
+                                                                        then
+                                                                            Ok
+                                                                                { equivalentVariables =
+                                                                                    equivalentVariableSetMerge
+                                                                                        soFarWithUses.equivalentVariables
+                                                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                                                , variableToType = soFarWithUses.variableToType
+                                                                                }
+
+                                                                        else
+                                                                            variableSubstitutionsMerge
+                                                                                typeContext
+                                                                                soFarWithUses
+                                                                                useUnifiedWithNewLetTypeInstance.substitutions
+                                                                    )
+                                                                    (typeUnify typeContext
+                                                                        useType
+                                                                        letDeclarationTypeNewInstanceForUse
+                                                                    )
+                                                            )
+                                        )
+                        in
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node = resultLetInNode
+                                }
                             )
-                            variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError
-                        )
+                            (Result.andThen
+                                (\variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes ->
+                                    variableSubstitutionsMerge4
+                                        typeContext
+                                        declaration0Substituted.substitutions
+                                        declaration1UpSubstituted.substitutions
+                                        resultSubstituted.substitutions
+                                        variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes
+                                )
+                                variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypesOrError
+                            )
                 )
                 (expressionLetIn.declaration0
                     |> letDeclarationSubstituteVariableByNotVariable declarationTypes
@@ -11481,34 +11855,46 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                 )
                 (expressionLetIn.declaration1Up
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmpty
+                        substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmptyAllUnchangedTrue
                         (\letDeclarationNode soFar ->
                             Result.andThen
                                 (\declarationSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
+                                    if declarationSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , updatedValueOrFunctionTypes =
-                                                case declarationSubstituted.updatedValueOrFunctionType of
-                                                    Nothing ->
-                                                        soFar.updatedValueOrFunctionTypes
-
-                                                    Just updatedValueOrFunctionType ->
-                                                        FastDict.insert updatedValueOrFunctionType.name
-                                                            { range = updatedValueOrFunctionType.range
-                                                            , type_ = updatedValueOrFunctionType.type_
-                                                            }
-                                                            soFar.updatedValueOrFunctionTypes
+                                                soFar.updatedValueOrFunctionTypes
                                             , nodes =
-                                                declarationSubstituted.node
-                                                    :: soFar.nodes
+                                                letDeclarationNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            soFar.substitutions
-                                            declarationSubstituted.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , updatedValueOrFunctionTypes =
+                                                    case declarationSubstituted.updatedValueOrFunctionType of
+                                                        Nothing ->
+                                                            soFar.updatedValueOrFunctionTypes
+
+                                                        Just updatedValueOrFunctionType ->
+                                                            FastDict.insert updatedValueOrFunctionType.name
+                                                                { range = updatedValueOrFunctionType.range
+                                                                , type_ = updatedValueOrFunctionType.type_
+                                                                }
+                                                                soFar.updatedValueOrFunctionTypes
+                                                , nodes =
+                                                    declarationSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                soFar.substitutions
+                                                declarationSubstituted.substitutions
+                                            )
                                 )
                                 (letDeclarationNode
                                     |> letDeclarationSubstituteVariableByNotVariable declarationTypes
@@ -11535,7 +11921,8 @@ letDeclarationSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { node :
+            { unchanged : Bool
+            , node :
                 { range : Elm.Syntax.Range.Range
                 , declaration : LetDeclaration (Type TypeVariableFromContext)
                 }
@@ -11548,36 +11935,41 @@ letDeclarationSubstituteVariableByNotVariable :
             , substitutions : VariableSubstitutions
             }
 letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDeclarationAndRange =
-    let
-        typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
-        typeContext =
-            { declarationTypes = declarationTypes
-            , range = letDeclarationAndRange.range
-            }
-    in
     case letDeclarationAndRange.declaration of
         LetDestructuring letDestructuring ->
             resultAndThen2
                 (\patternSubstituted expressionSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
+                    if patternSubstituted.unchanged && expressionSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = letDeclarationAndRange
+                            , substitutions = variableSubstitutionsNone
                             , updatedValueOrFunctionType = Nothing
-                            , node =
-                                { range = letDeclarationAndRange.range
-                                , declaration =
-                                    LetDestructuring
-                                        { pattern = patternSubstituted.node
-                                        , expression = expressionSubstituted.node
-                                        }
-                                }
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            patternSubstituted.substitutions
-                            expressionSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , updatedValueOrFunctionType = Nothing
+                                , node =
+                                    { range = letDeclarationAndRange.range
+                                    , declaration =
+                                        LetDestructuring
+                                            { pattern = patternSubstituted.node
+                                            , expression = expressionSubstituted.node
+                                            }
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge
+                                { declarationTypes = declarationTypes
+                                , range = letDeclarationAndRange.range
+                                }
+                                patternSubstituted.substitutions
+                                expressionSubstituted.substitutions
+                            )
                 )
                 (letDestructuring.pattern
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -11589,56 +11981,29 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                 )
 
         LetValueOrFunctionDeclaration letValueOrFunction ->
+            let
+                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext =
+                    { declarationTypes = declarationTypes
+                    , range = letDeclarationAndRange.range
+                    }
+            in
             resultAndThen3
-                (\parametersSubstituted resultSubstituted typeMaybeSubstituted ->
-                    case typeMaybeSubstituted of
-                        Just typeSubstituted ->
-                            case letValueOrFunction.signature of
-                                Just signature ->
-                                    Err
-                                        ("the let value/function annotation type ("
-                                            ++ (signature.range |> rangeToInfoString)
-                                            ++ ") is too loose. It is annotated as "
-                                            ++ (letValueOrFunction.type_ |> typeToInfoString)
-                                            ++ " but should be at least as strict as "
-                                            ++ (typeSubstituted.type_ |> typeToInfoString)
-                                        )
+                (\parametersSubstituted resultSubstituted typeSubstituted ->
+                    if typeSubstituted.unchanged then
+                        if resultSubstituted.unchanged && parametersSubstituted.allUnchanged then
+                            Ok
+                                { unchanged = True
+                                , substitutions = variableSubstitutionsNone
+                                , updatedValueOrFunctionType = Nothing
+                                , node = letDeclarationAndRange
+                                }
 
-                                Nothing ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
-                                            , updatedValueOrFunctionType =
-                                                Just
-                                                    { name = letValueOrFunction.name
-                                                    , range = letDeclarationAndRange.range
-                                                    , type_ = typeSubstituted.type_
-                                                    }
-                                            , node =
-                                                { range = letDeclarationAndRange.range
-                                                , declaration =
-                                                    LetValueOrFunctionDeclaration
-                                                        { parameters = parametersSubstituted.nodes
-                                                        , result = resultSubstituted.node
-                                                        , type_ = typeSubstituted.type_
-                                                        , signature = letValueOrFunction.signature
-                                                        , nameRange = letValueOrFunction.nameRange
-                                                        , name = letValueOrFunction.name
-                                                        }
-                                                }
-                                            }
-                                        )
-                                        (variableSubstitutionsMerge3
-                                            typeContext
-                                            parametersSubstituted.substitutions
-                                            resultSubstituted.substitutions
-                                            typeSubstituted.substitutions
-                                        )
-
-                        Nothing ->
+                        else
                             Result.map
                                 (\fullSubstitutions ->
-                                    { substitutions = fullSubstitutions
+                                    { unchanged = False
+                                    , substitutions = fullSubstitutions
                                     , updatedValueOrFunctionType = Nothing
                                     , node =
                                         { range = letDeclarationAndRange.range
@@ -11654,33 +12019,85 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                                         }
                                     }
                                 )
-                                (variableSubstitutionsMerge
-                                    typeContext
+                                (variableSubstitutionsMerge typeContext
                                     parametersSubstituted.substitutions
                                     resultSubstituted.substitutions
                                 )
+
+                    else
+                        case letValueOrFunction.signature of
+                            Just signature ->
+                                Err
+                                    ("the let value/function annotation type ("
+                                        ++ (signature.range |> rangeToInfoString)
+                                        ++ ") is too loose. It is annotated as "
+                                        ++ (letValueOrFunction.type_ |> typeToInfoString)
+                                        ++ " but should be at least as strict as "
+                                        ++ (typeSubstituted.type_ |> typeToInfoString)
+                                    )
+
+                            Nothing ->
+                                Result.map
+                                    (\fullSubstitutions ->
+                                        { unchanged = False
+                                        , substitutions = fullSubstitutions
+                                        , updatedValueOrFunctionType =
+                                            Just
+                                                { name = letValueOrFunction.name
+                                                , range = letDeclarationAndRange.range
+                                                , type_ = typeSubstituted.type_
+                                                }
+                                        , node =
+                                            { range = letDeclarationAndRange.range
+                                            , declaration =
+                                                LetValueOrFunctionDeclaration
+                                                    { parameters = parametersSubstituted.nodes
+                                                    , result = resultSubstituted.node
+                                                    , type_ = typeSubstituted.type_
+                                                    , signature = letValueOrFunction.signature
+                                                    , nameRange = letValueOrFunction.nameRange
+                                                    , name = letValueOrFunction.name
+                                                    }
+                                            }
+                                        }
+                                    )
+                                    (variableSubstitutionsMerge3 typeContext
+                                        parametersSubstituted.substitutions
+                                        resultSubstituted.substitutions
+                                        typeSubstituted.substitutions
+                                    )
                 )
                 (letValueOrFunction.parameters
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
-                        (\argumentNode soFar ->
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
+                        (\parameterNode soFar ->
                             Result.andThen
-                                (\argumentSubstituted ->
-                                    Result.map
-                                        (\fullSubstitutions ->
-                                            { substitutions = fullSubstitutions
+                                (\parameterSubstituted ->
+                                    if parameterSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , nodes =
-                                                argumentSubstituted.node
-                                                    :: soFar.nodes
+                                                parameterNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            soFar.substitutions
-                                            argumentSubstituted.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\fullSubstitutions ->
+                                                { allUnchanged = False
+                                                , substitutions = fullSubstitutions
+                                                , nodes =
+                                                    parameterSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                soFar.substitutions
+                                                parameterSubstituted.substitutions
+                                            )
                                 )
-                                (argumentNode
+                                (parameterNode
                                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
                                         replacement
                                 )
@@ -11690,35 +12107,11 @@ letDeclarationSubstituteVariableByNotVariable declarationTypes replacement letDe
                     |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
                         replacement
                 )
-                (if
-                    letValueOrFunction.type_
-                        |> -- TODO optiize check
-                           typeContainedVariables
-                        |> fastSetFastAny
-                            (\variable ->
-                                case replacement variable of
-                                    Nothing ->
-                                        False
-
-                                    Just _ ->
-                                        True
-                            )
-                 then
-                    Result.map Just
-                        (letValueOrFunction.type_
-                            |> typeSubstituteVariableByNotVariable
-                                typeContext
-                                replacement
-                        )
-
-                 else
-                    okNothing
+                (letValueOrFunction.type_
+                    |> typeSubstituteVariableByNotVariable
+                        typeContext
+                        replacement
                 )
-
-
-okNothing : Result error_ (Maybe value_)
-okNothing =
-    Ok Nothing
 
 
 expressionTypedNodeCondenseTypeVariables :
@@ -13086,9 +13479,13 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                                 Err error
 
                             Ok expressionTypedNodeWithVariableToTypeSubstitutionApplied ->
-                                expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                    expressionTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
-                                    expressionTypedNodeWithVariableToTypeSubstitutionApplied.node
+                                if expressionTypedNodeWithVariableToTypeSubstitutionApplied.unchanged then
+                                    Ok expressionTypedNode
+
+                                else
+                                    expressionTypedNodeApplyVariableSubstitutions declarationTypes
+                                        expressionTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
+                                        expressionTypedNodeWithVariableToTypeSubstitutionApplied.node
 
 
 patternTypedNodeApplyVariableSubstitutions :
@@ -13174,9 +13571,13 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
                                 Err error
 
                             Ok patternTypedNodeWithVariableToTypeSubstitutionApplied ->
-                                patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                    patternTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
-                                    patternTypedNodeWithVariableToTypeSubstitutionApplied.node
+                                if patternTypedNodeWithVariableToTypeSubstitutionApplied.unchanged then
+                                    Ok patternTypedNode
+
+                                else
+                                    patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                        patternTypedNodeWithVariableToTypeSubstitutionApplied.substitutions
+                                        patternTypedNodeWithVariableToTypeSubstitutionApplied.node
 
 
 substitutionsVariableToTypeApplyOverItself :
@@ -13227,42 +13628,23 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions :
     -> TypeNotVariable TypeVariableFromContext
     -> Result String (TypeNotVariable TypeVariableFromContext)
 typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToApply typeNotVariable =
-    let
-        variablesContainedInTypeNotVariable : FastSetFast TypeVariableFromContext
-        variablesContainedInTypeNotVariable =
-            typeNotVariable |> typeNotVariableContainedVariables
+    case
+        -- TODO optimize by not tracking new substitutions
+        typeNotVariable
+            |> typeNotVariableSubstituteVariableByNotVariable context
+                (\variable ->
+                    substitutionsToApply
+                        |> FastDict.get variable
+                )
+    of
+        Err error ->
+            Err error
 
-        -- TODO optimize by instead checking for any,
-        -- then just using substitutionsToApply directly for access
-        substitutionsThatWouldHaveAnImpactIfApplied :
-            FastDict.Dict
-                TypeVariableFromContext
-                (TypeNotVariable TypeVariableFromContext)
-        substitutionsThatWouldHaveAnImpactIfApplied =
-            substitutionsToApply
-                |> FastDict.filter
-                    (\variableToSubstitute _ ->
-                        variablesContainedInTypeNotVariable
-                            |> FastDict.member variableToSubstitute
-                    )
-    in
-    if substitutionsThatWouldHaveAnImpactIfApplied |> FastDict.isEmpty then
-        Ok typeNotVariable
+        Ok typeNotVariableSubstituted ->
+            if typeNotVariableSubstituted.unchanged then
+                Ok typeNotVariable
 
-    else
-        case
-            -- TODO optimize by not tracking new substitutions
-            typeNotVariable
-                |> typeNotVariableSubstituteVariableByNotVariable context
-                    (\variable ->
-                        substitutionsThatWouldHaveAnImpactIfApplied
-                            |> FastDict.get variable
-                    )
-        of
-            Err error ->
-                Err error
-
-            Ok typeNotVariableSubstituted ->
+            else
                 typeNotVariableFullyApplyVariableToTypeSubstitutions context
                     substitutionsToApply
                     typeNotVariableSubstituted.type_
@@ -13281,7 +13663,8 @@ patternTypedNodeSubstituteVariableByNotVariable :
     ->
         Result
             String
-            { substitutions : VariableSubstitutions
+            { unchanged : Bool
+            , substitutions : VariableSubstitutions
             , node :
                 TypedNode
                     (Pattern (Type TypeVariableFromContext))
@@ -13292,37 +13675,46 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
     case patternTypedNode.value of
         PatternUnit ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = patternTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         PatternChar _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = patternTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         PatternString _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = patternTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         PatternInt _ ->
             Ok
-                { substitutions = variableSubstitutionsNone
+                { unchanged = True
                 , node = patternTypedNode
+                , substitutions = variableSubstitutionsNone
                 }
 
         PatternIgnored ->
             Result.map
                 (\substituted ->
-                    { substitutions = substituted.substitutions
+                    { unchanged = substituted.unchanged
+                    , substitutions = substituted.substitutions
                     , node =
-                        { range = patternTypedNode.range
-                        , value = PatternIgnored
-                        , type_ = substituted.type_
-                        }
+                        if substituted.unchanged then
+                            patternTypedNode
+
+                        else
+                            { range = patternTypedNode.range
+                            , value = PatternIgnored
+                            , type_ = substituted.type_
+                            }
                     }
                 )
                 (patternTypedNode.type_
@@ -13336,13 +13728,21 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternVariable name ->
             Result.map
                 (\substituted ->
-                    { substitutions = substituted.substitutions
-                    , node =
-                        { range = patternTypedNode.range
-                        , value = PatternVariable name
-                        , type_ = substituted.type_
+                    if substituted.unchanged then
+                        { unchanged = True
+                        , node = patternTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = substituted.substitutions
+                        , node =
+                            { range = patternTypedNode.range
+                            , value = PatternVariable name
+                            , type_ = substituted.type_
+                            }
+                        }
                 )
                 (patternTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -13355,13 +13755,21 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternParenthesized inParens ->
             Result.map
                 (\inParensSubstituted ->
-                    { substitutions = inParensSubstituted.substitutions
-                    , node =
-                        { range = patternTypedNode.range
-                        , value = PatternParenthesized inParensSubstituted.node
-                        , type_ = inParensSubstituted.node.type_
+                    if inParensSubstituted.unchanged then
+                        { unchanged = True
+                        , node = patternTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = inParensSubstituted.substitutions
+                        , node =
+                            { range = patternTypedNode.range
+                            , value = PatternParenthesized inParensSubstituted.node
+                            , type_ = inParensSubstituted.node.type_
+                            }
+                        }
                 )
                 (inParens
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13371,21 +13779,29 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternAs patternAs ->
             Result.map
                 (\inParensSubstituted ->
-                    { substitutions = inParensSubstituted.substitutions
-                    , node =
-                        { range = patternTypedNode.range
-                        , value =
-                            PatternAs
-                                { pattern = inParensSubstituted.node
-                                , variable =
-                                    { range = patternAs.variable.range
-                                    , value = patternAs.variable.value
-                                    , type_ = inParensSubstituted.node.type_
-                                    }
-                                }
-                        , type_ = inParensSubstituted.node.type_
+                    if inParensSubstituted.unchanged then
+                        { unchanged = True
+                        , node = patternTypedNode
+                        , substitutions = variableSubstitutionsNone
                         }
-                    }
+
+                    else
+                        { unchanged = False
+                        , substitutions = inParensSubstituted.substitutions
+                        , node =
+                            { range = patternTypedNode.range
+                            , value =
+                                PatternAs
+                                    { pattern = inParensSubstituted.node
+                                    , variable =
+                                        { range = patternAs.variable.range
+                                        , value = patternAs.variable.value
+                                        , type_ = inParensSubstituted.node.type_
+                                        }
+                                    }
+                            , type_ = inParensSubstituted.node.type_
+                            }
+                        }
                 )
                 (patternAs.pattern
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13395,27 +13811,36 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternListCons patternListCons ->
             resultAndThen2
                 (\headSubstituted tailSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternListCons
-                                        { head = headSubstituted.node
-                                        , tail = tailSubstituted.node
-                                        }
-                                , type_ = typeListList headSubstituted.node.type_
+                    if headSubstituted.unchanged && tailSubstituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternListCons
+                                            { head = headSubstituted.node
+                                            , tail = tailSubstituted.node
+                                            }
+                                    , type_ = typeListList headSubstituted.node.type_
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge
-                            { declarationTypes = declarationTypes
-                            , range = patternTypedNode.range
-                            }
-                            headSubstituted.substitutions
-                            tailSubstituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge
+                                { declarationTypes = declarationTypes
+                                , range = patternTypedNode.range
+                                }
+                                headSubstituted.substitutions
+                                tailSubstituted.substitutions
+                            )
                 )
                 (patternListCons.head
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13429,33 +13854,42 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternTuple patternTuple ->
             resultAndThen2
                 (\part0Substituted part1Substituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternTuple
-                                        { part0 = part0Substituted.node
-                                        , part1 = part1Substituted.node
-                                        }
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeTuple
-                                            { part0 = part0Substituted.node.type_
-                                            , part1 = part1Substituted.node.type_
+                    if part0Substituted.unchanged && part1Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternTuple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
                                             }
-                                        )
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeTuple
+                                                { part0 = part0Substituted.node.type_
+                                                , part1 = part1Substituted.node.type_
+                                                }
+                                            )
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge
-                            { declarationTypes = declarationTypes
-                            , range = patternTypedNode.range
-                            }
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge
+                                { declarationTypes = declarationTypes
+                                , range = patternTypedNode.range
+                                }
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                            )
                 )
                 (patternTuple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13469,36 +13903,45 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
         PatternTriple patternTriple ->
             resultAndThen3
                 (\part0Substituted part1Substituted part2Substituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternTriple
-                                        { part0 = part0Substituted.node
-                                        , part1 = part1Substituted.node
-                                        , part2 = part2Substituted.node
-                                        }
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeTriple
-                                            { part0 = part0Substituted.node.type_
-                                            , part1 = part1Substituted.node.type_
-                                            , part2 = part2Substituted.node.type_
+                    if part0Substituted.unchanged && part1Substituted.unchanged && part2Substituted.unchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternTriple
+                                            { part0 = part0Substituted.node
+                                            , part1 = part1Substituted.node
+                                            , part2 = part2Substituted.node
                                             }
-                                        )
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeTriple
+                                                { part0 = part0Substituted.node.type_
+                                                , part1 = part1Substituted.node.type_
+                                                , part2 = part2Substituted.node.type_
+                                                }
+                                            )
+                                    }
                                 }
-                            }
-                        )
-                        (variableSubstitutionsMerge3
-                            { declarationTypes = declarationTypes
-                            , range = patternTypedNode.range
-                            }
-                            part0Substituted.substitutions
-                            part1Substituted.substitutions
-                            part2Substituted.substitutions
-                        )
+                            )
+                            (variableSubstitutionsMerge3
+                                { declarationTypes = declarationTypes
+                                , range = patternTypedNode.range
+                                }
+                                part0Substituted.substitutions
+                                part1Substituted.substitutions
+                                part2Substituted.substitutions
+                            )
                 )
                 (patternTriple.part0
                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13523,35 +13966,44 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
             in
             resultAndThen2
                 (\typeSubstituted fieldsSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternRecord
-                                        fieldsSubstituted.nodes
-                                , type_ =
-                                    TypeNotVariable
-                                        (TypeRecord
-                                            (fieldsSubstituted.nodes
-                                                |> List.foldl
-                                                    (\fieldSubstituted soFar ->
-                                                        soFar
-                                                            |> FastDict.insert fieldSubstituted.value
-                                                                fieldSubstituted.type_
-                                                    )
-                                                    FastDict.empty
-                                            )
-                                        )
-                                }
+                    if typeSubstituted.unchanged && fieldsSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            typeSubstituted.substitutions
-                            fieldsSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternRecord
+                                            fieldsSubstituted.nodes
+                                    , type_ =
+                                        TypeNotVariable
+                                            (TypeRecord
+                                                (fieldsSubstituted.nodes
+                                                    |> List.foldl
+                                                        (\fieldSubstituted soFar ->
+                                                            soFar
+                                                                |> FastDict.insert fieldSubstituted.value
+                                                                    fieldSubstituted.type_
+                                                        )
+                                                        FastDict.empty
+                                                )
+                                            )
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge
+                                typeContext
+                                typeSubstituted.substitutions
+                                fieldsSubstituted.substitutions
+                            )
                 )
                 (patternTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -13560,26 +14012,35 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
                 (patternRecordFields
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\fieldNode soFar ->
                             Result.andThen
                                 (\fieldTypeSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithField ->
-                                            { substitutions = substitutionsWithField
-                                            , nodes =
-                                                { value = fieldNode.value
-                                                , range = fieldNode.range
-                                                , type_ = fieldTypeSubstituted.type_
-                                                }
-                                                    :: soFar.nodes
+                                    if fieldTypeSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = fieldNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            fieldTypeSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsWithField ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsWithField
+                                                , nodes =
+                                                    { value = fieldNode.value
+                                                    , range = fieldNode.range
+                                                    , type_ = fieldTypeSubstituted.type_
+                                                    }
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                fieldTypeSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (fieldNode.type_
                                     |> typeSubstituteVariableByNotVariable
@@ -13599,23 +14060,32 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
             in
             resultAndThen2
                 (\typeSubstituted elementsSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternListExact
-                                        elementsSubstituted.nodes
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && elementsSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            elementsSubstituted.substitutions
-                            typeSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternListExact
+                                            elementsSubstituted.nodes
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge
+                                typeContext
+                                elementsSubstituted.substitutions
+                                typeSubstituted.substitutions
+                            )
                 )
                 (patternTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -13624,23 +14094,32 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
                 (patternListElements
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\elementNode soFar ->
                             Result.andThen
                                 (\fieldSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithElement ->
-                                            { substitutions = substitutionsWithElement
-                                            , nodes =
-                                                fieldSubstituted.node
-                                                    :: soFar.nodes
+                                    if fieldSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
+                                            , nodes = elementNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            fieldSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsWithElement ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsWithElement
+                                                , nodes =
+                                                    fieldSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                fieldSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (elementNode
                                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13659,27 +14138,35 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
             in
             resultAndThen2
                 (\typeSubstituted valuesSubstituted ->
-                    Result.map
-                        (\fullSubstitutions ->
-                            { substitutions = fullSubstitutions
-                            , node =
-                                { range = patternTypedNode.range
-                                , value =
-                                    PatternVariant
-                                        { qualification = patternVariant.qualification
-                                        , name = patternVariant.name
-                                        , moduleOrigin = patternVariant.moduleOrigin
-                                        , values = valuesSubstituted.nodes
-                                        }
-                                , type_ = typeSubstituted.type_
-                                }
+                    if typeSubstituted.unchanged && valuesSubstituted.allUnchanged then
+                        Ok
+                            { unchanged = True
+                            , node = patternTypedNode
+                            , substitutions = variableSubstitutionsNone
                             }
-                        )
-                        (variableSubstitutionsMerge
-                            typeContext
-                            typeSubstituted.substitutions
-                            valuesSubstituted.substitutions
-                        )
+
+                    else
+                        Result.map
+                            (\fullSubstitutions ->
+                                { unchanged = False
+                                , substitutions = fullSubstitutions
+                                , node =
+                                    { range = patternTypedNode.range
+                                    , value =
+                                        PatternVariant
+                                            { qualification = patternVariant.qualification
+                                            , name = patternVariant.name
+                                            , moduleOrigin = patternVariant.moduleOrigin
+                                            , values = valuesSubstituted.nodes
+                                            }
+                                    , type_ = typeSubstituted.type_
+                                    }
+                                }
+                            )
+                            (variableSubstitutionsMerge typeContext
+                                typeSubstituted.substitutions
+                                valuesSubstituted.substitutions
+                            )
                 )
                 (patternTypedNode.type_
                     |> typeSubstituteVariableByNotVariable
@@ -13688,23 +14175,33 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
                 (patternVariant.values
                     |> listFoldrWhileOkFrom
-                        substitutionsNoneNodesEmpty
+                        substitutionsNoneNodesEmptyAllUnchangedTrue
                         (\argumentNode soFar ->
                             Result.andThen
-                                (\argumentSubstituted ->
-                                    Result.map
-                                        (\substitutionsWithElement ->
-                                            { substitutions = substitutionsWithElement
+                                (\valueSubstituted ->
+                                    if valueSubstituted.unchanged then
+                                        Ok
+                                            { allUnchanged = soFar.allUnchanged
+                                            , substitutions = soFar.substitutions
                                             , nodes =
-                                                argumentSubstituted.node
-                                                    :: soFar.nodes
+                                                argumentNode :: soFar.nodes
                                             }
-                                        )
-                                        (variableSubstitutionsMerge
-                                            typeContext
-                                            argumentSubstituted.substitutions
-                                            soFar.substitutions
-                                        )
+
+                                    else
+                                        Result.map
+                                            (\substitutionsWithElement ->
+                                                { allUnchanged = False
+                                                , substitutions = substitutionsWithElement
+                                                , nodes =
+                                                    valueSubstituted.node
+                                                        :: soFar.nodes
+                                                }
+                                            )
+                                            (variableSubstitutionsMerge
+                                                typeContext
+                                                valueSubstituted.substitutions
+                                                soFar.substitutions
+                                            )
                                 )
                                 (argumentNode
                                     |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
@@ -13714,8 +14211,9 @@ patternTypedNodeSubstituteVariableByNotVariable declarationTypes replacement pat
                 )
 
 
-substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmpty :
-    { substitutions : VariableSubstitutions
+substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmptyAllUnchangedTrue :
+    { allUnchanged : Bool
+    , substitutions : VariableSubstitutions
     , updatedValueOrFunctionTypes :
         FastDict.Dict
             String
@@ -13724,8 +14222,9 @@ substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmpty :
             }
     , nodes : List node_
     }
-substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmpty =
-    { substitutions = variableSubstitutionsNone
+substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmptyAllUnchangedTrue =
+    { allUnchanged = True
+    , substitutions = variableSubstitutionsNone
     , updatedValueOrFunctionTypes = FastDict.empty
     , nodes = []
     }
@@ -13734,6 +14233,18 @@ substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmpty =
 substitutionsNoneNodesEmpty : { substitutions : VariableSubstitutions, nodes : List node_ }
 substitutionsNoneNodesEmpty =
     { substitutions = variableSubstitutionsNone
+    , nodes = []
+    }
+
+
+substitutionsNoneNodesEmptyAllUnchangedTrue :
+    { allUnchanged : Bool
+    , substitutions : VariableSubstitutions
+    , nodes : List node_
+    }
+substitutionsNoneNodesEmptyAllUnchangedTrue =
+    { allUnchanged = True
+    , substitutions = variableSubstitutionsNone
     , nodes = []
     }
 

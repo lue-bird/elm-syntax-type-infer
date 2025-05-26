@@ -1,9 +1,11 @@
 ## 2.0.0 (unreleased)
 considering
+- rename `matchedExpression` to `matched`
 - embed origin module if from local module top level as the actual name, not []
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
+- check if we can only substitute patterns when applying substitutions from unifying with uses, and leave the result pattern as is
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - represent LocationAsComparable as row + startColumn * 2^24 to save memory
