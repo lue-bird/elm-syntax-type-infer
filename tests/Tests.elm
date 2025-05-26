@@ -103,14 +103,15 @@ suite =
             )
         , Test.test "unify integer and float in list"
             (\() ->
-                Elm.Syntax.Expression.ListExpr
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 1)
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    ]
-                    |> expressionExpectInferredType
-                        (typeList typeFloat)
+                """module A exposing (..)
+accessors = [ 1, 2.2 ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (typeList typeFloat)
+                        )
             )
         , Test.test "record accessor functions unified: [ .a, .b ]"
             (\() ->
@@ -184,485 +185,318 @@ numbers = ( 1, 2.2, 3 )
             )
         , Test.test "identity called with float (from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [] "identity")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    ]
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = identity 2.2
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "identity called with integer (from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [] "identity")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 1)
-                    ]
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeVariable "number")
+                """module A exposing (..)
+doubleTwo = identity 1
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeVariable "number")
+                        )
             )
         , Test.test "Basics.identity called with float (qualified from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    ]
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = Basics.identity 2.2
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "Basics.identity <| float (qualified from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.OperatorApplication
-                    "<|"
-                    Elm.Syntax.Infix.Right
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
-                    )
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    )
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = Basics.identity <| 2.2
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "float |> Basics.identity (qualified from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.OperatorApplication
-                    "|>"
-                    Elm.Syntax.Infix.Left
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    )
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
-                    )
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = 2.2 |> Basics.identity
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "List.map called with Basics.identity (qualified from implicit import)"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Basics" ] "identity")
-                    ]
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    typeList (ElmSyntaxTypeInfer.TypeVariable "a")
-                                , output =
-                                    typeList (ElmSyntaxTypeInfer.TypeVariable "a")
-                                }
+                """module A exposing (..)
+doubleTwo = List.map Basics.identity
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        typeList (ElmSyntaxTypeInfer.TypeVariable "a")
+                                    , output =
+                                        typeList (ElmSyntaxTypeInfer.TypeVariable "a")
+                                    }
+                                )
                             )
                         )
             )
         , Test.test "let (a) = 2.2 in a"
             (\() ->
-                Elm.Syntax.Expression.LetExpression
-                    { declarations =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetDestructuring
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.ParenthesizedPattern
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Pattern.VarPattern "a")
-                                        )
-                                    )
-                                )
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 2.2)
-                                )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                    }
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = let (a) = 2.2 in a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "case 2.2 of (a) -> a"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ParenthesizedPattern
-                                    (Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.VarPattern "a")
-                                    )
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                          )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.Floatable 2.2)
-                    }
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+doubleTwo = case 2.2 of (a) -> a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
-        , Test.test "ignored argument pattern variable \\(a) -> [ 1, 2.2 ]"
+        , Test.test "unused argument pattern variable \\(a) -> [ 1, 2.2 ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                """module A exposing (..)
+alwaysSomeFloats = \\(a) -> [ 1, 2.2 ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable "a"
+                                    , output = typeList typeFloat
+                                    }
                                 )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Integer 1)
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 2.2)
-                                ]
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeVariable "a"
-                                , output = typeList typeFloat
-                                }
                             )
                         )
             )
         , Test.test "argument pattern variable unified with Float \\(a) -> [ a, 2.2 ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                """module A exposing (..)
+listTwoWithTwoPointTwo = \\(a) -> [ a, 2.2 ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeFloat
+                                    , output = typeList typeFloat
+                                    }
                                 )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 2.2)
-                                ]
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input = typeFloat
-                                , output = typeList typeFloat
-                                }
                             )
                         )
             )
-        , Test.test "argument pattern variable as if-then-else condition \\a -> if a then () else ()"
+        , Test.test "argument pattern variable unified with unit in if-then-else branch \\a -> if True then a else ()"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.IfBlock
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                """module A exposing (..)
+unitIdentity = \\a -> if True then a else ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    }
                                 )
-                                (Elm.Syntax.Node.empty
-                                    Elm.Syntax.Expression.UnitExpr
-                                )
-                                (Elm.Syntax.Node.empty
-                                    Elm.Syntax.Expression.UnitExpr
-                                )
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { arguments = []
-                                            , moduleOrigin = [ "Basics" ]
-                                            , name = "Bool"
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        ElmSyntaxTypeInfer.TypeUnit
-                                }
                             )
                         )
             )
-        , Test.test "argument pattern variable unified with unit in if-then-else branch \\a -> if a then () else ()"
+        , Test.test "argument pattern variable as condition in if-then-else branch \\a -> if a then () else ()"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.IfBlock
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "True")
+                """module A exposing (..)
+boolToUnit = \\a -> if a then () else ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeBool
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            ElmSyntaxTypeInfer.TypeUnit
+                                    }
                                 )
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                )
-                                (Elm.Syntax.Node.empty
-                                    Elm.Syntax.Expression.UnitExpr
-                                )
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        ElmSyntaxTypeInfer.TypeUnit
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        ElmSyntaxTypeInfer.TypeUnit
-                                }
                             )
                         )
             )
         , Test.test "argument pattern variable negated parenthesized \\(a) -> -(a)"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                """module A exposing (..)
+negateAlias = \\(a) -> -(a)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                    }
                                 )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.Negation
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.ParenthesizedExpression
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                        )
-                                    )
-                                )
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeVariable "number"
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeVariable "number"
-                                }
                             )
                         )
             )
         , Test.test "argument pattern variable called in Basics.negate parenthesized, implicit import \\(a) -> Basics.negate (a)"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                """module A exposing (..)
+negateAlias = \\(a) -> Basics.negate (a)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            "number"
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            "number"
+                                    }
                                 )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.Application
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "negate")
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.ParenthesizedExpression
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                        )
-                                    )
-                                ]
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        "number"
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeVariable
-                                        "number"
-                                }
                             )
                         )
             )
         , Test.test "argument pattern variable accessed field, implicit import \\a -> a.field"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.RecordAccess
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.ParenthesizedExpression
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                        )
-                                    )
+                """module A exposing (..)
+recordAccessField = \\a -> a.field
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeRecordExtension
+                                                { recordVariable = "record"
+                                                , fields =
+                                                    FastDict.singleton "field"
+                                                        (ElmSyntaxTypeInfer.TypeVariable
+                                                            "field"
+                                                        )
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable "field"
+                                    }
                                 )
-                                (Elm.Syntax.Node.empty "field")
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeRecordExtension
-                                            { recordVariable = "record"
-                                            , fields =
-                                                FastDict.singleton "field"
-                                                    (ElmSyntaxTypeInfer.TypeVariable
-                                                        "field"
-                                                    )
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeVariable "field"
-                                }
                             )
                         )
             )
         , Test.test "directly applied lambda with inexhaustive record pattern: (\\{ a } -> a) ({ a = 1.1, b = \"\" })"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.LambdaExpression
-                            { args =
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.RecordPattern
-                                        [ Elm.Syntax.Node.empty "a" ]
-                                    )
-                                ]
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                            }
-                        )
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.RecordExpr
-                            [ Elm.Syntax.Node.empty
-                                ( Elm.Syntax.Node.empty "a"
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 1.1)
-                                )
-                            , Elm.Syntax.Node.empty
-                                ( Elm.Syntax.Node.empty "b"
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Literal "")
-                                )
-                            ]
-                        )
-                    ]
-                    |> expressionToInferredType
+                """module A exposing (..)
+onePointOne = (\\{ a } -> a) ({ a = 1.1, b = "" })
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok typeFloat)
             )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.ParenthesizedPattern
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
+                """module A exposing (..)
+onePointOne = \\(a) -> [ a, 1 ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                    , output =
+                                        typeList
+                                            (ElmSyntaxTypeInfer.TypeVariable "number")
+                                    }
                                 )
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                , Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Integer 1)
-                                ]
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeVariable "number"
-                                , output =
-                                    typeList
-                                        (ElmSyntaxTypeInfer.TypeVariable "number")
-                                }
                             )
                         )
             )
         , Test.test "argument pattern variable equivalent to number variable \\a -> if a then a else a"
             (\() ->
-                Elm.Syntax.Expression.LambdaExpression
-                    { args =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Pattern.VarPattern "a")
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.IfBlock
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
+                """module A exposing (..)
+aaaa = \\a -> if a then a else a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Bool"
+                                                , arguments = []
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = [ "Basics" ]
+                                                , name = "Bool"
+                                                , arguments = []
+                                                }
+                                            )
+                                    }
                                 )
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                )
-                                (Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                )
-                            )
-                    }
-                    |> expressionExpectInferredType
-                        (ElmSyntaxTypeInfer.TypeNotVariable
-                            (ElmSyntaxTypeInfer.TypeFunction
-                                { input =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Bool"
-                                            , arguments = []
-                                            }
-                                        )
-                                , output =
-                                    ElmSyntaxTypeInfer.TypeNotVariable
-                                        (ElmSyntaxTypeInfer.TypeConstruct
-                                            { moduleOrigin = [ "Basics" ]
-                                            , name = "Bool"
-                                            , arguments = []
-                                            }
-                                        )
-                                }
                             )
                         )
             )
@@ -810,149 +644,68 @@ records = \\a -> [ { a | b = 1 }, { c = (), b = 2.2 } ]
             )
         , Test.test "case 2 of 1 -> 1; n -> n"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.Integer 2)
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.IntPattern 1)
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 2)
-                          )
-                        , ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.VarPattern "n")
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
-                          )
-                        ]
-                    }
-                    |> expressionExpectInferredType
-                        typeInt
+                """module A exposing (..)
+two =
+    case 2 of
+        1 -> 1
+        n -> n
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeInt)
             )
         , Test.test "should fail: case [] of [ 1 ] -> 1; n -> n"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr [])
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ListPattern
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.IntPattern 1)
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 1)
-                          )
-                        , ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.VarPattern "n")
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+listEmpty =
+    case [] of
+        [ 1 ] -> 1
+        n -> n
+"""
+                    |> typeInferModuleFromSource
                     |> Expect.err
             )
         , Test.test "bad matched + pattern unification should fail: case [] of [ 1 ] -> 1; 0 -> 0"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr [])
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ListPattern
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.IntPattern 1)
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 1)
-                          )
-                        , ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.IntPattern 0)
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 0)
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+listEmpty =
+    case [] of
+        [ 1 ] -> 1
+        0 -> 0
+"""
+                    |> typeInferModuleFromSource
                     |> Expect.err
             )
         , Test.test "bad matched + pattern unification should fail: case [] of [ \"\" ] -> 1; [ 0 ] -> 0"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr [])
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ListPattern
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.StringPattern "")
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 1)
-                          )
-                        , ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ListPattern
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.IntPattern 0)
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 0)
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+listEmpty =
+    case [] of
+        [ "" ] -> 1
+        [ 0 ] -> 0
+"""
+                    |> typeInferModuleFromSource
                     |> Expect.err
             )
         , Test.test "bad matched + pattern unification should fail: case [] of [ \"\" ] -> 1; _ -> \"\""
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr [])
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.ListPattern
-                                    [ Elm.Syntax.Node.empty
-                                        (Elm.Syntax.Pattern.StringPattern "")
-                                    ]
-                                )
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Integer 1)
-                          )
-                        , ( Elm.Syntax.Node.empty
-                                Elm.Syntax.Pattern.AllPattern
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Literal "")
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+explode =
+    case [] of
+        [ "" ] -> 1
+        _ -> ""
+"""
+                    |> typeInferModuleFromSource
                     |> Expect.err
             )
         , Test.test "fully connected case in and output type: case [] of n -> n"
             (\() ->
-                Elm.Syntax.Expression.CaseExpression
-                    { expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.ListExpr [])
-                    , cases =
-                        [ ( Elm.Syntax.Node.empty
-                                (Elm.Syntax.Pattern.VarPattern "n")
-                          , Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.FunctionOrValue [] "n")
-                          )
-                        ]
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+listEmpty = case [] of n -> n
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (typeList
@@ -1213,13 +966,11 @@ doubleTrouble =
             )
         , Test.test "curried call: Tuple.pair \"\""
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "Tuple" ] "pair")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Literal "")
-                    ]
-                    |> expressionToInferredType
+                """module A exposing (..)
+tuple = Tuple.pair ""
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
