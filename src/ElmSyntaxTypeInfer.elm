@@ -2809,6 +2809,7 @@ type alias VariableSubstitutions =
 
 type alias EquivalentVariableSet =
     { constraint : Maybe TypeVariableConstraint
+    , overarchingRangeAsComparable : RangeAsComparable
     , variables : FastSetFast TypeVariableFromContext
     }
 
@@ -3003,28 +3004,47 @@ equivalentVariablesMergeWithSetOf2Into :
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
+            let
+                ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
+                    aEquivalentVariable
+
+                ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
+                    bEquivalentVariable
+            in
             Result.map
                 (\abConstraint ->
                     { variables =
                         FastDict.singleton aEquivalentVariable ()
                             |> FastDict.insert bEquivalentVariable ()
                     , constraint = abConstraint
+                    , overarchingRangeAsComparable =
+                        rangeAsComparableOverarching
+                            aEquivalentVariableUseRangeAsComparable
+                            bEquivalentVariableUseRangeAsComparable
                     }
                         :: soFar
                 )
                 (maybeTypeVariableConstraintMerge
-                    (aEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
-                    (bEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                    (aEquivalentVariableName |> typeVariableConstraint)
+                    (bEquivalentVariableName |> typeVariableConstraint)
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
             if equivalentVariablesSet0.variables |> FastDict.member aEquivalentVariable then
+                let
+                    ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
+                        bEquivalentVariable
+                in
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
                                 |> FastDict.insert bEquivalentVariable ()
                         , constraint = unifiedConstraint
+                        , overarchingRangeAsComparable =
+                            rangeAsComparableOverarching
+                                equivalentVariablesSet0.overarchingRangeAsComparable
+                                bEquivalentVariableUseRangeAsComparable
                         }
                             :: listAppendFastButInReverseOrder
                                 soFar
@@ -3032,16 +3052,24 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     )
                     (maybeTypeVariableConstraintMerge
                         equivalentVariablesSet0.constraint
-                        (bEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                        (bEquivalentVariableName |> typeVariableConstraint)
                     )
 
             else if equivalentVariablesSet0.variables |> FastDict.member bEquivalentVariable then
+                let
+                    ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
+                        aEquivalentVariable
+                in
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
                                 |> FastDict.insert aEquivalentVariable ()
                         , constraint = unifiedConstraint
+                        , overarchingRangeAsComparable =
+                            rangeAsComparableOverarching
+                                equivalentVariablesSet0.overarchingRangeAsComparable
+                                aEquivalentVariableUseRangeAsComparable
                         }
                             :: listAppendFastButInReverseOrder
                                 soFar
@@ -3049,7 +3077,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     )
                     (maybeTypeVariableConstraintMerge
                         equivalentVariablesSet0.constraint
-                        (aEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                        (aEquivalentVariableName |> typeVariableConstraint)
                     )
 
             else
@@ -3125,6 +3153,10 @@ equivalentVariableSetMerge a b =
                                                                 aEquivalentVariableSet.variables
                                                                 bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
+                                                        , overarchingRangeAsComparable =
+                                                            rangeAsComparableOverarching
+                                                                aEquivalentVariableSet.overarchingRangeAsComparable
+                                                                bEquivalentVariableSetAndRemaining.value.overarchingRangeAsComparable
                                                         }
                                                             :: soFar.sets
                                                     , bRemaining = bEquivalentVariableSetAndRemaining.remaining
@@ -9477,6 +9509,13 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
         okVariableSubstitutionsNone
 
     else
+        let
+            ( aVariableUseRangeAsComparable, aVariableName ) =
+                aVariable
+
+            ( bVariableUseRangeAsComparable, bVariableName ) =
+                bVariable
+        in
         Result.map
             (\abConstraint ->
                 { variableToType = FastDict.empty
@@ -9485,13 +9524,17 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                             FastDict.singleton aVariable ()
                                 |> FastDict.insert bVariable ()
                       , constraint = abConstraint
+                      , overarchingRangeAsComparable =
+                            rangeAsComparableOverarching
+                                aVariableUseRangeAsComparable
+                                bVariableUseRangeAsComparable
                       }
                     ]
                 }
             )
             (maybeTypeVariableConstraintMerge
-                (aVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
-                (bVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                (aVariableName |> typeVariableConstraint)
+                (bVariableName |> typeVariableConstraint)
             )
 
 
@@ -14488,31 +14531,19 @@ equivalentVariablesCreateCondensedVariable set =
         Nothing ->
             Err "implementation bug: equivalent variables set is empty"
 
-        Just ( ( variable0, () ), setExceptVariable0 ) ->
-            let
-                ( variable0UseRangeAsComparable, variable0Name ) =
-                    variable0
-
-                overarchingRange : RangeAsComparable
-                overarchingRange =
-                    setExceptVariable0
-                        |> FastDict.foldl
-                            (\( variableUseRangeAsComparable, _ ) () soFar ->
-                                rangeAsComparableOverarching
-                                    soFar
-                                    variableUseRangeAsComparable
-                            )
-                            variable0UseRangeAsComparable
-            in
+        Just ( ( variable0, () ), _ ) ->
             Ok
-                (case set.constraint of
+                ( set.overarchingRangeAsComparable
+                , case set.constraint of
                     Nothing ->
-                        ( overarchingRange, variable0Name )
+                        let
+                            ( _, variable0Name ) =
+                                variable0
+                        in
+                        variable0Name
 
                     Just unifiedConstraint ->
-                        ( overarchingRange
-                        , unifiedConstraint |> typeVariableConstraintToString
-                        )
+                        unifiedConstraint |> typeVariableConstraintToString
                 )
 
 
