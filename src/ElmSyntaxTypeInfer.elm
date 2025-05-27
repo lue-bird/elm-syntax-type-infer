@@ -8928,19 +8928,21 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
     in
     case state.substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            case equivalentVariablesCreateCondensedVariable equivalentVariableSet0 of
+            case
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
+            of
                 Err error ->
                     Err error
 
-                Ok condensedVariable ->
+                Ok variableCondenseLookup ->
                     let
                         variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
                         variableToCondensedIfNecessary variable =
-                            if equivalentVariableSet0 |> FastDict.member variable then
-                                condensedVariable
-
-                            else
-                                variable
+                            variableCondenseLookup
+                                |> FastDict.get variable
+                                |> Maybe.withDefault
+                                    variable
 
                         valueAndFunctionDeclarationsCondensed :
                             FastDict.Dict
@@ -8954,12 +8956,6 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                             |> declarationValueOrFunctionInfoMapTypeVariables
                                                 variableToCondensedIfNecessary
                                     )
-
-                        variableCondenseLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-                        variableCondenseLookup =
-                            equivalentVariableSet0
-                                |> FastDict.map
-                                    (\_ () -> condensedVariable)
 
                         newSubstitutionsOrError : Result String VariableSubstitutions
                         newSubstitutionsOrError =
@@ -9011,19 +9007,22 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                                                     Just inferredDeclarationCondensed ->
                                                                         let
-                                                                            unannotatedInferredDeclarationTypeCondensedContainedVariables : FastSetFast TypeVariableFromContext
-                                                                            unannotatedInferredDeclarationTypeCondensedContainedVariables =
-                                                                                inferredDeclarationCondensed.type_
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : FastSetFast TypeVariableFromContext
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables =
+                                                                                inferredDeclarationBeforeCondensing.type_
                                                                                     |> typeContainedVariables
                                                                         in
                                                                         if
-                                                                            unannotatedInferredDeclarationTypeCondensedContainedVariables
-                                                                                |> FastDict.member condensedVariable
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
+                                                                                |> fastSetFastAny
+                                                                                    (\variableBeforeCondensing ->
+                                                                                        variableCondenseLookup |> FastDict.member variableBeforeCondensing
+                                                                                    )
                                                                         then
                                                                             let
-                                                                                unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : FastSetFast TypeVariableFromContext
-                                                                                unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables =
-                                                                                    inferredDeclarationBeforeCondensing.type_
+                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables : FastSetFast TypeVariableFromContext
+                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables =
+                                                                                    inferredDeclarationCondensed.type_
                                                                                         |> typeContainedVariables
                                                                             in
                                                                             -- if we don't check whether the condensed type
@@ -9050,13 +9049,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                     in
                                     unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution
                                         |> listFoldlWhileOkFrom
-                                            { equivalentVariables =
-                                                equivalentVariableSetMerge
-                                                    variableSubstitutionsCondensed.equivalentVariables
-                                                    equivalentVariableSet1Up
-                                            , variableToType =
-                                                variableSubstitutionsCondensed.variableToType
-                                            }
+                                            variableSubstitutionsCondensed
                                             (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
                                                 partialTypeVariableAmongEquivalentVariables.uses
                                                     |> fastDictFoldlWhileOkFrom
@@ -9117,19 +9110,14 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                         Err error
 
                     Ok variableToTypeSubstitutedOverItself ->
-                        let
-                            substitutionToApply :
-                                TypeVariableFromContext
-                                -> Maybe (TypeNotVariable TypeVariableFromContext)
-                            substitutionToApply variable =
-                                variableToTypeSubstitutedOverItself
-                                    |> FastDict.get variable
-                        in
                         case
                             valueAndFunctionDeclarationsSoFar
                                 |> valueAndFunctionDeclarationsSubstituteVariableByNotVariable
                                     state.declarationTypes
-                                    substitutionToApply
+                                    (\variable ->
+                                        variableToTypeSubstitutedOverItself
+                                            |> FastDict.get variable
+                                    )
                         of
                             Err error ->
                                 Err error
