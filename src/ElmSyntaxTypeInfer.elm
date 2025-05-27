@@ -2799,11 +2799,17 @@ variable substitutions get passed all the way to the top and only get processed 
 -}
 type alias VariableSubstitutions =
     { equivalentVariables :
-        List (FastSetFast TypeVariableFromContext)
+        List EquivalentVariableSet
     , variableToType :
         FastDict.Dict
             TypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
+    }
+
+
+type alias EquivalentVariableSet =
+    { constraint : Maybe TypeVariableConstraint
+    , variables : FastSetFast TypeVariableFromContext
     }
 
 
@@ -2829,13 +2835,16 @@ variableSubstitutionsMerge context a b =
                 Ok b
 
             _ :: _ ->
-                Ok
-                    { variableToType = b.variableToType
-                    , equivalentVariables =
-                        equivalentVariableSetMerge
-                            a.equivalentVariables
-                            b.equivalentVariables
-                    }
+                Result.map
+                    (\abEquivalentVariables ->
+                        { variableToType = b.variableToType
+                        , equivalentVariables = abEquivalentVariables
+                        }
+                    )
+                    (equivalentVariableSetMerge
+                        a.equivalentVariables
+                        b.equivalentVariables
+                    )
 
     else if b.variableToType |> FastDict.isEmpty then
         case b.equivalentVariables of
@@ -2843,13 +2852,16 @@ variableSubstitutionsMerge context a b =
                 Ok a
 
             _ :: _ ->
-                Ok
-                    { variableToType = a.variableToType
-                    , equivalentVariables =
-                        equivalentVariableSetMerge
-                            a.equivalentVariables
-                            b.equivalentVariables
-                    }
+                Result.map
+                    (\abEquivalentVariables ->
+                        { variableToType = a.variableToType
+                        , equivalentVariables = abEquivalentVariables
+                        }
+                    )
+                    (equivalentVariableSetMerge
+                        a.equivalentVariables
+                        b.equivalentVariables
+                    )
 
     else
         FastDict.merge
@@ -2870,25 +2882,30 @@ variableSubstitutionsMerge context a b =
                     (\soFar ->
                         Result.andThen
                             (\abTypesUnified ->
-                                Result.map
+                                Result.andThen
                                     (\substitutionsWithAB ->
                                         case abTypesUnified.type_ of
                                             TypeVariable abUnifiedVariable ->
-                                                { equivalentVariables =
-                                                    substitutionsWithAB.equivalentVariables
+                                                Result.map
+                                                    (\equivalentVariables ->
+                                                        { equivalentVariables = equivalentVariables
+                                                        , variableToType =
+                                                            substitutionsWithAB.variableToType
+                                                        }
+                                                    )
+                                                    (substitutionsWithAB.equivalentVariables
                                                         |> equivalentVariablesMergeWithSetOf2
                                                             variable
                                                             abUnifiedVariable
-                                                , variableToType =
-                                                    substitutionsWithAB.variableToType
-                                                }
+                                                    )
 
                                             TypeNotVariable abUnifiedNotVariable ->
-                                                { equivalentVariables = substitutionsWithAB.equivalentVariables
-                                                , variableToType =
-                                                    substitutionsWithAB.variableToType
-                                                        |> FastDict.insert variable abUnifiedNotVariable
-                                                }
+                                                Ok
+                                                    { equivalentVariables = substitutionsWithAB.equivalentVariables
+                                                    , variableToType =
+                                                        substitutionsWithAB.variableToType
+                                                            |> FastDict.insert variable abUnifiedNotVariable
+                                                    }
                                     )
                                     (variableSubstitutionsMerge context
                                         soFar
@@ -2913,13 +2930,16 @@ variableSubstitutionsMerge context a b =
             )
             a.variableToType
             b.variableToType
-            (Ok
-                { variableToType = FastDict.empty
-                , equivalentVariables =
-                    equivalentVariableSetMerge
-                        a.equivalentVariables
-                        b.equivalentVariables
-                }
+            (Result.map
+                (\abEquivalentVariables ->
+                    { variableToType = FastDict.empty
+                    , equivalentVariables = abEquivalentVariables
+                    }
+                )
+                (equivalentVariableSetMerge
+                    a.equivalentVariables
+                    b.equivalentVariables
+                )
             )
 
 
@@ -2966,44 +2986,71 @@ variableSubstitutionsMerge4 context a b c d =
 
 
 equivalentVariablesMergeWithSetOf2 :
-    comparable
-    -> comparable
-    -> List (FastSetFast comparable)
-    -> List (FastSetFast comparable)
+    TypeVariableFromContext
+    -> TypeVariableFromContext
+    -> List EquivalentVariableSet
+    -> Result String (List EquivalentVariableSet)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
     equivalentVariablesMergeWithSetOf2Into [] aEquivalentVariable bEquivalentVariable equivalentVariables
 
 
 equivalentVariablesMergeWithSetOf2Into :
-    List (FastSetFast comparable)
-    -> comparable
-    -> comparable
-    -> List (FastSetFast comparable)
-    -> List (FastSetFast comparable)
+    List EquivalentVariableSet
+    -> TypeVariableFromContext
+    -> TypeVariableFromContext
+    -> List EquivalentVariableSet
+    -> Result String (List EquivalentVariableSet)
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
-            (FastDict.singleton aEquivalentVariable ()
-                |> FastDict.insert bEquivalentVariable ()
-            )
-                :: soFar
+            Result.map
+                (\abConstraint ->
+                    { variables =
+                        FastDict.singleton aEquivalentVariable ()
+                            |> FastDict.insert bEquivalentVariable ()
+                    , constraint = abConstraint
+                    }
+                        :: soFar
+                )
+                (maybeTypeVariableConstraintMerge
+                    (aEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                    (bEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            if equivalentVariablesSet0 |> FastDict.member aEquivalentVariable then
-                (equivalentVariablesSet0
-                    |> FastDict.insert bEquivalentVariable ()
-                )
-                    :: listAppendFastButInReverseOrder
-                        soFar
-                        equivalentVariablesSet1Up
+            if equivalentVariablesSet0.variables |> FastDict.member aEquivalentVariable then
+                Result.map
+                    (\unifiedConstraint ->
+                        { variables =
+                            equivalentVariablesSet0.variables
+                                |> FastDict.insert bEquivalentVariable ()
+                        , constraint = unifiedConstraint
+                        }
+                            :: listAppendFastButInReverseOrder
+                                soFar
+                                equivalentVariablesSet1Up
+                    )
+                    (maybeTypeVariableConstraintMerge
+                        equivalentVariablesSet0.constraint
+                        (bEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                    )
 
-            else if equivalentVariablesSet0 |> FastDict.member bEquivalentVariable then
-                (equivalentVariablesSet0
-                    |> FastDict.insert aEquivalentVariable ()
-                )
-                    :: listAppendFastButInReverseOrder
-                        soFar
-                        equivalentVariablesSet1Up
+            else if equivalentVariablesSet0.variables |> FastDict.member bEquivalentVariable then
+                Result.map
+                    (\unifiedConstraint ->
+                        { variables =
+                            equivalentVariablesSet0.variables
+                                |> FastDict.insert aEquivalentVariable ()
+                        , constraint = unifiedConstraint
+                        }
+                            :: listAppendFastButInReverseOrder
+                                soFar
+                                equivalentVariablesSet1Up
+                    )
+                    (maybeTypeVariableConstraintMerge
+                        equivalentVariablesSet0.constraint
+                        (aEquivalentVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                    )
 
             else
                 equivalentVariablesMergeWithSetOf2Into
@@ -3024,57 +3071,71 @@ listAppendFastButInReverseOrder aList bList =
 
 
 equivalentVariableSetMerge :
-    List (FastSetFast comparableTypeVariable)
-    -> List (FastSetFast comparableTypeVariable)
-    -> List (FastSetFast comparableTypeVariable)
+    List EquivalentVariableSet
+    -> List EquivalentVariableSet
+    -> Result String (List EquivalentVariableSet)
 equivalentVariableSetMerge a b =
     case a of
         [] ->
-            b
+            Ok b
 
         _ :: _ ->
             case b of
                 [] ->
-                    a
+                    Ok a
 
                 _ :: _ ->
-                    let
-                        mergedIntoA :
-                            { sets : List (FastSetFast comparableTypeVariable)
-                            , bRemaining : List (FastSetFast comparableTypeVariable)
-                            }
-                        mergedIntoA =
-                            a
-                                |> List.foldl
-                                    (\aEquivalentVariableSet soFar ->
-                                        case
-                                            soFar.bRemaining
-                                                |> listMapAndFirstJustAndRemainingAnyOrder
-                                                    (\bEquivalentVariableSet ->
-                                                        if fastSetShareElements aEquivalentVariableSet bEquivalentVariableSet then
-                                                            Just bEquivalentVariableSet
+                    Result.map
+                        (\mergedIntoA ->
+                            listAppendFastButInReverseOrder
+                                mergedIntoA.sets
+                                mergedIntoA.bRemaining
+                        )
+                        (a
+                            |> listFoldlWhileOkFrom
+                                { sets = [], bRemaining = b }
+                                (\aEquivalentVariableSet soFar ->
+                                    case
+                                        soFar.bRemaining
+                                            |> listMapAndFirstJustAndRemainingAnyOrder
+                                                (\bEquivalentVariableSet ->
+                                                    if
+                                                        fastSetShareElements
+                                                            aEquivalentVariableSet.variables
+                                                            bEquivalentVariableSet.variables
+                                                    then
+                                                        Just bEquivalentVariableSet
 
-                                                        else
-                                                            Nothing
-                                                    )
-                                        of
-                                            Nothing ->
+                                                    else
+                                                        Nothing
+                                                )
+                                    of
+                                        Nothing ->
+                                            Ok
                                                 { sets = aEquivalentVariableSet :: soFar.sets
                                                 , bRemaining = soFar.bRemaining
                                                 }
 
-                                            Just bEquivalentVariableSetAndRemaining ->
-                                                { sets =
-                                                    FastDict.union aEquivalentVariableSet bEquivalentVariableSetAndRemaining.value
-                                                        :: soFar.sets
-                                                , bRemaining = bEquivalentVariableSetAndRemaining.remaining
-                                                }
-                                    )
-                                    { sets = [], bRemaining = b }
-                    in
-                    listAppendFastButInReverseOrder
-                        mergedIntoA.sets
-                        mergedIntoA.bRemaining
+                                        Just bEquivalentVariableSetAndRemaining ->
+                                            Result.map
+                                                (\unifiedConstraint ->
+                                                    { sets =
+                                                        { variables =
+                                                            FastDict.union
+                                                                aEquivalentVariableSet.variables
+                                                                bEquivalentVariableSetAndRemaining.value.variables
+                                                        , constraint = unifiedConstraint
+                                                        }
+                                                            :: soFar.sets
+                                                    , bRemaining = bEquivalentVariableSetAndRemaining.remaining
+                                                    }
+                                                )
+                                                (maybeTypeVariableConstraintMerge
+                                                    aEquivalentVariableSet.constraint
+                                                    bEquivalentVariableSetAndRemaining.value.constraint
+                                                )
+                                )
+                        )
 
 
 fastSetShareElements : FastSetFast comparable -> FastSetFast comparable -> Bool
@@ -3202,13 +3263,17 @@ typeUnify context a b =
         TypeVariable aVariable ->
             case b of
                 TypeVariable bVariable ->
-                    Ok
-                        { type_ = a
-                        , substitutions =
-                            variableSubstitutionsFrom2EquivalentVariables
-                                aVariable
-                                bVariable
-                        }
+                    Result.map
+                        (\abEquivalentVariablesSubstitutions ->
+                            { type_ = a
+                            , substitutions =
+                                abEquivalentVariablesSubstitutions
+                            }
+                        )
+                        (variableSubstitutionsFrom2EquivalentVariables
+                            aVariable
+                            bVariable
+                        )
 
                 TypeNotVariable bTypeNotVariable ->
                     Result.map
@@ -4345,8 +4410,13 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             )
                     }
                 )
-                (variableSubstitutionsMerge3 context
-                    fieldsUnified.substitutions
+                (resultAndThen2
+                    (\aRecordVariableSubstitutions bRecordVariableSubstitutions ->
+                        variableSubstitutionsMerge3 context
+                            fieldsUnified.substitutions
+                            aRecordVariableSubstitutions
+                            bRecordVariableSubstitutions
+                    )
                     (variableSubstitutionsFromVariableToType
                         aRecordExtension.recordVariable
                         (if aVariableReplacementFields |> FastDict.isEmpty then
@@ -5541,16 +5611,20 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
         Elm.Syntax.Expression.Negation negated ->
             Result.andThen
                 (\negatedInferred ->
-                    { range = fullRange
-                    , value = ExpressionNegation negatedInferred
-                    , type_ = negatedInferred.type_
-                    }
-                        |> expressionTypedNodeApplyVariableSubstitutions
-                            context.declarationTypes
-                            (variableSubstitutionsFromVariableToType
-                                ( fullRange |> rangeToAsComparable, "number" )
-                                negatedInferred.type_
-                            )
+                    Result.andThen
+                        (\substitutionsFromUnifyingNegatedWithNumber ->
+                            { range = fullRange
+                            , value = ExpressionNegation negatedInferred
+                            , type_ = negatedInferred.type_
+                            }
+                                |> expressionTypedNodeApplyVariableSubstitutions
+                                    context.declarationTypes
+                                    substitutionsFromUnifyingNegatedWithNumber
+                        )
+                        (variableSubstitutionsFromVariableToType
+                            ( fullRange |> rangeToAsComparable, "number" )
+                            negatedInferred.type_
+                        )
                 )
                 (negated |> expressionTypeInfer context)
 
@@ -6568,13 +6642,17 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                                     (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                     (useType |> typeContainedVariables)
                                             then
-                                                Ok
-                                                    { equivalentVariables =
-                                                        equivalentVariableSetMerge
-                                                            soFarWithUses.equivalentVariables
-                                                            useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                    , variableToType = soFarWithUses.variableToType
-                                                    }
+                                                Result.map
+                                                    (\mergedEquivalentVariables ->
+                                                        { equivalentVariables =
+                                                            mergedEquivalentVariables
+                                                        , variableToType = soFarWithUses.variableToType
+                                                        }
+                                                    )
+                                                    (equivalentVariableSetMerge
+                                                        soFarWithUses.equivalentVariables
+                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                    )
 
                                             else
                                                 variableSubstitutionsMerge context
@@ -6653,13 +6731,16 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                                     (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                     (useType |> typeContainedVariables)
                                             then
-                                                Ok
-                                                    { equivalentVariables =
-                                                        equivalentVariableSetMerge
-                                                            soFarWithUses.equivalentVariables
-                                                            useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                    , variableToType = soFarWithUses.variableToType
-                                                    }
+                                                Result.map
+                                                    (\mergedEquivalentVariables ->
+                                                        { equivalentVariables = mergedEquivalentVariables
+                                                        , variableToType = soFarWithUses.variableToType
+                                                        }
+                                                    )
+                                                    (equivalentVariableSetMerge
+                                                        soFarWithUses.equivalentVariables
+                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                    )
 
                                             else
                                                 variableSubstitutionsMerge context
@@ -9368,17 +9449,18 @@ typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
 variableSubstitutionsFromVariableToType :
     TypeVariableFromContext
     -> Type TypeVariableFromContext
-    -> VariableSubstitutions
+    -> Result String VariableSubstitutions
 variableSubstitutionsFromVariableToType variableToReplace replacementType =
     case replacementType of
         TypeNotVariable replacementTypeNotVariable ->
             -- TODO use variableSubstitutionsFromVariableToTypeNotVariableOrError
             -- to detect self-referential substitution
-            { variableToType =
-                FastDict.singleton variableToReplace
-                    replacementTypeNotVariable
-            , equivalentVariables = []
-            }
+            Ok
+                { variableToType =
+                    FastDict.singleton variableToReplace
+                        replacementTypeNotVariable
+                , equivalentVariables = []
+                }
 
         TypeVariable replacementVariable ->
             variableSubstitutionsFrom2EquivalentVariables
@@ -9389,18 +9471,28 @@ variableSubstitutionsFromVariableToType variableToReplace replacementType =
 variableSubstitutionsFrom2EquivalentVariables :
     TypeVariableFromContext
     -> TypeVariableFromContext
-    -> VariableSubstitutions
-variableSubstitutionsFrom2EquivalentVariables variableToReplace replacementVariable =
-    if typeVariableFromContextEquals variableToReplace replacementVariable then
-        variableSubstitutionsNone
+    -> Result String VariableSubstitutions
+variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
+    if typeVariableFromContextEquals aVariable bVariable then
+        okVariableSubstitutionsNone
 
     else
-        { variableToType = FastDict.empty
-        , equivalentVariables =
-            [ FastDict.singleton variableToReplace ()
-                |> FastDict.insert replacementVariable ()
-            ]
-        }
+        Result.map
+            (\abConstraint ->
+                { variableToType = FastDict.empty
+                , equivalentVariables =
+                    [ { variables =
+                            FastDict.singleton aVariable ()
+                                |> FastDict.insert bVariable ()
+                      , constraint = abConstraint
+                      }
+                    ]
+                }
+            )
+            (maybeTypeVariableConstraintMerge
+                (aVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+                (bVariable |> typeVariableIgnoringContext |> typeVariableConstraint)
+            )
 
 
 type alias ValueOrFunctionDeclarationInfo type_ =
@@ -10188,7 +10280,7 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 
 
 createEquivalentVariablesToCondensedVariableLookup :
-    List (FastSetFast TypeVariableFromContext)
+    List EquivalentVariableSet
     -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
 createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
     equivalentVariables
@@ -10197,7 +10289,7 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
             (\equivalentVariableSet soFar ->
                 Result.map
                     (\unifiedVariable ->
-                        equivalentVariableSet
+                        equivalentVariableSet.variables
                             |> FastDict.foldl
                                 (\variable () soFarInSet ->
                                     soFarInSet
@@ -10416,14 +10508,18 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                                     (\replacementTypeForCondensedVariable ->
                                         case replacementTypeForCondensedVariable.type_ of
                                             TypeVariable replacementTypeVariableForCondensedVariable ->
-                                                Ok
-                                                    { equivalentVariables =
-                                                        equivalentVariablesMergeWithSetOf2
+                                                Result.map
+                                                    (\equivalentVariablesWithCondensed ->
+                                                        { equivalentVariables =
+                                                            equivalentVariablesWithCondensed
+                                                        , variableToType = soFar.variableToType
+                                                        }
+                                                    )
+                                                    (soFar.equivalentVariables
+                                                        |> equivalentVariablesMergeWithSetOf2
                                                             condensedVariable
                                                             replacementTypeVariableForCondensedVariable
-                                                            soFar.equivalentVariables
-                                                    , variableToType = soFar.variableToType
-                                                    }
+                                                    )
 
                                             TypeNotVariable replacementTypeNotVariableForCondensedVariable ->
                                                 Result.map
@@ -11801,13 +11897,16 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                                                 (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                                                 (useType |> typeContainedVariables)
                                                                         then
-                                                                            Ok
-                                                                                { equivalentVariables =
-                                                                                    equivalentVariableSetMerge
-                                                                                        soFarWithUses.equivalentVariables
-                                                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                                                , variableToType = soFarWithUses.variableToType
-                                                                                }
+                                                                            Result.map
+                                                                                (\mergedEquivalentVariables ->
+                                                                                    { equivalentVariables = mergedEquivalentVariables
+                                                                                    , variableToType = soFarWithUses.variableToType
+                                                                                    }
+                                                                                )
+                                                                                (equivalentVariableSetMerge
+                                                                                    soFarWithUses.equivalentVariables
+                                                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                                                )
 
                                                                         else
                                                                             variableSubstitutionsMerge
@@ -12783,13 +12882,16 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                                                 useTypeContainedVariables
                                                                                 (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                                         then
-                                                                            Ok
-                                                                                { equivalentVariables =
-                                                                                    equivalentVariableSetMerge
-                                                                                        soFarWithUses.equivalentVariables
-                                                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                                                , variableToType = soFarWithUses.variableToType
-                                                                                }
+                                                                            Result.map
+                                                                                (\mergedEquivalentVariables ->
+                                                                                    { equivalentVariables = mergedEquivalentVariables
+                                                                                    , variableToType = soFarWithUses.variableToType
+                                                                                    }
+                                                                                )
+                                                                                (equivalentVariableSetMerge
+                                                                                    soFarWithUses.equivalentVariables
+                                                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                                                                )
 
                                                                         else
                                                                             variableSubstitutionsMerge context
@@ -14380,9 +14482,9 @@ patternMapTypes typeChange pattern =
                 }
 
 
-equivalentVariablesCreateCondensedVariable : FastSetFast TypeVariableFromContext -> Result String TypeVariableFromContext
+equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    case set |> FastDict.popMin of
+    case set.variables |> FastDict.popMin of
         Nothing ->
             Err "implementation bug: equivalent variables set is empty"
 
@@ -14390,37 +14492,26 @@ equivalentVariablesCreateCondensedVariable set =
             let
                 ( variable0UseRangeAsComparable, variable0Name ) =
                     variable0
-            in
-            Result.map
-                (\unified ->
-                    case unified.maybeConstraint of
-                        Nothing ->
-                            ( unified.overarchingRange, variable0Name )
 
-                        Just unifiedConstraint ->
-                            ( unified.overarchingRange
-                            , unifiedConstraint |> typeVariableConstraintToString
+                overarchingRange : RangeAsComparable
+                overarchingRange =
+                    setExceptVariable0
+                        |> FastDict.foldl
+                            (\( variableUseRangeAsComparable, _ ) () soFar ->
+                                rangeAsComparableOverarching
+                                    soFar
+                                    variableUseRangeAsComparable
                             )
-                )
-                (setExceptVariable0
-                    |> fastDictFoldlWhileOkFrom
-                        { maybeConstraint = variable0Name |> typeVariableConstraint
-                        , overarchingRange = variable0UseRangeAsComparable
-                        }
-                        (\( variableUseRangeAsComparable, variableName ) () soFar ->
-                            Result.map
-                                (\maybeConstraintWithVariable ->
-                                    { maybeConstraint = maybeConstraintWithVariable
-                                    , overarchingRange =
-                                        rangeAsComparableOverarching
-                                            soFar.overarchingRange
-                                            variableUseRangeAsComparable
-                                    }
-                                )
-                                (maybeTypeVariableConstraintMerge
-                                    soFar.maybeConstraint
-                                    (variableName |> typeVariableConstraint)
-                                )
+                            variable0UseRangeAsComparable
+            in
+            Ok
+                (case set.constraint of
+                    Nothing ->
+                        ( overarchingRange, variable0Name )
+
+                    Just unifiedConstraint ->
+                        ( overarchingRange
+                        , unifiedConstraint |> typeVariableConstraintToString
                         )
                 )
 
