@@ -1500,13 +1500,7 @@ typeSubstituteVariable context replacement type_ =
         TypeNotVariable argumentNotVariable ->
             type_
                 |> typeSubstituteVariableByNotVariable context
-                    (\variable ->
-                        if typeVariableFromContextEquals variable replacement.variable then
-                            Just argumentNotVariable
-
-                        else
-                            Nothing
-                    )
+                    (FastDict.singleton replacement.variable argumentNotVariable)
                 |> Result.map
                     (\substituted ->
                         { type_ = substituted.type_
@@ -1574,10 +1568,7 @@ typeApplyVariableSubstitutions context substitutions originalType =
                         case
                             originalType
                                 |> typeSubstituteVariableByNotVariable context
-                                    (\variable ->
-                                        variableToTypeSubstitutedOverItself
-                                            |> FastDict.get variable
-                                    )
+                                    variableToTypeSubstitutedOverItself
                         of
                             Err error ->
                                 Err error
@@ -1597,9 +1588,9 @@ typeSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     -> Type TypeVariableFromContext
     ->
         Result
@@ -1612,7 +1603,7 @@ typeSubstituteVariableByNotVariable context replacement type_ =
     -- IGNORE TCO
     case type_ of
         TypeVariable typeVariable ->
-            case replacement typeVariable of
+            case replacement |> FastDict.get typeVariable of
                 Nothing ->
                     Ok
                         { unchanged = True
@@ -1824,9 +1815,9 @@ typeNotVariableSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     -> TypeNotVariable TypeVariableFromContext
     ->
         Result
@@ -2042,7 +2033,7 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeRecordExtension typeRecordExtension ->
             Result.andThen
                 (\fieldsSubstituted ->
-                    case replacement typeRecordExtension.recordVariable of
+                    case replacement |> FastDict.get typeRecordExtension.recordVariable of
                         Nothing ->
                             if fieldsSubstituted.allUnchanged then
                                 Ok
@@ -2775,10 +2766,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                         case
                             aliasTypeWithVariableArgumentsFilledIn
                                 |> typeSubstituteVariableByNotVariable context
-                                    (\variable ->
-                                        substitutionsToApplyToOriginAliasType.parameterToTypeNotVariable
-                                            |> FastDict.get variable
-                                    )
+                                    substitutionsToApplyToOriginAliasType.parameterToTypeNotVariable
                         of
                             Ok typeAliasWithSomeVariablesSubstitutedByTypes ->
                                 Just typeAliasWithSomeVariablesSubstitutedByTypes.type_
@@ -9110,10 +9098,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                             valueAndFunctionDeclarationsSoFar
                                 |> valueAndFunctionDeclarationsSubstituteVariableByNotVariable
                                     declarationTypes
-                                    (\variable ->
-                                        variableToTypeSubstitutedOverItself
-                                            |> FastDict.get variable
-                                    )
+                                    variableToTypeSubstitutedOverItself
                         of
                             Err error ->
                                 Err error
@@ -10289,9 +10274,9 @@ fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     ->
         FastDict.Dict
             String
@@ -10466,9 +10451,9 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
 valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
     ->
         Result
@@ -10638,9 +10623,9 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
 expressionTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     ->
         TypedNode
             (Expression (Type TypeVariableFromContext))
@@ -11918,9 +11903,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
 letDeclarationSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     ->
         { range : Elm.Syntax.Range.Range
         , declaration : LetDeclaration (Type TypeVariableFromContext)
@@ -13477,10 +13462,7 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                         case
                             expressionTypedNode
                                 |> expressionTypedNodeSubstituteVariableByNotVariable declarationTypes
-                                    (\variable ->
-                                        variableToTypeSubstitutedOverItself
-                                            |> FastDict.get variable
-                                    )
+                                    variableToTypeSubstitutedOverItself
                         of
                             Err error ->
                                 Err error
@@ -13569,10 +13551,7 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
                         case
                             patternTypedNode
                                 |> patternTypedNodeSubstituteVariableByNotVariable declarationTypes
-                                    (\variable ->
-                                        variableToTypeSubstitutedOverItself
-                                            |> FastDict.get variable
-                                    )
+                                    variableToTypeSubstitutedOverItself
                         of
                             Err error ->
                                 Err error
@@ -13608,7 +13587,7 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
 
     else
         -- TODO optimize by instead updating existing variableToTypeInitial
-        -- and skipping when repllacement type does not contain
+        -- and skipping when replacement type does not contain
         variableToTypeInitial
             |> fastDictFoldlWhileOkFrom
                 FastDict.empty
@@ -13628,7 +13607,7 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
 
 
 typeNotVariableFullyApplyVariableToTypeSubstitutions :
-    -- TODO do new substitutions need be tracked
+    -- TODO do new substitutions need be tracked?
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
@@ -13643,10 +13622,7 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToAppl
         -- TODO optimize by not tracking new substitutions
         typeNotVariable
             |> typeNotVariableSubstituteVariableByNotVariable context
-                (\variable ->
-                    substitutionsToApply
-                        |> FastDict.get variable
-                )
+                substitutionsToApply
     of
         Err error ->
             Err error
@@ -13664,9 +13640,9 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToAppl
 patternTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        (TypeVariableFromContext
-         -> Maybe (TypeNotVariable TypeVariableFromContext)
-        )
+        FastDict.Dict
+            TypeVariableFromContext
+            (TypeNotVariable TypeVariableFromContext)
     ->
         TypedNode
             (Pattern (Type TypeVariableFromContext))
