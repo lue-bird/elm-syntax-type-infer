@@ -1630,7 +1630,6 @@ typeSubstituteVariableByNotVariable context replacement type_ =
                                 }
 
                         Just constraint ->
-                            -- TODO: instead check these when creating/suggesting the substitution!
                             case constraint of
                                 TypeVariableConstraintNumber ->
                                     if
