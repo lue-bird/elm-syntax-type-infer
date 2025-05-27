@@ -147,17 +147,20 @@ typeVariableConstraint variableName =
     if variableName |> String.startsWith "number" then
         justTypeVariableConstraintNumber
 
-    else if variableName |> String.startsWith "appendable" then
-        justTypeVariableConstraintAppendable
-
-    else if variableName |> String.startsWith "comparable" then
-        justTypeVariableConstraintComparable
-
-    else if variableName |> String.startsWith "compappend" then
-        justTypeVariableConstraintCompappend
-
     else
-        Nothing
+        -- small optimization because they are all equal in length
+        case variableName |> String.slice 0 10 of
+            "appendable" ->
+                justTypeVariableConstraintAppendable
+
+            "comparable" ->
+                justTypeVariableConstraintComparable
+
+            "compappend" ->
+                justTypeVariableConstraintCompappend
+
+            _ ->
+                Nothing
 
 
 justTypeVariableConstraintCompappend : Maybe TypeVariableConstraint
@@ -3002,7 +3005,15 @@ equivalentVariablesMergeWithSetOf2 :
     -> List EquivalentVariableSet
     -> Result String (List EquivalentVariableSet)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
-    equivalentVariablesMergeWithSetOf2Into [] aEquivalentVariable bEquivalentVariable equivalentVariables
+    if typeVariableFromContextEquals aEquivalentVariable bEquivalentVariable then
+        Ok equivalentVariables
+
+    else
+        equivalentVariablesMergeWithSetOf2Into []
+            aEquivalentVariable
+            bEquivalentVariable
+            equivalentVariables
+            equivalentVariables
 
 
 equivalentVariablesMergeWithSetOf2Into :
@@ -3010,17 +3021,18 @@ equivalentVariablesMergeWithSetOf2Into :
     -> TypeVariableFromContext
     -> TypeVariableFromContext
     -> List EquivalentVariableSet
+    -> List EquivalentVariableSet
     -> Result String (List EquivalentVariableSet)
-equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
+equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables originalFullEquivalentVariables =
+    let
+        ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
+            aEquivalentVariable
+
+        ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
+            bEquivalentVariable
+    in
     case equivalentVariables of
         [] ->
-            let
-                ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
-                    aEquivalentVariable
-
-                ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
-                    bEquivalentVariable
-            in
             Result.map
                 (\abConstraint ->
                     { variable0 = aEquivalentVariable
@@ -3040,37 +3052,42 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            if equivalentVariablesSet0 |> equivalentVariableSetMember aEquivalentVariable then
-                let
-                    ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
-                        bEquivalentVariable
-                in
-                Result.map
-                    (\unifiedConstraint ->
-                        { variable0 = equivalentVariablesSet0.variable0
-                        , otherVariables =
-                            equivalentVariablesSet0.otherVariables
-                                |> FastDict.insert bEquivalentVariable ()
-                        , constraint = unifiedConstraint
-                        , overarchingRangeAsComparable =
-                            rangeAsComparableOverarching
-                                equivalentVariablesSet0.overarchingRangeAsComparable
-                                bEquivalentVariableUseRangeAsComparable
-                        }
-                            :: listAppendFastButInReverseOrder
-                                soFar
-                                equivalentVariablesSet1Up
-                    )
-                    (maybeTypeVariableConstraintMerge
-                        equivalentVariablesSet0.constraint
-                        (bEquivalentVariableName |> typeVariableConstraint)
-                    )
+            let
+                equivalentVariablesSet0ContainsAEquivalentVariable : Bool
+                equivalentVariablesSet0ContainsAEquivalentVariable =
+                    equivalentVariablesSet0 |> equivalentVariableSetMember aEquivalentVariable
 
-            else if equivalentVariablesSet0 |> equivalentVariableSetMember bEquivalentVariable then
-                let
-                    ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
-                        aEquivalentVariable
-                in
+                equivalentVariablesSet0ContainsBEquivalentVariable : Bool
+                equivalentVariablesSet0ContainsBEquivalentVariable =
+                    equivalentVariablesSet0 |> equivalentVariableSetMember bEquivalentVariable
+            in
+            if equivalentVariablesSet0ContainsAEquivalentVariable then
+                if equivalentVariablesSet0ContainsBEquivalentVariable then
+                    Ok originalFullEquivalentVariables
+
+                else
+                    Result.map
+                        (\unifiedConstraint ->
+                            { variable0 = equivalentVariablesSet0.variable0
+                            , otherVariables =
+                                equivalentVariablesSet0.otherVariables
+                                    |> FastDict.insert bEquivalentVariable ()
+                            , constraint = unifiedConstraint
+                            , overarchingRangeAsComparable =
+                                rangeAsComparableOverarching
+                                    equivalentVariablesSet0.overarchingRangeAsComparable
+                                    bEquivalentVariableUseRangeAsComparable
+                            }
+                                :: listAppendFastButInReverseOrder
+                                    soFar
+                                    equivalentVariablesSet1Up
+                        )
+                        (maybeTypeVariableConstraintMerge
+                            equivalentVariablesSet0.constraint
+                            (bEquivalentVariableName |> typeVariableConstraint)
+                        )
+
+            else if equivalentVariablesSet0ContainsBEquivalentVariable then
                 Result.map
                     (\unifiedConstraint ->
                         { variable0 = equivalentVariablesSet0.variable0
@@ -3098,6 +3115,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     aEquivalentVariable
                     bEquivalentVariable
                     equivalentVariablesSet1Up
+                    originalFullEquivalentVariables
 
 
 listAppendFastButInReverseOrder : List a -> List a -> List a
@@ -14538,6 +14556,7 @@ equivalentVariablesCreateCondensedVariable set =
             variable0Name
 
         Just unifiedConstraint ->
+            -- TODO still add variable0Name and only remove it when disambiguating variables
             unifiedConstraint |> typeVariableConstraintToString
     )
 
