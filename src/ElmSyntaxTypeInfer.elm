@@ -8842,10 +8842,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                     (\substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses ->
                         declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
                             |> valueAndFunctionDeclarationsApplySubstitutions
-                                { declarationTypes = declarationTypes
-                                , substitutions =
-                                    substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
-                                }
+                                declarationTypes
+                                substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
                     )
                     (declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
                         |> fastDictFoldlWhileOkFrom
@@ -8904,9 +8902,8 @@ syntaxValueOrFunctionDeclarationRange syntaxValueOrFunctionDeclaration =
 
 
 valueAndFunctionDeclarationsApplySubstitutions :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    , substitutions : VariableSubstitutions
-    }
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> VariableSubstitutions
     ->
         FastDict.Dict
             String
@@ -8918,15 +8915,15 @@ valueAndFunctionDeclarationsApplySubstitutions :
                 String
                 (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
             )
-valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclarationsSoFar =
+valueAndFunctionDeclarationsApplySubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
     let
         everywhereTypeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
         everywhereTypeContext =
-            { declarationTypes = state.declarationTypes
+            { declarationTypes = declarationTypes
             , range = everywhereRange
             }
     in
-    case state.substitutions.equivalentVariables of
+    case substitutionsToApply.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
             case
                 (equivalentVariableSet0 :: equivalentVariableSet1Up)
@@ -9080,7 +9077,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                                                         )
                                             )
                                 )
-                                (state.substitutions.variableToType
+                                (substitutionsToApply.variableToType
                                     |> variableToTypeSubstitutionsCondenseVariables
                                         everywhereTypeContext
                                         variableCondenseLookup
@@ -9092,18 +9089,17 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                         Ok newSubstitutions ->
                             valueAndFunctionDeclarationsApplySubstitutions
-                                { declarationTypes = state.declarationTypes
-                                , substitutions = newSubstitutions
-                                }
+                                declarationTypes
+                                newSubstitutions
                                 valueAndFunctionDeclarationsCondensed
 
         [] ->
-            if state.substitutions.variableToType |> FastDict.isEmpty then
+            if substitutionsToApply.variableToType |> FastDict.isEmpty then
                 Ok valueAndFunctionDeclarationsSoFar
 
             else
                 case
-                    state.substitutions.variableToType
+                    substitutionsToApply.variableToType
                         |> substitutionsVariableToTypeApplyOverItself everywhereTypeContext
                 of
                     Err error ->
@@ -9113,7 +9109,7 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
                         case
                             valueAndFunctionDeclarationsSoFar
                                 |> valueAndFunctionDeclarationsSubstituteVariableByNotVariable
-                                    state.declarationTypes
+                                    declarationTypes
                                     (\variable ->
                                         variableToTypeSubstitutedOverItself
                                             |> FastDict.get variable
@@ -9230,9 +9226,8 @@ valueAndFunctionDeclarationsApplySubstitutions state valueAndFunctionDeclaration
 
                                             Ok substitutionsAfterSubstitution ->
                                                 valueAndFunctionDeclarationsApplySubstitutions
-                                                    { declarationTypes = state.declarationTypes
-                                                    , substitutions = substitutionsAfterSubstitution
-                                                    }
+                                                    declarationTypes
+                                                    substitutionsAfterSubstitution
                                                     valueAndFunctionDeclarationsSubstituted.declarations
 
 
