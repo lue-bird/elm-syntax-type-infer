@@ -8841,7 +8841,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                 Result.andThen
                     (\substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses ->
                         declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                            |> valueAndFunctionDeclarationsApplySubstitutions
+                            |> valueAndFunctionDeclarationsApplyVariableSubstitutions
                                 declarationTypes
                                 substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
                     )
@@ -8901,7 +8901,7 @@ syntaxValueOrFunctionDeclarationRange syntaxValueOrFunctionDeclaration =
     }
 
 
-valueAndFunctionDeclarationsApplySubstitutions :
+valueAndFunctionDeclarationsApplyVariableSubstitutions :
     ModuleLevelDeclarationTypesAvailableInModule
     -> VariableSubstitutions
     ->
@@ -8915,7 +8915,7 @@ valueAndFunctionDeclarationsApplySubstitutions :
                 String
                 (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
             )
-valueAndFunctionDeclarationsApplySubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
+valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
     let
         everywhereTypeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
         everywhereTypeContext =
@@ -9088,7 +9088,7 @@ valueAndFunctionDeclarationsApplySubstitutions declarationTypes substitutionsToA
                             Err error
 
                         Ok newSubstitutions ->
-                            valueAndFunctionDeclarationsApplySubstitutions
+                            valueAndFunctionDeclarationsApplyVariableSubstitutions
                                 declarationTypes
                                 newSubstitutions
                                 valueAndFunctionDeclarationsCondensed
@@ -9225,7 +9225,7 @@ valueAndFunctionDeclarationsApplySubstitutions declarationTypes substitutionsToA
                                                 Err error
 
                                             Ok substitutionsAfterSubstitution ->
-                                                valueAndFunctionDeclarationsApplySubstitutions
+                                                valueAndFunctionDeclarationsApplyVariableSubstitutions
                                                     declarationTypes
                                                     substitutionsAfterSubstitution
                                                     valueAndFunctionDeclarationsSubstituted.declarations
