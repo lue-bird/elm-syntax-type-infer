@@ -13621,24 +13621,28 @@ substitutionsVariableToTypeApplyOverItself :
                 (TypeNotVariable TypeVariableFromContext)
             )
 substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
-    -- TODO optimize by instead updating existing variableToTypeInitial
-    -- and skipping when repllacement type does not contain
-    variableToTypeInitial
-        |> fastDictFoldlWhileOkFrom
-            FastDict.empty
-            (\variable replacementTypeNotVariable soFar ->
-                Result.map
-                    (\replacementTypeSubstituted ->
-                        soFar
-                            |> FastDict.insert variable
-                                replacementTypeSubstituted
-                    )
-                    (replacementTypeNotVariable
-                        |> typeNotVariableFullyApplyVariableToTypeSubstitutions
-                            context
-                            variableToTypeInitial
-                    )
-            )
+    if (variableToTypeInitial |> FastDict.size) <= 1 then
+        Ok variableToTypeInitial
+
+    else
+        -- TODO optimize by instead updating existing variableToTypeInitial
+        -- and skipping when repllacement type does not contain
+        variableToTypeInitial
+            |> fastDictFoldlWhileOkFrom
+                FastDict.empty
+                (\variable replacementTypeNotVariable soFar ->
+                    Result.map
+                        (\replacementTypeSubstituted ->
+                            soFar
+                                |> FastDict.insert variable
+                                    replacementTypeSubstituted
+                        )
+                        (replacementTypeNotVariable
+                            |> typeNotVariableFullyApplyVariableToTypeSubstitutions
+                                context
+                                variableToTypeInitial
+                        )
+                )
 
 
 typeNotVariableFullyApplyVariableToTypeSubstitutions :
