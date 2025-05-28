@@ -1,20 +1,15 @@
-module DictByTypeVariableFromContextInternal exposing (DictByTypeVariableFromContext(..), InnerDictByTypeVariableFromContext(..), NColor(..), VisitQueue, fromSortedList, unconsBiggest, unconsBiggestWhileDroppingGT)
+module DictByTypeVariableFromContextInternal exposing (DictByTypeVariableFromContext(..), InnerDictByTypeVariableFromContext(..), VisitQueue, fromSortedList, unconsBiggest, unconsBiggestWhileDroppingGT)
 
 import ListWithLength exposing (ListWithLength)
 import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
 
--- The color of a node. Leaves are considered Black.
-
-
-type NColor
-    = Red
-    | Black
+-- The color of a node. Leaves are considered False.
 
 
 type InnerDictByTypeVariableFromContext v
-    = InnerNode NColor TypeVariableFromContext v (InnerDictByTypeVariableFromContext v) (InnerDictByTypeVariableFromContext v)
+    = InnerNode {- True = Red, False = Black -} Bool TypeVariableFromContext v (InnerDictByTypeVariableFromContext v) (InnerDictByTypeVariableFromContext v)
     | Leaf
 
 
@@ -37,45 +32,39 @@ fromSortedList dacc =
         redLayer : Int
         redLayer =
             floor (logBase 2 (toFloat len))
-
-        go : Int -> Int -> Int -> List ( TypeVariableFromContext, v ) -> ( InnerDictByTypeVariableFromContext v, List ( TypeVariableFromContext, v ) )
-        go layer fromIncluded toExcluded acc =
-            if fromIncluded >= toExcluded then
-                ( Leaf, acc )
-
-            else
-                let
-                    mid : Int
-                    mid =
-                        fromIncluded + (toExcluded - fromIncluded) // 2
-
-                    ( lchild, accAfterLeft ) =
-                        go (layer + 1) fromIncluded mid acc
-                in
-                case accAfterLeft of
-                    [] ->
-                        ( Leaf, acc )
-
-                    ( k, v ) :: tail ->
-                        let
-                            ( rchild, accAfterRight ) =
-                                go (layer + 1) (mid + 1) toExcluded tail
-
-                            color : NColor
-                            color =
-                                if layer > 0 && (layer - redLayer == 0) then
-                                    Red
-
-                                else
-                                    Black
-                        in
-                        ( InnerNode color k v lchild rchild
-                        , accAfterRight
-                        )
     in
-    go 0 0 len (ListWithLength.toList dacc)
+    fromSortedListHelp redLayer 0 0 len (ListWithLength.toList dacc)
         |> Tuple.first
         |> DictByTypeVariableFromContext len
+
+
+fromSortedListHelp : Int -> Int -> Int -> Int -> List ( TypeVariableFromContext, v ) -> ( InnerDictByTypeVariableFromContext v, List ( TypeVariableFromContext, v ) )
+fromSortedListHelp redLayer layer fromIncluded toExcluded acc =
+    -- IGNORE TCO
+    if fromIncluded >= toExcluded then
+        ( Leaf, acc )
+
+    else
+        let
+            mid : Int
+            mid =
+                fromIncluded + (toExcluded - fromIncluded) // 2
+
+            ( lchild, accAfterLeft ) =
+                fromSortedListHelp redLayer (layer + 1) fromIncluded mid acc
+        in
+        case accAfterLeft of
+            [] ->
+                ( Leaf, acc )
+
+            ( k, v ) :: tail ->
+                let
+                    ( rchild, accAfterRight ) =
+                        fromSortedListHelp redLayer (layer + 1) (mid + 1) toExcluded tail
+                in
+                ( InnerNode (layer > 0 && (layer - redLayer == 0)) k v lchild rchild
+                , accAfterRight
+                )
 
 
 {-| This is a list of nodes that are going to be visited.

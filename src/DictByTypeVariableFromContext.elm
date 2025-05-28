@@ -8,7 +8,7 @@ module DictByTypeVariableFromContext exposing
     , map, foldl, foldr, filter, partition
     , union, intersect, diff, merge
     , toCoreDict, fromCoreDict
-    , Step(..), stoppableFoldl, stoppableFoldr, restructure
+    , restructure
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
@@ -60,7 +60,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Advanced functions
 
-@docs Step, stoppableFoldl, stoppableFoldr, restructure
+@docs restructure
 
 -}
 
@@ -150,7 +150,7 @@ getInner targetKey dict =
 
 {-| Determine if a key is in a dictionary.
 -}
-member : TypeVariableFromContext -> DictByTypeVariableFromContext v -> Bool
+member : TypeVariableFromContext -> DictByTypeVariableFromContext v_ -> Bool
 member key dict =
     case get key dict of
         Just _ ->
@@ -162,7 +162,7 @@ member key dict =
 
 {-| Determine the number of key-value pairs in the dictionary.
 -}
-size : DictByTypeVariableFromContext v -> Int
+size : DictByTypeVariableFromContext v_ -> Int
 size (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext sz _) =
     sz
 
@@ -171,31 +171,34 @@ size (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext sz _) 
 -}
 equals : DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v -> Bool
 equals (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext lsz lRoot) (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext rsz rRoot) =
-    let
-        go : Maybe ( TypeVariableFromContext, v, DictByTypeVariableFromContextInternal.VisitQueue v ) -> Maybe ( TypeVariableFromContext, v, DictByTypeVariableFromContextInternal.VisitQueue v ) -> Bool
-        go lList rList =
-            case lList of
-                Nothing ->
-                    case rList of
-                        Nothing ->
-                            True
-
-                        Just _ ->
-                            False
-
-                Just ( lk, lv, lRest ) ->
-                    case rList of
-                        Nothing ->
-                            False
-
-                        Just ( rk, rv, rRest ) ->
-                            TypeVariableFromContext.equals lk rk
-                                && (lv == rv)
-                                && go (DictByTypeVariableFromContextInternal.unconsBiggest lRest) (DictByTypeVariableFromContextInternal.unconsBiggest rRest)
-    in
     (lsz - rsz == 0)
-        && go (DictByTypeVariableFromContextInternal.unconsBiggest [ lRoot ])
+        && equalsHelp (DictByTypeVariableFromContextInternal.unconsBiggest [ lRoot ])
             (DictByTypeVariableFromContextInternal.unconsBiggest [ rRoot ])
+
+
+equalsHelp : Maybe ( TypeVariableFromContext, v, DictByTypeVariableFromContextInternal.VisitQueue v ) -> Maybe ( TypeVariableFromContext, v, DictByTypeVariableFromContextInternal.VisitQueue v ) -> Bool
+equalsHelp lList rList =
+    case lList of
+        Nothing ->
+            case rList of
+                Nothing ->
+                    True
+
+                Just _ ->
+                    False
+
+        Just ( lk, lv, lRest ) ->
+            case rList of
+                Nothing ->
+                    False
+
+                Just ( rk, rv, rRest ) ->
+                    -- for TCO
+                    if TypeVariableFromContext.equals lk rk && (lv == rv) then
+                        equalsHelp (DictByTypeVariableFromContextInternal.unconsBiggest lRest) (DictByTypeVariableFromContextInternal.unconsBiggest rRest)
+
+                    else
+                        False
 
 
 {-| Gets the smallest key in the dictionary.
@@ -211,7 +214,7 @@ equals (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext lsz 
     --> Nothing
 
 -}
-getMinKey : DictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMinKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMinKey (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
     let
         go : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
@@ -242,7 +245,7 @@ getMinKey (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _
     --> Nothing
 
 -}
-getMaxKey : DictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMaxKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMaxKey (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
     let
         go : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
@@ -374,7 +377,7 @@ popMax dict =
     --> True
 
 -}
-isEmpty : DictByTypeVariableFromContext v -> Bool
+isEmpty : DictByTypeVariableFromContext v_ -> Bool
 isEmpty (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
@@ -415,10 +418,10 @@ insertNoReplace key value (DictByTypeVariableFromContextInternal.DictByTypeVaria
 
 insertInner : TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 insertInner key value dict =
-    -- Root node is always Black
+    -- Root node is always False
     case insertHelp key value dict of
-        ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red k v l r, isNew ) ->
-            ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black k v l r, isNew )
+        ( DictByTypeVariableFromContextInternal.InnerNode True k v l r, isNew ) ->
+            ( DictByTypeVariableFromContextInternal.InnerNode False k v l r, isNew )
 
         x ->
             x
@@ -426,10 +429,10 @@ insertInner key value dict =
 
 insertInnerNoReplace : TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 insertInnerNoReplace key value dict =
-    -- Root node is always Black
+    -- Root node is always False
     case insertHelpNoReplace key value dict of
-        ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red k v l r, isNew ) ->
-            ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black k v l r, isNew )
+        ( DictByTypeVariableFromContextInternal.InnerNode True k v l r, isNew ) ->
+            ( DictByTypeVariableFromContextInternal.InnerNode False k v l r, isNew )
 
         x ->
             x
@@ -437,11 +440,12 @@ insertInnerNoReplace key value dict =
 
 insertHelp : TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 insertHelp key value dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
             -- New nodes are always red. If it violates the rules, it will be fixed
             -- when balancing.
-            ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf, True )
+            ( DictByTypeVariableFromContextInternal.InnerNode True key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf, True )
 
         DictByTypeVariableFromContextInternal.InnerNode nColor nKey nValue nLeft nRight ->
             case TypeVariableFromContext.compare key nKey of
@@ -465,11 +469,12 @@ insertHelp key value dict =
 
 insertHelpNoReplace : TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 insertHelpNoReplace key value dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
             -- New nodes are always red. If it violates the rules, it will be fixed
             -- when balancing.
-            ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf, True )
+            ( DictByTypeVariableFromContextInternal.InnerNode True key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf, True )
 
         DictByTypeVariableFromContextInternal.InnerNode nColor nKey nValue nLeft nRight ->
             case TypeVariableFromContext.compare key nKey of
@@ -491,31 +496,31 @@ insertHelpNoReplace key value dict =
                     ( balance nColor nKey nValue nLeft newRight, isNew )
 
 
-balance : DictByTypeVariableFromContextInternal.NColor -> TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
+balance : Bool -> TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
 balance color key value left right =
     case right of
-        DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rK rV rLeft rRight ->
+        DictByTypeVariableFromContextInternal.InnerNode True rK rV rLeft rRight ->
             case left of
-                DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight ->
+                DictByTypeVariableFromContextInternal.InnerNode True lK lV lLeft lRight ->
                     DictByTypeVariableFromContextInternal.InnerNode
-                        DictByTypeVariableFromContextInternal.Red
+                        True
                         key
                         value
-                        (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black lK lV lLeft lRight)
-                        (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black rK rV rLeft rRight)
+                        (DictByTypeVariableFromContextInternal.InnerNode False lK lV lLeft lRight)
+                        (DictByTypeVariableFromContextInternal.InnerNode False rK rV rLeft rRight)
 
                 _ ->
-                    DictByTypeVariableFromContextInternal.InnerNode color rK rV (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red key value left rLeft) rRight
+                    DictByTypeVariableFromContextInternal.InnerNode color rK rV (DictByTypeVariableFromContextInternal.InnerNode True key value left rLeft) rRight
 
         _ ->
             case left of
-                DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red llK llV llLeft llRight) lRight ->
+                DictByTypeVariableFromContextInternal.InnerNode True lK lV (DictByTypeVariableFromContextInternal.InnerNode True llK llV llLeft llRight) lRight ->
                     DictByTypeVariableFromContextInternal.InnerNode
-                        DictByTypeVariableFromContextInternal.Red
+                        True
                         lK
                         lV
-                        (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black llK llV llLeft llRight)
-                        (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black key value lRight right)
+                        (DictByTypeVariableFromContextInternal.InnerNode False llK llV llLeft llRight)
+                        (DictByTypeVariableFromContextInternal.InnerNode False key value lRight right)
 
                 _ ->
                     DictByTypeVariableFromContextInternal.InnerNode color key value left right
@@ -539,10 +544,10 @@ remove key ((DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext
 
 removeInner : TypeVariableFromContext -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 removeInner key dict =
-    -- Root node is always Black
+    -- Root node is always False
     case removeHelp key dict of
-        ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red k v l r, wasMember ) ->
-            ( DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black k v l r, wasMember )
+        ( DictByTypeVariableFromContextInternal.InnerNode True k v l r, wasMember ) ->
+            ( DictByTypeVariableFromContextInternal.InnerNode False k v l r, wasMember )
 
         x ->
             x
@@ -556,6 +561,7 @@ up again.
 -}
 removeHelp : TypeVariableFromContext -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> ( DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, Bool )
 removeHelp targetKey dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
             ( DictByTypeVariableFromContextInternal.Leaf, False )
@@ -563,9 +569,9 @@ removeHelp targetKey dict =
         DictByTypeVariableFromContextInternal.InnerNode color key value left right ->
             if TypeVariableFromContext.lessThan targetKey key then
                 case left of
-                    DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black _ _ lLeft _ ->
+                    DictByTypeVariableFromContextInternal.InnerNode False _ _ lLeft _ ->
                         case lLeft of
-                            DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red _ _ _ _ ->
+                            DictByTypeVariableFromContextInternal.InnerNode True _ _ _ _ ->
                                 let
                                     ( newLeft, wasMember ) =
                                         removeHelp targetKey left
@@ -574,7 +580,7 @@ removeHelp targetKey dict =
 
                             _ ->
                                 let
-                                    res : { color : DictByTypeVariableFromContextInternal.NColor, k : TypeVariableFromContext, v : v, left : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, right : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v }
+                                    res : { color : Bool, k : TypeVariableFromContext, v : v, left : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, right : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v }
                                     res =
                                         moveRedLeft color key value left right
 
@@ -594,23 +600,23 @@ removeHelp targetKey dict =
                 removeHelpEQGT targetKey (removeHelpPrepEQGT dict color key value left right)
 
 
-removeHelpPrepEQGT : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.NColor -> TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
+removeHelpPrepEQGT : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> Bool -> TypeVariableFromContext -> v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
 removeHelpPrepEQGT dict color key value left right =
     case left of
-        DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight ->
+        DictByTypeVariableFromContextInternal.InnerNode True lK lV lLeft lRight ->
             DictByTypeVariableFromContextInternal.InnerNode
                 color
                 lK
                 lV
                 lLeft
-                (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red key value lRight right)
+                (DictByTypeVariableFromContextInternal.InnerNode True key value lRight right)
 
-        DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black lK lV lLeft lRight ->
+        DictByTypeVariableFromContextInternal.InnerNode False lK lV lLeft lRight ->
             case right of
-                DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black rK rV ((DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black _ _ _ _) as rLeft) rRight ->
+                DictByTypeVariableFromContextInternal.InnerNode False rK rV ((DictByTypeVariableFromContextInternal.InnerNode False _ _ _ _) as rLeft) rRight ->
                     moveRedRight key value lK lV lLeft lRight rK rV rLeft rRight
 
-                DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black rK rV DictByTypeVariableFromContextInternal.Leaf rRight ->
+                DictByTypeVariableFromContextInternal.InnerNode False rK rV DictByTypeVariableFromContextInternal.Leaf rRight ->
                     moveRedRight key value lK lV lLeft lRight rK rV DictByTypeVariableFromContextInternal.Leaf rRight
 
                 _ ->
@@ -648,37 +654,37 @@ removeHelpEQGT targetKey dict =
 
 removeMin : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
 removeMin dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.InnerNode color key value ((DictByTypeVariableFromContextInternal.InnerNode lColor _ _ lLeft _) as left) right ->
-            case lColor of
-                DictByTypeVariableFromContextInternal.Black ->
-                    case lLeft of
-                        DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red _ _ _ _ ->
-                            DictByTypeVariableFromContextInternal.InnerNode color key value (removeMin left) right
+            if lColor then
+                DictByTypeVariableFromContextInternal.InnerNode color key value (removeMin left) right
 
-                        _ ->
-                            let
-                                res : { color : DictByTypeVariableFromContextInternal.NColor, k : TypeVariableFromContext, v : v, left : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, right : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v }
-                                res =
-                                    moveRedLeft color key value left right
-                            in
-                            balance res.color res.k res.v (removeMin res.left) res.right
+            else
+                case lLeft of
+                    DictByTypeVariableFromContextInternal.InnerNode True _ _ _ _ ->
+                        DictByTypeVariableFromContextInternal.InnerNode color key value (removeMin left) right
 
-                _ ->
-                    DictByTypeVariableFromContextInternal.InnerNode color key value (removeMin left) right
+                    _ ->
+                        let
+                            res : { color : Bool, k : TypeVariableFromContext, v : v, left : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v, right : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v }
+                            res =
+                                moveRedLeft color key value left right
+                        in
+                        balance res.color res.k res.v (removeMin res.left) res.right
 
         _ ->
             DictByTypeVariableFromContextInternal.Leaf
 
 
 moveRedLeft :
-    DictByTypeVariableFromContextInternal.NColor
+    Bool
     -> TypeVariableFromContext
     -> v
     -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
     -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
     ->
-        { color : DictByTypeVariableFromContextInternal.NColor
+        { color : Bool
         , k : TypeVariableFromContext
         , v : v
         , left : DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
@@ -688,36 +694,26 @@ moveRedLeft clr k v left right =
     case left of
         DictByTypeVariableFromContextInternal.InnerNode _ lK lV lLeft lRight ->
             case right of
-                DictByTypeVariableFromContextInternal.InnerNode _ rK rV (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rlK rlV rlL rlR) rRight ->
-                    { color = DictByTypeVariableFromContextInternal.Red
+                DictByTypeVariableFromContextInternal.InnerNode _ rK rV (DictByTypeVariableFromContextInternal.InnerNode True rlK rlV rlL rlR) rRight ->
+                    { color = True
                     , k = rlK
                     , v = rlV
-                    , left = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black k v (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight) rlL
-                    , right = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black rK rV rlR rRight
+                    , left = DictByTypeVariableFromContextInternal.InnerNode False k v (DictByTypeVariableFromContextInternal.InnerNode True lK lV lLeft lRight) rlL
+                    , right = DictByTypeVariableFromContextInternal.InnerNode False rK rV rlR rRight
                     }
 
                 DictByTypeVariableFromContextInternal.InnerNode _ rK rV rLeft rRight ->
-                    case clr of
-                        DictByTypeVariableFromContextInternal.Black ->
-                            { color = DictByTypeVariableFromContextInternal.Black
-                            , k = k
-                            , v = v
-                            , left = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight
-                            , right = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rK rV rLeft rRight
-                            }
-
-                        DictByTypeVariableFromContextInternal.Red ->
-                            { color = DictByTypeVariableFromContextInternal.Black
-                            , k = k
-                            , v = v
-                            , left = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight
-                            , right = DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rK rV rLeft rRight
-                            }
+                    { color = False
+                    , k = k
+                    , v = v
+                    , left = DictByTypeVariableFromContextInternal.InnerNode True lK lV lLeft lRight
+                    , right = DictByTypeVariableFromContextInternal.InnerNode True rK rV rLeft rRight
+                    }
 
                 _ ->
                     { color = clr, k = k, v = v, left = left, right = right }
 
-        _ ->
+        DictByTypeVariableFromContextInternal.Leaf ->
             { color = clr, k = k, v = v, left = left, right = right }
 
 
@@ -735,21 +731,21 @@ moveRedRight :
     -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
 moveRedRight key value lK lV lLeft lRight rK rV rLeft rRight =
     case lLeft of
-        DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red llK llV llLeft llRight ->
+        DictByTypeVariableFromContextInternal.InnerNode True llK llV llLeft llRight ->
             DictByTypeVariableFromContextInternal.InnerNode
-                DictByTypeVariableFromContextInternal.Red
+                True
                 lK
                 lV
-                (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black llK llV llLeft llRight)
-                (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black key value lRight (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rK rV rLeft rRight))
+                (DictByTypeVariableFromContextInternal.InnerNode False llK llV llLeft llRight)
+                (DictByTypeVariableFromContextInternal.InnerNode False key value lRight (DictByTypeVariableFromContextInternal.InnerNode True rK rV rLeft rRight))
 
         _ ->
             DictByTypeVariableFromContextInternal.InnerNode
-                DictByTypeVariableFromContextInternal.Black
+                False
                 key
                 value
-                (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red lK lV lLeft lRight)
-                (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Red rK rV rLeft rRight)
+                (DictByTypeVariableFromContextInternal.InnerNode True lK lV lLeft lRight)
+                (DictByTypeVariableFromContextInternal.InnerNode True rK rV rLeft rRight)
 
 
 {-| Update the value of a dictionary for a specific key with a given function.
@@ -768,8 +764,8 @@ update targetKey alter dictionary =
 -}
 singleton : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v
 singleton key value =
-    -- Root node is always Black
-    DictByTypeVariableFromContext 1 (DictByTypeVariableFromContextInternal.InnerNode DictByTypeVariableFromContextInternal.Black key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf)
+    -- Root node is always False
+    DictByTypeVariableFromContext 1 (DictByTypeVariableFromContextInternal.InnerNode False key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf)
 
 
 
@@ -841,7 +837,7 @@ intersectFromZipper dacc lleft rleft =
 
 {-| Keep a key-value pair when its key does not appear in the second dictionary.
 -}
-diff : DictByTypeVariableFromContext a -> DictByTypeVariableFromContext b -> DictByTypeVariableFromContext a
+diff : DictByTypeVariableFromContext a -> DictByTypeVariableFromContext b_ -> DictByTypeVariableFromContext a
 diff ((DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext sz1 _) as t1) t2 =
     if sz1 == 0 then
         empty
@@ -906,6 +902,7 @@ map func (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext sz
 
 mapInner : (TypeVariableFromContext -> a -> b) -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext a -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext b
 mapInner func dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
             DictByTypeVariableFromContextInternal.Leaf
@@ -1044,7 +1041,7 @@ partition isGood dict =
     --> [ 0, 1 ]
 
 -}
-keys : DictByTypeVariableFromContext v -> List TypeVariableFromContext
+keys : DictByTypeVariableFromContext v_ -> List TypeVariableFromContext
 keys dict =
     foldr (\key _ keyList -> key :: keyList) [] dict
 
@@ -1135,109 +1132,6 @@ fromCoreDict dict =
 -- ADVANCED
 
 
-{-| A custom type used for stoppable folds.
--}
-type Step a
-    = Continue a
-    | Stop a
-
-
-{-| A foldl that can stop early instead of traversing the whole dictionary.
-
-    stoppableFoldl
-        (\k v acc ->
-            if k >= 10 then
-                Stop acc
-            else
-                Continue (v + acc)
-        )
-        0
-        (fromList <| List.indexedMap Tuple.pair <| List.range 1 10000)
-    --> 55
-
--}
-stoppableFoldl : (TypeVariableFromContext -> v -> acc -> Step acc) -> acc -> DictByTypeVariableFromContext v -> acc
-stoppableFoldl func acc (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
-    case stoppableFoldlInner func acc dict of
-        Continue res ->
-            res
-
-        Stop res ->
-            res
-
-
-stoppableFoldlInner :
-    (TypeVariableFromContext -> v -> acc -> Step acc)
-    -> acc
-    -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
-    -> Step acc
-stoppableFoldlInner func acc dict =
-    case dict of
-        DictByTypeVariableFromContextInternal.Leaf ->
-            Continue acc
-
-        DictByTypeVariableFromContextInternal.InnerNode _ key value left right ->
-            case stoppableFoldlInner func acc left of
-                Continue lacc ->
-                    case func key value lacc of
-                        Continue vacc ->
-                            stoppableFoldlInner func vacc right
-
-                        Stop vacc ->
-                            Stop vacc
-
-                Stop lacc ->
-                    Stop lacc
-
-
-{-| A foldr that can stop early instead of traversing the whole dictionary.
-
-    stoppableFoldr
-        (\k v acc ->
-            if k <= 9990 then
-                Stop acc
-            else
-                Continue (v + acc)
-        )
-        0
-        (fromList <| List.indexedMap Tuple.pair <| List.range 1 10000)
-    --> 89964
-
--}
-stoppableFoldr : (TypeVariableFromContext -> v -> acc -> Step acc) -> acc -> DictByTypeVariableFromContext v -> acc
-stoppableFoldr func acc (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
-    case stoppableFoldrInner func acc dict of
-        Continue res ->
-            res
-
-        Stop res ->
-            res
-
-
-stoppableFoldrInner :
-    (TypeVariableFromContext -> v -> acc -> Step acc)
-    -> acc
-    -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v
-    -> Step acc
-stoppableFoldrInner func acc dict =
-    case dict of
-        DictByTypeVariableFromContextInternal.Leaf ->
-            Continue acc
-
-        DictByTypeVariableFromContextInternal.InnerNode _ key value left right ->
-            case stoppableFoldrInner func acc right of
-                Continue racc ->
-                    case func key value racc of
-                        Continue vacc ->
-                            stoppableFoldrInner func vacc left
-
-                        Stop vacc ->
-                            Stop vacc
-
-                Stop lacc ->
-                    Stop lacc
-
-
 {-| This allows you to take advantage of the tree structure of the dictionary to do some operations more efficiently.
 
 Calling `left` will give the result of calling `restructure` on the left subtree (lower keys), `right` on the right one (higher keys).
@@ -1265,6 +1159,7 @@ restructureInner :
     -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext value
     -> acc
 restructureInner leafFunc nodeFunc dict =
+    -- IGNORE TCO
     case dict of
         DictByTypeVariableFromContextInternal.Leaf ->
             leafFunc
