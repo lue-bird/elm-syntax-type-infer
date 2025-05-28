@@ -118,7 +118,7 @@ unconsBiggestWhileDroppingGT compareKey queue =
                             Leaf ->
                                 Just ( key, value, childLT :: t )
 
-                            _ ->
+                            InnerNode _ _ _ _ _ ->
                                 unconsBiggestWhileDroppingGT compareKey (childGT :: InnerNode color key value childLT Leaf :: t)
 
                 Leaf ->

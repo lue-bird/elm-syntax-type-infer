@@ -36,7 +36,7 @@ type ListWithLength a
 
 {-| An empty list.
 -}
-empty : ListWithLength a
+empty : ListWithLength a_
 empty =
     ListWithLength 0 []
 
@@ -56,7 +56,7 @@ cons x (ListWithLength s xs) =
 This function is O(1).
 
 -}
-length : ListWithLength a -> Int
+length : ListWithLength a_ -> Int
 length (ListWithLength s _) =
     s
 
