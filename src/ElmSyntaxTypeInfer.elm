@@ -14540,11 +14540,12 @@ patternMapTypes typeChange pattern =
 
 equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    case set.variables |> FastDict.popMin of
+    -- TODO figure out why getMaxKey for example doesn't work. Makes no sense to me
+    case set.variables |> FastDict.getMinKey of
         Nothing ->
-            Err "implementation bug: equivalent variables set is empty"
+            Err "implementation bug: equivalent variable set is empty"
 
-        Just ( ( variable0, () ), _ ) ->
+        Just variable0 ->
             Ok
                 ( set.overarchingRangeAsComparable
                 , case set.constraint of
