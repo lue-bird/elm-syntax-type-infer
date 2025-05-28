@@ -5,9 +5,12 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
+- avoid record update in moduleDeclarationsToTypes
+- optimize typeVariablesFromContextToDisambiguationLookup by adding a regular set for tracking disambiguated variables
 - check if we can only substitute patterns when applying substitutions from unifying with uses, and leave the result pattern as is
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
+- lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
 - represent LocationAsComparable as row + startColumn * 2^24 to save memory
 
 #### 1.0.10 (unreleased)

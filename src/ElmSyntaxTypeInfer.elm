@@ -27,6 +27,7 @@ If you are interested in exposing helpers like `expressionMapType`,
 
 -}
 
+import DictByTypeVariableFromContext exposing (DictByTypeVariableFromContext)
 import Elm.Docs
 import Elm.Syntax.Declaration
 import Elm.Syntax.Exposing
@@ -39,6 +40,8 @@ import Elm.Syntax.Range
 import Elm.Syntax.TypeAnnotation
 import Elm.Type
 import FastDict
+import FastSet
+import TypeVariableFromContext
 
 
 {-| Known types of members in a module.
@@ -400,38 +403,34 @@ typeNotVariableMapVariables variableMap typeNotVariable =
                 }
 
 
-{-| because the FastSet module doesn't offer certain helpers
-that are highly valuable for performance which FastDict does have
-e.g. fast conversion between the two or restructure
--}
-type alias FastSetFast a =
-    FastDict.Dict a ()
+type alias TypeVariableFromContextSet =
+    DictByTypeVariableFromContext ()
 
 
 typeMapVariablesAndCollectResultingVariables :
-    (variable -> comparableChangedVariable)
-    -> Type variable
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> Type TypeVariableFromContext
     ->
-        { type_ : Type comparableChangedVariable
-        , containedVariables : FastSetFast comparableChangedVariable
+        { type_ : Type TypeVariableFromContext
+        , containedVariables : TypeVariableFromContextSet
         }
 typeMapVariablesAndCollectResultingVariables variableMap type_ =
     case type_ of
         TypeVariable variable ->
             let
-                variableMapped : comparableChangedVariable
+                variableMapped : TypeVariableFromContext
                 variableMapped =
                     variable |> variableMap
             in
             { type_ = TypeVariable variableMapped
-            , containedVariables = FastDict.singleton variableMapped ()
+            , containedVariables = DictByTypeVariableFromContext.singleton variableMapped ()
             }
 
         TypeNotVariable typeNotVariable ->
             let
                 typeNotVariableMapped :
-                    { type_ : TypeNotVariable comparableChangedVariable
-                    , containedVariables : FastSetFast comparableChangedVariable
+                    { type_ : TypeNotVariable TypeVariableFromContext
+                    , containedVariables : TypeVariableFromContextSet
                     }
                 typeNotVariableMapped =
                     typeNotVariable
@@ -443,21 +442,21 @@ typeMapVariablesAndCollectResultingVariables variableMap type_ =
 
 
 typeUnitContainedVariablesEmpty :
-    { type_ : TypeNotVariable comparableChangedVariable
-    , containedVariables : FastSetFast comparableChangedVariable
+    { type_ : TypeNotVariable TypeVariableFromContext
+    , containedVariables : TypeVariableFromContextSet
     }
 typeUnitContainedVariablesEmpty =
     { type_ = TypeUnit
-    , containedVariables = FastDict.empty
+    , containedVariables = DictByTypeVariableFromContext.empty
     }
 
 
 typeNotVariableMapVariablesAndCollectResultingVariables :
-    (variable -> comparableChangedVariable)
-    -> TypeNotVariable variable
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypeNotVariable TypeVariableFromContext
     ->
-        { type_ : TypeNotVariable comparableChangedVariable
-        , containedVariables : FastSetFast comparableChangedVariable
+        { type_ : TypeNotVariable TypeVariableFromContext
+        , containedVariables : TypeVariableFromContextSet
         }
 typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVariable =
     case typeNotVariable of
@@ -466,11 +465,11 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeFunction typeFunction ->
             let
-                inputMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                inputMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 inputMapped =
                     typeFunction.input |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                outputMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                outputMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 outputMapped =
                     typeFunction.output |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -480,18 +479,18 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     , output = outputMapped.type_
                     }
             , containedVariables =
-                FastDict.union
+                DictByTypeVariableFromContext.union
                     inputMapped.containedVariables
                     outputMapped.containedVariables
             }
 
         TypeTuple typeTuple ->
             let
-                part0Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part0Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 part0Mapped =
                     typeTuple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part1Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part1Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 part1Mapped =
                     typeTuple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -501,22 +500,22 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     , part1 = part1Mapped.type_
                     }
             , containedVariables =
-                FastDict.union
+                DictByTypeVariableFromContext.union
                     part0Mapped.containedVariables
                     part1Mapped.containedVariables
             }
 
         TypeTriple typeTriple ->
             let
-                part0Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part0Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 part0Mapped =
                     typeTriple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part1Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part1Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 part1Mapped =
                     typeTriple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part2Mapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                part2Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                 part2Mapped =
                     typeTriple.part2 |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -528,25 +527,25 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     }
             , containedVariables =
                 part0Mapped.containedVariables
-                    |> FastDict.union part1Mapped.containedVariables
-                    |> FastDict.union part2Mapped.containedVariables
+                    |> DictByTypeVariableFromContext.union part1Mapped.containedVariables
+                    |> DictByTypeVariableFromContext.union part2Mapped.containedVariables
             }
 
         TypeConstruct typeConstruct ->
             let
-                argumentsMapped : { types : List (Type comparableChangedVariable), containedVariables : FastSetFast comparableChangedVariable }
+                argumentsMapped : { types : List (Type TypeVariableFromContext), containedVariables : TypeVariableFromContextSet }
                 argumentsMapped =
                     typeConstruct.arguments
                         |> List.foldr
                             (\argument soFar ->
                                 let
-                                    argumentMapped : { type_ : Type comparableChangedVariable, containedVariables : FastSetFast comparableChangedVariable }
+                                    argumentMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
                                     argumentMapped =
                                         argument |> typeMapVariablesAndCollectResultingVariables variableMap
                                 in
                                 { types = argumentMapped.type_ :: soFar.types
                                 , containedVariables =
-                                    FastDict.union
+                                    DictByTypeVariableFromContext.union
                                         soFar.containedVariables
                                         argumentMapped.containedVariables
                                 }
@@ -564,7 +563,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeRecord typeRecordFields ->
             let
-                fieldsMapped : FastDict.Dict String (Type comparableChangedVariable)
+                fieldsMapped : FastDict.Dict String (Type TypeVariableFromContext)
                 fieldsMapped =
                     typeRecordFields
                         |> FastDict.map
@@ -577,20 +576,20 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                 fieldsMapped
                     |> FastDict.foldl
                         (\_ value soFar ->
-                            FastDict.union soFar
+                            DictByTypeVariableFromContext.union soFar
                                 (value |> typeContainedVariables)
                         )
-                        FastDict.empty
+                        DictByTypeVariableFromContext.empty
             }
 
         TypeRecordExtension typeRecordExtension ->
             let
-                recordVariableMapped : comparableChangedVariable
+                recordVariableMapped : TypeVariableFromContext
                 recordVariableMapped =
                     typeRecordExtension.recordVariable
                         |> variableMap
 
-                fieldsMapped : FastDict.Dict String (Type comparableChangedVariable)
+                fieldsMapped : FastDict.Dict String (Type TypeVariableFromContext)
                 fieldsMapped =
                     typeRecordExtension.fields
                         |> FastDict.map
@@ -607,97 +606,81 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                 fieldsMapped
                     |> FastDict.foldl
                         (\_ value soFar ->
-                            FastDict.union soFar
+                            DictByTypeVariableFromContext.union soFar
                                 (value |> typeContainedVariables)
                         )
-                        (FastDict.singleton recordVariableMapped ())
+                        (DictByTypeVariableFromContext.singleton recordVariableMapped ())
             }
 
 
 typedListEmptyContainedVariablesEmpty :
-    { types : List (Type comparableChangedVariable)
-    , containedVariables : FastSetFast comparableChangedVariable
+    { types : List (Type TypeVariableFromContext)
+    , containedVariables : TypeVariableFromContextSet
     }
 typedListEmptyContainedVariablesEmpty =
-    { types = [], containedVariables = FastDict.empty }
+    { types = []
+    , containedVariables = DictByTypeVariableFromContext.empty
+    }
 
 
 typeContainedVariables :
-    Type comparableTypeVariable
-    -> FastSetFast comparableTypeVariable
+    Type TypeVariableFromContext
+    -> TypeVariableFromContextSet
 typeContainedVariables type_ =
     case type_ of
         TypeVariable variable ->
-            FastDict.singleton variable ()
+            DictByTypeVariableFromContext.singleton variable ()
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableContainedVariables typeNotVariable
 
 
 typeNotVariableContainedVariables :
-    TypeNotVariable comparableTypeVariable
-    -> FastSetFast comparableTypeVariable
+    TypeNotVariable TypeVariableFromContext
+    -> TypeVariableFromContextSet
 typeNotVariableContainedVariables typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         TypeFunction typeFunction ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (typeFunction.input |> typeContainedVariables)
                 (typeFunction.output |> typeContainedVariables)
 
         TypeTuple typeTuple ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (typeTuple.part0 |> typeContainedVariables)
                 (typeTuple.part1 |> typeContainedVariables)
 
         TypeTriple typeTriple ->
             (typeTriple.part0 |> typeContainedVariables)
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (typeTriple.part1 |> typeContainedVariables)
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (typeTriple.part2 |> typeContainedVariables)
 
         TypeConstruct typeConstruct ->
             typeConstruct.arguments
-                |> listMapToFastSetFastsAndUnify typeContainedVariables
+                |> listMapToTypeVariableFromContextSetsAndUnify typeContainedVariables
 
         TypeRecord typeRecordFields ->
             typeRecordFields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastDict.union soFar
+                        DictByTypeVariableFromContext.union soFar
                             (value |> typeContainedVariables)
                     )
-                    FastDict.empty
+                    DictByTypeVariableFromContext.empty
 
         TypeRecordExtension typeRecordExtension ->
             typeRecordExtension.fields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        FastDict.union soFar
+                        DictByTypeVariableFromContext.union soFar
                             (value |> typeContainedVariables)
                     )
-                    (FastDict.singleton typeRecordExtension.recordVariable ())
-
-
-typeVariableFromContextEquals : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-typeVariableFromContextEquals ( aRangeAsComparable, aName ) ( bRangeAsComparable, bName ) =
-    (aName == bName)
-        && rangeAsComparableEquals aRangeAsComparable bRangeAsComparable
-
-
-rangeAsComparableEquals : RangeAsComparable -> RangeAsComparable -> Bool
-rangeAsComparableEquals ( aStart, aEnd ) ( bStart, bEnd ) =
-    locationAsComparableEquals aStart bStart
-        && locationAsComparableEquals aEnd bEnd
-
-
-locationAsComparableEquals : LocationAsComparable -> LocationAsComparable -> Bool
-locationAsComparableEquals ( aRow, aColumn ) ( bRow, bColumn ) =
-    (aRow - bRow == 0)
-        && (aColumn - bColumn == 0)
+                    (DictByTypeVariableFromContext.singleton typeRecordExtension.recordVariable ())
 
 
 typeContainsVariable :
@@ -707,7 +690,7 @@ typeContainsVariable :
 typeContainsVariable variableToCheckFor type_ =
     case type_ of
         TypeVariable variable ->
-            typeVariableFromContextEquals variableToCheckFor variable
+            TypeVariableFromContext.equals variableToCheckFor variable
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableContainsVariable variableToCheckFor typeNotVariable
@@ -750,7 +733,7 @@ typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
                     )
 
         TypeRecordExtension typeRecordExtension ->
-            typeVariableFromContextEquals
+            TypeVariableFromContext.equals
                 typeRecordExtension.recordVariable
                 variableToCheckFor
                 || (typeRecordExtension.fields
@@ -1491,7 +1474,7 @@ typeSubstituteVariable context replacement type_ =
                     type_
                         |> typeMapVariables
                             (\variable ->
-                                if typeVariableFromContextEquals variable replacement.variable then
+                                if TypeVariableFromContext.equals variable replacement.variable then
                                     argumentVariable
 
                                 else
@@ -1503,7 +1486,7 @@ typeSubstituteVariable context replacement type_ =
         TypeNotVariable argumentNotVariable ->
             type_
                 |> typeSubstituteVariableByNotVariable context
-                    (FastDict.singleton replacement.variable argumentNotVariable)
+                    (DictByTypeVariableFromContext.singleton replacement.variable argumentNotVariable)
                 |> Result.map
                     (\substituted ->
                         { type_ = substituted.type_
@@ -1550,13 +1533,13 @@ typeApplyVariableSubstitutions context substitutions originalType =
                                     |> typeMapVariables
                                         (\originalVariable ->
                                             variableToCondensedLookup
-                                                |> FastDict.get originalVariable
+                                                |> DictByTypeVariableFromContext.get originalVariable
                                                 |> Maybe.withDefault originalVariable
                                         )
                                 )
 
         [] ->
-            if substitutions.variableToType |> FastDict.isEmpty then
+            if substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty then
                 Ok originalType
 
             else
@@ -1591,8 +1574,7 @@ typeSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     -> Type TypeVariableFromContext
     ->
@@ -1606,7 +1588,7 @@ typeSubstituteVariableByNotVariable context replacement type_ =
     -- IGNORE TCO
     case type_ of
         TypeVariable typeVariable ->
-            case replacement |> FastDict.get typeVariable of
+            case replacement |> DictByTypeVariableFromContext.get typeVariable of
                 Nothing ->
                     Ok
                         { unchanged = True
@@ -1818,8 +1800,7 @@ typeNotVariableSubstituteVariableByNotVariable :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     -> TypeNotVariable TypeVariableFromContext
     ->
@@ -2036,7 +2017,7 @@ typeNotVariableSubstituteVariableByNotVariable context replacement typeNotVariab
         TypeRecordExtension typeRecordExtension ->
             Result.andThen
                 (\fieldsSubstituted ->
-                    case replacement |> FastDict.get typeRecordExtension.recordVariable of
+                    case replacement |> DictByTypeVariableFromContext.get typeRecordExtension.recordVariable of
                         Nothing ->
                             if fieldsSubstituted.allUnchanged then
                                 Ok
@@ -2717,7 +2698,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                     let
                         substitutionsToApplyToOriginAliasType :
                             { parameterToVariable : FastDict.Dict String TypeVariableFromContext
-                            , parameterToTypeNotVariable : FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+                            , parameterToTypeNotVariable : DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
                             }
                         substitutionsToApplyToOriginAliasType =
                             listFoldl2From
@@ -2737,7 +2718,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                             { parameterToVariable = soFar.parameterToVariable
                                             , parameterToTypeNotVariable =
                                                 soFar.parameterToTypeNotVariable
-                                                    |> FastDict.insert
+                                                    |> DictByTypeVariableFromContext.insert
                                                         ( rangeAsComparableEmpty, parameterName )
                                                         argumentTypeNotVariable
                                             }
@@ -2761,7 +2742,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                     in
                     if
                         substitutionsToApplyToOriginAliasType.parameterToTypeNotVariable
-                            |> FastDict.isEmpty
+                            |> DictByTypeVariableFromContext.isEmpty
                     then
                         Just aliasTypeWithVariableArgumentsFilledIn
 
@@ -2780,11 +2761,11 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
 
 parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty :
     { parameterToVariable : FastDict.Dict String TypeVariableFromContext
-    , parameterToTypeNotVariable : FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    , parameterToTypeNotVariable : DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
     }
 parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty =
     { parameterToVariable = FastDict.empty
-    , parameterToTypeNotVariable = FastDict.empty
+    , parameterToTypeNotVariable = DictByTypeVariableFromContext.empty
     }
 
 
@@ -2804,8 +2785,7 @@ type alias VariableSubstitutions =
     { equivalentVariables :
         List EquivalentVariableSet
     , variableToType :
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     }
 
@@ -2813,14 +2793,14 @@ type alias VariableSubstitutions =
 type alias EquivalentVariableSet =
     { constraint : Maybe TypeVariableConstraint
     , overarchingRangeAsComparable : RangeAsComparable
-    , variables : FastSetFast TypeVariableFromContext
+    , variables : TypeVariableFromContextSet
     }
 
 
 variableSubstitutionsNone : VariableSubstitutions
 variableSubstitutionsNone =
     { equivalentVariables = []
-    , variableToType = FastDict.empty
+    , variableToType = DictByTypeVariableFromContext.empty
     }
 
 
@@ -2833,7 +2813,7 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge context a b =
     -- IGNORE TCO
-    if a.variableToType |> FastDict.isEmpty then
+    if a.variableToType |> DictByTypeVariableFromContext.isEmpty then
         case a.equivalentVariables of
             [] ->
                 Ok b
@@ -2850,7 +2830,7 @@ variableSubstitutionsMerge context a b =
                         b.equivalentVariables
                     )
 
-    else if b.variableToType |> FastDict.isEmpty then
+    else if b.variableToType |> DictByTypeVariableFromContext.isEmpty then
         case b.equivalentVariables of
             [] ->
                 Ok a
@@ -2868,13 +2848,13 @@ variableSubstitutionsMerge context a b =
                     )
 
     else
-        FastDict.merge
+        DictByTypeVariableFromContext.merge
             (\variable aType soFarOrError ->
                 Result.map
                     (\soFar ->
                         { variableToType =
                             soFar.variableToType
-                                |> FastDict.insert variable aType
+                                |> DictByTypeVariableFromContext.insert variable aType
                         , equivalentVariables =
                             soFar.equivalentVariables
                         }
@@ -2908,7 +2888,7 @@ variableSubstitutionsMerge context a b =
                                                     { equivalentVariables = substitutionsWithAB.equivalentVariables
                                                     , variableToType =
                                                         substitutionsWithAB.variableToType
-                                                            |> FastDict.insert variable abUnifiedNotVariable
+                                                            |> DictByTypeVariableFromContext.insert variable abUnifiedNotVariable
                                                     }
                                     )
                                     (variableSubstitutionsMerge context
@@ -2925,7 +2905,7 @@ variableSubstitutionsMerge context a b =
                     (\soFar ->
                         { variableToType =
                             soFar.variableToType
-                                |> FastDict.insert variable bType
+                                |> DictByTypeVariableFromContext.insert variable bType
                         , equivalentVariables =
                             soFar.equivalentVariables
                         }
@@ -2936,7 +2916,7 @@ variableSubstitutionsMerge context a b =
             b.variableToType
             (Result.map
                 (\abEquivalentVariables ->
-                    { variableToType = FastDict.empty
+                    { variableToType = DictByTypeVariableFromContext.empty
                     , equivalentVariables = abEquivalentVariables
                     }
                 )
@@ -2995,7 +2975,7 @@ equivalentVariablesMergeWithSetOf2 :
     -> List EquivalentVariableSet
     -> Result String (List EquivalentVariableSet)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
-    if typeVariableFromContextEquals aEquivalentVariable bEquivalentVariable then
+    if TypeVariableFromContext.equals aEquivalentVariable bEquivalentVariable then
         Ok equivalentVariables
 
     else
@@ -3026,8 +3006,8 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
             Result.map
                 (\abConstraint ->
                     { variables =
-                        FastDict.singleton aEquivalentVariable ()
-                            |> FastDict.insert bEquivalentVariable ()
+                        DictByTypeVariableFromContext.singleton aEquivalentVariable ()
+                            |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
                     , constraint = abConstraint
                     , overarchingRangeAsComparable =
                         rangeAsComparableOverarching
@@ -3042,7 +3022,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            if equivalentVariablesSet0.variables |> FastDict.member aEquivalentVariable then
+            if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member aEquivalentVariable then
                 let
                     ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
                         bEquivalentVariable
@@ -3051,7 +3031,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
-                                |> FastDict.insert bEquivalentVariable ()
+                                |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
                         , constraint = unifiedConstraint
                         , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
@@ -3067,7 +3047,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                         (bEquivalentVariableName |> typeVariableConstraint)
                     )
 
-            else if equivalentVariablesSet0.variables |> FastDict.member bEquivalentVariable then
+            else if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member bEquivalentVariable then
                 let
                     ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
                         aEquivalentVariable
@@ -3076,7 +3056,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
-                                |> FastDict.insert aEquivalentVariable ()
+                                |> DictByTypeVariableFromContext.insert aEquivalentVariable ()
                         , constraint = unifiedConstraint
                         , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
@@ -3162,7 +3142,7 @@ equivalentVariableSetMerge a b =
                                                 (\unifiedConstraint ->
                                                     { sets =
                                                         { variables =
-                                                            FastDict.union
+                                                            DictByTypeVariableFromContext.union
                                                                 aEquivalentVariableSet.variables
                                                                 bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
@@ -3183,9 +3163,12 @@ equivalentVariableSetMerge a b =
                         )
 
 
-fastSetShareElements : FastSetFast comparable -> FastSetFast comparable -> Bool
+fastSetShareElements :
+    TypeVariableFromContextSet
+    -> TypeVariableFromContextSet
+    -> Bool
 fastSetShareElements a b =
-    a |> fastSetFastAny (\aKey -> b |> FastDict.member aKey)
+    a |> typeVariableFromContextSetAny (\aKey -> b |> DictByTypeVariableFromContext.member aKey)
 
 
 listMapAndFirstJustAndRemainingAnyOrder :
@@ -3630,7 +3613,7 @@ variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes repla
         Ok
             { equivalentVariables = []
             , variableToType =
-                FastDict.singleton replacementVariable
+                DictByTypeVariableFromContext.singleton replacementVariable
                     replacementTypeNotVariable
             }
 
@@ -4338,7 +4321,7 @@ typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
                     fieldsUnified.substitutions
                     { equivalentVariables = []
                     , variableToType =
-                        FastDict.singleton
+                        DictByTypeVariableFromContext.singleton
                             recordExtension.recordVariable
                             (TypeRecord fieldsUnified.fieldsUnified)
                     }
@@ -9051,7 +9034,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                         variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
                         variableToCondensedIfNecessary variable =
                             variableCondenseLookup
-                                |> FastDict.get variable
+                                |> DictByTypeVariableFromContext.get variable
                                 |> Maybe.withDefault
                                     variable
 
@@ -9118,20 +9101,20 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
 
                                                                     Just inferredDeclarationCondensed ->
                                                                         let
-                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : FastSetFast TypeVariableFromContext
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : TypeVariableFromContextSet
                                                                             unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables =
                                                                                 inferredDeclarationBeforeCondensing.type_
                                                                                     |> typeContainedVariables
                                                                         in
                                                                         if
                                                                             unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
-                                                                                |> fastSetFastAny
+                                                                                |> typeVariableFromContextSetAny
                                                                                     (\variableBeforeCondensing ->
-                                                                                        variableCondenseLookup |> FastDict.member variableBeforeCondensing
+                                                                                        variableCondenseLookup |> DictByTypeVariableFromContext.member variableBeforeCondensing
                                                                                     )
                                                                         then
                                                                             let
-                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables : FastSetFast TypeVariableFromContext
+                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables : TypeVariableFromContextSet
                                                                                 unannotatedInferredDeclarationTypeCondensedContainedVariables =
                                                                                     inferredDeclarationCondensed.type_
                                                                                         |> typeContainedVariables
@@ -9208,7 +9191,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                 valueAndFunctionDeclarationsCondensed
 
         [] ->
-            if substitutionsToApply.variableToType |> FastDict.isEmpty then
+            if substitutionsToApply.variableToType |> DictByTypeVariableFromContext.isEmpty then
                 Ok valueAndFunctionDeclarationsSoFar
 
             else
@@ -9272,7 +9255,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                         Just inferredDeclarationAfterSubstituting ->
                                                             if
                                                                 valueAndFunctionDeclarationsSubstituted.unchangedDeclarations
-                                                                    |> FastDict.member unannotatedInferredDeclarationName
+                                                                    |> FastSet.member unannotatedInferredDeclarationName
                                                             then
                                                                 { uses = uses
                                                                 , partiallyInferredDeclarationType =
@@ -9502,7 +9485,7 @@ variableSubstitutionsFromVariableToType variableToReplace replacementType =
             -- to detect self-referential substitution
             Ok
                 { variableToType =
-                    FastDict.singleton variableToReplace
+                    DictByTypeVariableFromContext.singleton variableToReplace
                         replacementTypeNotVariable
                 , equivalentVariables = []
                 }
@@ -9518,7 +9501,7 @@ variableSubstitutionsFrom2EquivalentVariables :
     -> TypeVariableFromContext
     -> Result String VariableSubstitutions
 variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
-    if typeVariableFromContextEquals aVariable bVariable then
+    if TypeVariableFromContext.equals aVariable bVariable then
         okVariableSubstitutionsNone
 
     else
@@ -9531,11 +9514,11 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
         in
         Result.map
             (\abConstraint ->
-                { variableToType = FastDict.empty
+                { variableToType = DictByTypeVariableFromContext.empty
                 , equivalentVariables =
                     [ { variables =
-                            FastDict.singleton aVariable ()
-                                |> FastDict.insert bVariable ()
+                            DictByTypeVariableFromContext.singleton aVariable ()
+                                |> DictByTypeVariableFromContext.insert bVariable ()
                       , constraint = abConstraint
                       , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
@@ -9586,7 +9569,7 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables :
     -> ValueOrFunctionDeclarationInfo (Type String)
 declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
-        globalTypeVariableDisambiguationLookup : FastDict.Dict TypeVariableFromContext String
+        globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
         globalTypeVariableDisambiguationLookup =
             typeVariablesFromContextToDisambiguationLookup
                 (declarationValueOrFunctionInfo
@@ -9597,34 +9580,34 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
         |> declarationValueOrFunctionInfoMapTypeVariables
             (\variable ->
                 globalTypeVariableDisambiguationLookup
-                    |> FastDict.get variable
+                    |> DictByTypeVariableFromContext.get variable
                     |> Maybe.withDefault
                         "thisIsABugInDisambiguationPleaseReportToElmSyntaxTypeInfer"
             )
 
 
 valueOrFunctionDeclarationInfoContainedTypeVariables :
-    ValueOrFunctionDeclarationInfo (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
     declarationValueOrFunction.parameters
-        |> listMapToFastSetFastsAndUnify
+        |> listMapToTypeVariableFromContextSetsAndUnify
             patternTypedNodeContainedTypeVariables
-        |> FastDict.union
+        |> DictByTypeVariableFromContext.union
             (declarationValueOrFunction.type_
                 |> typeContainedVariables
             )
-        |> FastDict.union
+        |> DictByTypeVariableFromContext.union
             (declarationValueOrFunction.result
                 |> expressionTypedNodeContainedTypeVariables
             )
 
 
 patternTypedNodeContainedTypeVariables :
-    TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 patternTypedNodeContainedTypeVariables patternTypedNode =
-    FastDict.union
+    DictByTypeVariableFromContext.union
         (patternTypedNode.type_
             |> typeContainedVariables
         )
@@ -9634,34 +9617,34 @@ patternTypedNodeContainedTypeVariables patternTypedNode =
 
 
 patternContainedTypeVariables :
-    Pattern (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    Pattern (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 patternContainedTypeVariables pattern =
     case pattern of
         PatternIgnored ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternUnit ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternChar _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternString _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternInt _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternVariable _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         PatternParenthesized inParens ->
             patternTypedNodeContainedTypeVariables
                 inParens
 
         PatternAs patternAs ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (patternAs.variable.type_
                     |> typeContainedVariables
                 )
@@ -9670,7 +9653,7 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternTuple parts ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9681,17 +9664,17 @@ patternContainedTypeVariables pattern =
         PatternTriple parts ->
             parts.part0
                 |> patternTypedNodeContainedTypeVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (parts.part1
                         |> patternTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (parts.part2
                         |> patternTypedNodeContainedTypeVariables
                     )
 
         PatternListCons patternListCons ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (patternListCons.head
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9701,32 +9684,35 @@ patternContainedTypeVariables pattern =
 
         PatternListExact elements ->
             elements
-                |> listMapToFastSetFastsAndUnify
+                |> listMapToTypeVariableFromContextSetsAndUnify
                     patternTypedNodeContainedTypeVariables
 
         PatternVariant patternVariant ->
             patternVariant.values
-                |> listMapToFastSetFastsAndUnify
+                |> listMapToTypeVariableFromContextSetsAndUnify
                     patternTypedNodeContainedTypeVariables
 
         PatternRecord fields ->
             fields
-                |> listMapToFastSetFastsAndUnify
+                |> listMapToTypeVariableFromContextSetsAndUnify
                     (\fieldTypedNode ->
                         fieldTypedNode.type_
                             |> typeContainedVariables
                     )
 
 
-listMapToFastSetFastsAndUnify : (a -> FastSetFast comparable) -> List a -> FastSetFast comparable
-listMapToFastSetFastsAndUnify elementToSet elements =
+listMapToTypeVariableFromContextSetsAndUnify :
+    (a -> TypeVariableFromContextSet)
+    -> List a
+    -> TypeVariableFromContextSet
+listMapToTypeVariableFromContextSetsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
-                FastDict.union soFar
+                DictByTypeVariableFromContext.union soFar
                     (element |> elementToSet)
             )
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
 
 listMapToFastDictsAndUnify :
@@ -10100,10 +10086,10 @@ fastDictUnionWith combineValuesFromBothAndKey aDict bDict =
 
 
 expressionTypedNodeContainedTypeVariables :
-    TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 expressionTypedNodeContainedTypeVariables expressionTypedNode =
-    FastDict.union
+    DictByTypeVariableFromContext.union
         (expressionTypedNode.type_
             |> typeContainedVariables
         )
@@ -10113,33 +10099,33 @@ expressionTypedNodeContainedTypeVariables expressionTypedNode =
 
 
 expressionContainedTypeVariables :
-    Expression (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    Expression (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 expressionContainedTypeVariables expression =
     case expression of
         ExpressionUnit ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionInteger _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionFloat _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionString _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionChar _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionReference _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionOperatorFunction _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionRecordAccessFunction _ ->
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
         ExpressionNegation negated ->
             expressionTypedNodeContainedTypeVariables
@@ -10154,7 +10140,7 @@ expressionContainedTypeVariables expression =
                 expressionRecordAccess.record
 
         ExpressionInfixOperation expressionInfixOperation ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (expressionInfixOperation.left
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -10163,7 +10149,7 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionTuple parts ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -10174,11 +10160,11 @@ expressionContainedTypeVariables expression =
         ExpressionTriple parts ->
             parts.part0
                 |> expressionTypedNodeContainedTypeVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (parts.part1
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (parts.part2
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10186,23 +10172,23 @@ expressionContainedTypeVariables expression =
         ExpressionIfThenElse expressionIfThenElse ->
             expressionIfThenElse.condition
                 |> expressionTypedNodeContainedTypeVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionIfThenElse.onFalse
                         |> expressionTypedNodeContainedTypeVariables
                     )
 
         ExpressionList elements ->
             elements
-                |> listMapToFastSetFastsAndUnify
+                |> listMapToTypeVariableFromContextSetsAndUnify
                     expressionTypedNodeContainedTypeVariables
 
         ExpressionRecord fields ->
             fields
-                |> listMapToFastSetFastsAndUnify
+                |> listMapToTypeVariableFromContextSetsAndUnify
                     (\field ->
                         field.value
                             |> expressionTypedNodeContainedTypeVariables
@@ -10211,13 +10197,13 @@ expressionContainedTypeVariables expression =
         ExpressionCall expressionCall ->
             expressionCall.called
                 |> expressionTypedNodeContainedTypeVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionCall.argument0
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionCall.argument1Up
-                        |> listMapToFastSetFastsAndUnify
+                        |> listMapToTypeVariableFromContextSetsAndUnify
                             expressionTypedNodeContainedTypeVariables
                     )
 
@@ -10225,7 +10211,7 @@ expressionContainedTypeVariables expression =
             expressionLambda.parameter1Up
                 |> List.foldl
                     (\parameter soFar ->
-                        FastDict.union
+                        DictByTypeVariableFromContext.union
                             soFar
                             (parameter
                                 |> patternTypedNodeContainedTypeVariables
@@ -10234,7 +10220,7 @@ expressionContainedTypeVariables expression =
                     (expressionLambda.parameter0
                         |> patternTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionLambda.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10242,11 +10228,11 @@ expressionContainedTypeVariables expression =
         ExpressionRecordUpdate expressionRecordUpdate ->
             expressionRecordUpdate.recordVariable.type_
                 |> typeContainedVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionRecordUpdate.field1Up
                         |> List.foldl
                             (\field soFar ->
-                                FastDict.union
+                                DictByTypeVariableFromContext.union
                                     soFar
                                     (field.value
                                         |> expressionTypedNodeContainedTypeVariables
@@ -10260,11 +10246,11 @@ expressionContainedTypeVariables expression =
         ExpressionCaseOf expressionCaseOf ->
             expressionCaseOf.matchedExpression
                 |> expressionTypedNodeContainedTypeVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionCaseOf.case1Up
                         |> List.foldl
                             (\case_ soFar ->
-                                FastDict.union
+                                DictByTypeVariableFromContext.union
                                     soFar
                                     (case_ |> expressionCaseOfCaseContainedTypeVariables)
                             )
@@ -10277,7 +10263,7 @@ expressionContainedTypeVariables expression =
             expressionLetIn.declaration1Up
                 |> List.foldl
                     (\letDeclaration soFar ->
-                        FastDict.union
+                        DictByTypeVariableFromContext.union
                             soFar
                             (letDeclaration.declaration
                                 |> letDeclarationContainedTypeVariables
@@ -10286,19 +10272,19 @@ expressionContainedTypeVariables expression =
                     (expressionLetIn.declaration0.declaration
                         |> letDeclarationContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (expressionLetIn.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
 
 
 letDeclarationContainedTypeVariables :
-    LetDeclaration (Type comparableTypeVariable)
-    -> FastSetFast comparableTypeVariable
+    LetDeclaration (Type TypeVariableFromContext)
+    -> TypeVariableFromContextSet
 letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
-            FastDict.union
+            DictByTypeVariableFromContext.union
                 (letDestructuring.pattern
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -10309,24 +10295,24 @@ letDeclarationContainedTypeVariables letDeclaration =
         LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
             letValueOrFunctionDeclaration.type_
                 |> typeContainedVariables
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (letValueOrFunctionDeclaration.parameters
-                        |> listMapToFastSetFastsAndUnify
+                        |> listMapToTypeVariableFromContextSetsAndUnify
                             patternTypedNodeContainedTypeVariables
                     )
-                |> FastDict.union
+                |> DictByTypeVariableFromContext.union
                     (letValueOrFunctionDeclaration.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
 
 
 expressionCaseOfCaseContainedTypeVariables :
-    { pattern : TypedNode (Pattern (Type comparableTypeVariable)) (Type comparableTypeVariable)
-    , result : TypedNode (Expression (Type comparableTypeVariable)) (Type comparableTypeVariable)
+    { pattern : TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    , result : TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
     }
-    -> FastSetFast comparableTypeVariable
+    -> TypeVariableFromContextSet
 expressionCaseOfCaseContainedTypeVariables syntaxCase =
-    FastDict.union
+    DictByTypeVariableFromContext.union
         (syntaxCase.pattern
             |> patternTypedNodeContainedTypeVariables
         )
@@ -10337,19 +10323,19 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 
 createEquivalentVariablesToCondensedVariableLookup :
     List EquivalentVariableSet
-    -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
+    -> Result String (DictByTypeVariableFromContext TypeVariableFromContext)
 createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
     equivalentVariables
         |> listFoldlWhileOkFrom
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
             (\equivalentVariableSet soFar ->
                 Result.map
                     (\unifiedVariable ->
                         equivalentVariableSet.variables
-                            |> FastDict.foldl
+                            |> DictByTypeVariableFromContext.foldl
                                 (\variable () soFarInSet ->
                                     soFarInSet
-                                        |> FastDict.insert variable unifiedVariable
+                                        |> DictByTypeVariableFromContext.insert variable unifiedVariable
                                 )
                                 soFar
                     )
@@ -10407,12 +10393,12 @@ valueOrFunctionDeclarationInfoRange valueOrFunctionDeclarationInfo =
 
 
 fastSetFastToListHighestToLowestAndMap :
-    (comparable -> listElement)
-    -> FastSetFast comparable
+    (TypeVariableFromContext -> listElement)
+    -> TypeVariableFromContextSet
     -> List listElement
 fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
     fastSet
-        |> FastDict.foldl
+        |> DictByTypeVariableFromContext.foldl
             (\setElement () soFar ->
                 (setElement |> setElementToListElement) :: soFar
             )
@@ -10422,8 +10408,7 @@ fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     ->
         FastDict.Dict
@@ -10436,7 +10421,7 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
                 FastDict.Dict
                     String
                     (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
-            , unchangedDeclarations : FastSetFast String
+            , unchangedDeclarations : FastSet.Set String
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
@@ -10451,7 +10436,7 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes sub
                                 { substitutions = soFar.substitutions
                                 , unchangedDeclarations =
                                     soFar.unchangedDeclarations
-                                        |> FastDict.insert declarationName ()
+                                        |> FastSet.insert declarationName
                                 , declarations =
                                     FastDict.insert declarationName
                                         declarationToSubstituteIn
@@ -10506,12 +10491,12 @@ everywhereRange =
 substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty :
     { substitutions : VariableSubstitutions
     , declarations : FastDict.Dict String declarationInfo_
-    , unchangedDeclarations : FastSetFast String
+    , unchangedDeclarations : FastSet.Set String
     }
 substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty =
     { substitutions = variableSubstitutionsNone
     , declarations = FastDict.empty
-    , unchangedDeclarations = FastDict.empty
+    , unchangedDeclarations = FastSet.empty
     }
 
 
@@ -10519,12 +10504,12 @@ variableToTypeSubstitutionsCondenseVariables :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-    -> FastDict.Dict TypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    -> DictByTypeVariableFromContext TypeVariableFromContext
+    -> DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
     -> Result String VariableSubstitutions
 variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup variableToType =
     variableToType
-        |> fastDictFoldlWhileOkFrom
+        |> dictByTypeFromContextFoldlWhileOkFrom
             variableSubstitutionsNone
             (\uncondensedVariable replacementType soFar ->
                 let
@@ -10534,28 +10519,28 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                             |> typeNotVariableMapVariables
                                 (\variable ->
                                     variableToCondensedLookup
-                                        |> FastDict.get variable
+                                        |> DictByTypeVariableFromContext.get variable
                                         |> Maybe.withDefault variable
                                 )
                 in
-                case variableToCondensedLookup |> FastDict.get uncondensedVariable of
+                case variableToCondensedLookup |> DictByTypeVariableFromContext.get uncondensedVariable of
                     Nothing ->
                         Ok
                             { equivalentVariables = soFar.equivalentVariables
                             , variableToType =
                                 soFar.variableToType
-                                    |> FastDict.insert uncondensedVariable
+                                    |> DictByTypeVariableFromContext.insert uncondensedVariable
                                         replacementTypeUsingCondensedVariables
                             }
 
                     Just condensedVariable ->
-                        case soFar.variableToType |> FastDict.get condensedVariable of
+                        case soFar.variableToType |> DictByTypeVariableFromContext.get condensedVariable of
                             Nothing ->
                                 Ok
                                     { equivalentVariables = soFar.equivalentVariables
                                     , variableToType =
                                         soFar.variableToType
-                                            |> FastDict.insert condensedVariable
+                                            |> DictByTypeVariableFromContext.insert condensedVariable
                                                 replacementTypeUsingCondensedVariables
                                     }
 
@@ -10582,7 +10567,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                                                     (\substitutionsSoFarAndFromUnifying ->
                                                         { variableToType =
                                                             substitutionsSoFarAndFromUnifying.variableToType
-                                                                |> FastDict.insert condensedVariable
+                                                                |> DictByTypeVariableFromContext.insert condensedVariable
                                                                     replacementTypeNotVariableForCondensedVariable
                                                         , equivalentVariables =
                                                             substitutionsSoFarAndFromUnifying.equivalentVariables
@@ -10603,8 +10588,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
 valueOrFunctionDeclarationInfoSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
     ->
@@ -10775,8 +10759,7 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
 expressionTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     ->
         TypedNode
@@ -12058,8 +12041,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
 letDeclarationSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     ->
         { range : Elm.Syntax.Range.Range
@@ -12894,7 +12876,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                             let
                                                                 partialTypeNewInstance :
                                                                     { type_ : Type TypeVariableFromContext
-                                                                    , containedVariables : FastSetFast TypeVariableFromContext
+                                                                    , containedVariables : TypeVariableFromContextSet
                                                                     }
                                                                 partialTypeNewInstance =
                                                                     inferredDeclarationType.type_
@@ -12917,7 +12899,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                                                     inferredDeclarationTypeVariable
                                                                             )
 
-                                                                useTypeContainedVariables : FastSetFast TypeVariableFromContext
+                                                                useTypeContainedVariables : TypeVariableFromContextSet
                                                                 useTypeContainedVariables =
                                                                     useType |> typeContainedVariables
                                                             in
@@ -13082,14 +13064,14 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
             Result.andThen
                 (\condensedResult ->
                     let
-                        uncondensedTypeContainedVariables : FastSetFast TypeVariableFromContext
+                        uncondensedTypeContainedVariables : TypeVariableFromContextSet
                         uncondensedTypeContainedVariables =
                             letValueOrFunction.type_
                                 |> typeContainedVariables
 
                         condensedType :
                             { type_ : Type TypeVariableFromContext
-                            , containedVariables : FastSetFast TypeVariableFromContext
+                            , containedVariables : TypeVariableFromContextSet
                             }
                         condensedType =
                             letValueOrFunction.type_
@@ -13188,11 +13170,11 @@ letDeclarationCondenseTypeVariables declarationTypes typeVariableChange expressi
 
 -}
 typesAreEquallyStrict :
-    FastSetFast TypeVariableFromContext
-    -> FastSetFast TypeVariableFromContext
+    TypeVariableFromContextSet
+    -> TypeVariableFromContextSet
     -> Bool
 typesAreEquallyStrict aType bType =
-    ((aType |> FastDict.size) - (bType |> FastDict.size) == 0)
+    ((aType |> DictByTypeVariableFromContext.size) - (bType |> DictByTypeVariableFromContext.size) == 0)
         && ((aType
                 |> fastSetFastToListHighestToLowestAndMap
                     (\( _, aVariable ) ->
@@ -13581,7 +13563,7 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                                         declarationTypes
                                         (\originalTypeVariable ->
                                             variableToCondensedLookup
-                                                |> FastDict.get originalTypeVariable
+                                                |> DictByTypeVariableFromContext.get originalTypeVariable
                                                 |> Maybe.withDefault originalTypeVariable
                                         )
                             of
@@ -13605,7 +13587,7 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
                                                 condensedExpressionTypedNode.node
 
         [] ->
-            if substitutions.variableToType |> FastDict.isEmpty then
+            if substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty then
                 Ok expressionTypedNode
 
             else
@@ -13688,13 +13670,13 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
                                     |> patternTypedNodeMapTypeVariables
                                         (\originalTypeVariable ->
                                             variableToCondensedLookup
-                                                |> FastDict.get originalTypeVariable
+                                                |> DictByTypeVariableFromContext.get originalTypeVariable
                                                 |> Maybe.withDefault originalTypeVariable
                                         )
                                 )
 
         [] ->
-            if substitutions.variableToType |> FastDict.isEmpty then
+            if substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty then
                 Ok patternTypedNode
 
             else
@@ -13729,31 +13711,29 @@ substitutionsVariableToTypeApplyOverItself :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     ->
         Result
             String
-            (FastDict.Dict
-                TypeVariableFromContext
+            (DictByTypeVariableFromContext
                 (TypeNotVariable TypeVariableFromContext)
             )
 substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
-    if (variableToTypeInitial |> FastDict.size) <= 1 then
+    if (variableToTypeInitial |> DictByTypeVariableFromContext.size) <= 1 then
         Ok variableToTypeInitial
 
     else
         -- TODO optimize by instead updating existing variableToTypeInitial
         -- and skipping when replacement type does not contain
         variableToTypeInitial
-            |> fastDictFoldlWhileOkFrom
-                FastDict.empty
+            |> dictByTypeFromContextFoldlWhileOkFrom
+                DictByTypeVariableFromContext.empty
                 (\variable replacementTypeNotVariable soFar ->
                     Result.map
                         (\replacementTypeSubstituted ->
                             soFar
-                                |> FastDict.insert variable
+                                |> DictByTypeVariableFromContext.insert variable
                                     replacementTypeSubstituted
                         )
                         (replacementTypeNotVariable
@@ -13770,8 +13750,7 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     -> TypeNotVariable TypeVariableFromContext
     -> Result String (TypeNotVariable TypeVariableFromContext)
@@ -13798,8 +13777,7 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToAppl
 patternTypedNodeSubstituteVariableByNotVariable :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
-        FastDict.Dict
-            TypeVariableFromContext
+        DictByTypeVariableFromContext
             (TypeNotVariable TypeVariableFromContext)
     ->
         TypedNode
@@ -14541,7 +14519,7 @@ patternMapTypes typeChange pattern =
 equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
     -- TODO figure out why getMaxKey for example doesn't work. Makes no sense to me
-    case set.variables |> FastDict.getMinKey of
+    case set.variables |> DictByTypeVariableFromContext.getMinKey of
         Nothing ->
             Err "implementation bug: equivalent variable set is empty"
 
@@ -14593,6 +14571,23 @@ fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
         |> -- we could use stoppableFoldl with some overhead for the case that all are ok
            -- but elm-syntax-type-infer optimizes for the more common case
            FastDict.foldl
+            (\key value soFarOrError ->
+                case soFarOrError of
+                    Err error ->
+                        Err error
+
+                    Ok soFar ->
+                        reduceToResult key value soFar
+            )
+            (Ok initialFolded)
+
+
+dictByTypeFromContextFoldlWhileOkFrom : ok -> (TypeVariableFromContext -> value -> ok -> Result err ok) -> DictByTypeVariableFromContext value -> Result err ok
+dictByTypeFromContextFoldlWhileOkFrom initialFolded reduceToResult fastDict =
+    fastDict
+        |> -- we could use stoppableFoldl with some overhead for the case that all are ok
+           -- but elm-syntax-type-infer optimizes for the more common case
+           DictByTypeVariableFromContext.foldl
             (\key value soFarOrError ->
                 case soFarOrError of
                     Err error ->
@@ -15211,11 +15206,11 @@ moduleTypesEmpty =
 
 
 typeVariablesFromContextToDisambiguationLookup :
-    FastSetFast TypeVariableFromContext
-    -> FastDict.Dict TypeVariableFromContext String
+    TypeVariableFromContextSet
+    -> DictByTypeVariableFromContext String
 typeVariablesFromContextToDisambiguationLookup variables =
     variables
-        |> FastDict.foldl
+        |> DictByTypeVariableFromContext.foldl
             (\variable () soFar ->
                 let
                     ( _, name ) =
@@ -15224,7 +15219,7 @@ typeVariablesFromContextToDisambiguationLookup variables =
                     alreadyExists : String -> Bool
                     alreadyExists toDisambiguate =
                         soFar
-                            |> fastDictAny
+                            |> dictByTypeFromContextAny
                                 (\diambiguatedVariableSoFar ->
                                     diambiguatedVariableSoFar == toDisambiguate
                                 )
@@ -15234,10 +15229,10 @@ typeVariablesFromContextToDisambiguationLookup variables =
                         name |> nameDisambiguateBy alreadyExists
                 in
                 soFar
-                    |> FastDict.insert variable
+                    |> DictByTypeVariableFromContext.insert variable
                         variableAsDisambiguatedString
             )
-            FastDict.empty
+            DictByTypeVariableFromContext.empty
 
 
 nameDisambiguateBy : (String -> Bool) -> String -> String
@@ -15275,10 +15270,22 @@ fastDictAny valueIsFound dict =
             )
 
 
-fastSetFastAny : (key -> Bool) -> FastDict.Dict key value_ -> Bool
-fastSetFastAny valueIsFound dict =
+dictByTypeFromContextAny : (value -> Bool) -> DictByTypeVariableFromContext value -> Bool
+dictByTypeFromContextAny valueIsFound dict =
     dict
-        |> FastDict.restructure False
+        |> DictByTypeVariableFromContext.restructure False
+            (\state ->
+                valueIsFound state.value
+                    || state.left ()
+                    || state.right ()
+            )
+
+
+typeVariableFromContextSetAny : (TypeVariableFromContext -> Bool) -> TypeVariableFromContextSet -> Bool
+typeVariableFromContextSetAny valueIsFound dict =
+    -- TODO optimize
+    dict
+        |> DictByTypeVariableFromContext.restructure False
             (\state ->
                 valueIsFound state.key
                     || state.left ()
