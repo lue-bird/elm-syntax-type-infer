@@ -5,7 +5,6 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
-- avoid record update in moduleDeclarationsToTypes
 - optimize typeVariablesFromContextToDisambiguationLookup by adding a regular set for tracking disambiguated variables
 - represent List EquivalentVariableSet as FastDict.Dict RangeAsComparable info
   to speed up merge with 2
