@@ -9,6 +9,7 @@ module DictByTypeVariableFromContext exposing
     , union, intersect, diff, merge
     , toCoreDict, fromCoreDict
     , restructure
+    , foldlWhileOkFrom
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
@@ -852,6 +853,40 @@ twoDistinct aKey aValue bKey bValue =
                 )
                 DictByTypeVariableFromContextInternal.Leaf
         )
+
+
+foldlWhileOkFrom :
+    ok
+    -> (TypeVariableFromContext -> value -> ok -> Result err ok)
+    -> DictByTypeVariableFromContext value
+    -> Result err ok
+foldlWhileOkFrom initialFolded reduceToResult (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
+    dict |> foldlWhileOkFromInner reduceToResult initialFolded
+
+
+foldlWhileOkFromInner :
+    (TypeVariableFromContext -> value -> ok -> Result err ok)
+    -> ok
+    -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext value
+    -> Result err ok
+foldlWhileOkFromInner func initialFolded dict =
+    -- IGNORE TCO
+    case dict of
+        DictByTypeVariableFromContextInternal.Leaf ->
+            Ok initialFolded
+
+        DictByTypeVariableFromContextInternal.InnerNode _ key value left right ->
+            case foldlWhileOkFromInner func initialFolded left of
+                Err error ->
+                    Err error
+
+                Ok leftFolded ->
+                    case func key value leftFolded of
+                        Err error ->
+                            Err error
+
+                        Ok leftAndCurrentFolded ->
+                            foldlWhileOkFromInner func leftAndCurrentFolded right
 
 
 

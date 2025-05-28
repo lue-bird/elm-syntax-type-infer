@@ -10508,7 +10508,7 @@ variableToTypeSubstitutionsCondenseVariables :
     -> Result String VariableSubstitutions
 variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup variableToType =
     variableToType
-        |> dictByTypeFromContextFoldlWhileOkFrom
+        |> DictByTypeVariableFromContext.foldlWhileOkFrom
             variableSubstitutionsNone
             (\uncondensedVariable replacementType soFar ->
                 let
@@ -13726,7 +13726,7 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
         -- TODO optimize by instead updating existing variableToTypeInitial
         -- and skipping when replacement type does not contain
         variableToTypeInitial
-            |> dictByTypeFromContextFoldlWhileOkFrom
+            |> DictByTypeVariableFromContext.foldlWhileOkFrom
                 DictByTypeVariableFromContext.empty
                 (\variable replacementTypeNotVariable soFar ->
                     Result.map
@@ -14570,23 +14570,6 @@ fastDictFoldlWhileOkFrom initialFolded reduceToResult fastDict =
         |> -- we could use stoppableFoldl with some overhead for the case that all are ok
            -- but elm-syntax-type-infer optimizes for the more common case
            FastDict.foldl
-            (\key value soFarOrError ->
-                case soFarOrError of
-                    Err error ->
-                        Err error
-
-                    Ok soFar ->
-                        reduceToResult key value soFar
-            )
-            (Ok initialFolded)
-
-
-dictByTypeFromContextFoldlWhileOkFrom : ok -> (TypeVariableFromContext -> value -> ok -> Result err ok) -> DictByTypeVariableFromContext value -> Result err ok
-dictByTypeFromContextFoldlWhileOkFrom initialFolded reduceToResult fastDict =
-    fastDict
-        |> -- we could use stoppableFoldl with some overhead for the case that all are ok
-           -- but elm-syntax-type-infer optimizes for the more common case
-           DictByTypeVariableFromContext.foldl
             (\key value soFarOrError ->
                 case soFarOrError of
                     Err error ->
