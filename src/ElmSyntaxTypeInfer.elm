@@ -40,7 +40,7 @@ import Elm.Syntax.Range
 import Elm.Syntax.TypeAnnotation
 import Elm.Type
 import FastDict
-import FastSet
+import Set exposing (Set)
 import TypeVariableFromContext
 
 
@@ -3117,7 +3117,7 @@ equivalentVariableSetMerge a b =
                                             |> listMapAndFirstJustAndRemainingAnyOrder
                                                 (\bEquivalentVariableSet ->
                                                     if
-                                                        fastSetShareElements
+                                                        typeVariableFromContextSetShareElements
                                                             aEquivalentVariableSet.variables
                                                             bEquivalentVariableSet.variables
                                                     then
@@ -3159,11 +3159,11 @@ equivalentVariableSetMerge a b =
                         )
 
 
-fastSetShareElements :
+typeVariableFromContextSetShareElements :
     TypeVariableFromContextSet
     -> TypeVariableFromContextSet
     -> Bool
-fastSetShareElements a b =
+typeVariableFromContextSetShareElements a b =
     a
         |> DictByTypeVariableFromContext.any
             (\aKey () ->
@@ -9255,7 +9255,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                         Just inferredDeclarationAfterSubstituting ->
                                                             if
                                                                 valueAndFunctionDeclarationsSubstituted.unchangedDeclarations
-                                                                    |> FastSet.member unannotatedInferredDeclarationName
+                                                                    |> Set.member unannotatedInferredDeclarationName
                                                             then
                                                                 { uses = uses
                                                                 , partiallyInferredDeclarationType =
@@ -10391,12 +10391,12 @@ valueOrFunctionDeclarationInfoRange valueOrFunctionDeclarationInfo =
     }
 
 
-fastSetFastToListHighestToLowestAndMap :
+typeVariableFromContextSetToListHighestToLowestAndMap :
     (TypeVariableFromContext -> listElement)
     -> TypeVariableFromContextSet
     -> List listElement
-fastSetFastToListHighestToLowestAndMap setElementToListElement fastSet =
-    fastSet
+typeVariableFromContextSetToListHighestToLowestAndMap setElementToListElement typeVariableFromContextSet =
+    typeVariableFromContextSet
         |> DictByTypeVariableFromContext.foldl
             (\setElement () soFar ->
                 (setElement |> setElementToListElement) :: soFar
@@ -10420,7 +10420,7 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable :
                 FastDict.Dict
                     String
                     (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
-            , unchangedDeclarations : FastSet.Set String
+            , unchangedDeclarations : Set.Set String
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
@@ -10435,7 +10435,7 @@ valueAndFunctionDeclarationsSubstituteVariableByNotVariable declarationTypes sub
                                 { substitutions = soFar.substitutions
                                 , unchangedDeclarations =
                                     soFar.unchangedDeclarations
-                                        |> FastSet.insert declarationName
+                                        |> Set.insert declarationName
                                 , declarations =
                                     FastDict.insert declarationName
                                         declarationToSubstituteIn
@@ -10490,12 +10490,12 @@ everywhereRange =
 substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty :
     { substitutions : VariableSubstitutions
     , declarations : FastDict.Dict String declarationInfo_
-    , unchangedDeclarations : FastSet.Set String
+    , unchangedDeclarations : Set String
     }
 substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty =
     { substitutions = variableSubstitutionsNone
     , declarations = FastDict.empty
-    , unchangedDeclarations = FastSet.empty
+    , unchangedDeclarations = Set.empty
     }
 
 
@@ -13175,7 +13175,7 @@ typesAreEquallyStrict :
 typesAreEquallyStrict aType bType =
     ((aType |> DictByTypeVariableFromContext.size) - (bType |> DictByTypeVariableFromContext.size) == 0)
         && ((aType
-                |> fastSetFastToListHighestToLowestAndMap
+                |> typeVariableFromContextSetToListHighestToLowestAndMap
                     (\( _, aVariable ) ->
                         aVariable
                             |> typeVariableConstraint
@@ -13184,7 +13184,7 @@ typesAreEquallyStrict aType bType =
                 |> List.sort
             )
                 == (bType
-                        |> fastSetFastToListHighestToLowestAndMap
+                        |> typeVariableFromContextSetToListHighestToLowestAndMap
                             (\( _, bVariable ) ->
                                 bVariable
                                     |> typeVariableConstraint
