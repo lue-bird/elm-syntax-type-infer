@@ -1,6 +1,6 @@
 module DictByTypeVariableFromContext exposing
     ( DictByTypeVariableFromContext
-    , empty, singleton, insert, update, remove
+    , empty, singleton, two, insert, update, remove
     , isEmpty, member, get, size, equals
     , getMinKey, getMin, getMaxKey, getMax
     , popMin, popMax
@@ -23,7 +23,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Build
 
-@docs empty, singleton, insert, update, remove
+@docs empty, singleton, two, insert, update, remove
 
 
 # Query
@@ -765,7 +765,39 @@ update targetKey alter dictionary =
 singleton : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v
 singleton key value =
     -- Root node is always False
-    DictByTypeVariableFromContext 1 (DictByTypeVariableFromContextInternal.InnerNode False key value DictByTypeVariableFromContextInternal.Leaf DictByTypeVariableFromContextInternal.Leaf)
+    DictByTypeVariableFromContext 1
+        (DictByTypeVariableFromContextInternal.InnerNode
+            False
+            key
+            value
+            DictByTypeVariableFromContextInternal.Leaf
+            DictByTypeVariableFromContextInternal.Leaf
+        )
+
+
+{-| Faster equivalent of `singleton aKey aValue |> insert bKey bValue`
+-}
+two :
+    TypeVariableFromContext
+    -> v
+    -> TypeVariableFromContext
+    -> v
+    -> DictByTypeVariableFromContext v
+two aKey aValue bKey bValue =
+    DictByTypeVariableFromContext 2
+        (DictByTypeVariableFromContextInternal.InnerNode
+            False
+            bKey
+            bValue
+            (DictByTypeVariableFromContextInternal.InnerNode
+                True
+                aKey
+                aValue
+                DictByTypeVariableFromContextInternal.Leaf
+                DictByTypeVariableFromContextInternal.Leaf
+            )
+            DictByTypeVariableFromContextInternal.Leaf
+        )
 
 
 

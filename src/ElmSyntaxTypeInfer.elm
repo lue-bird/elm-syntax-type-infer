@@ -3004,8 +3004,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
             Result.map
                 (\abConstraint ->
                     { variables =
-                        DictByTypeVariableFromContext.singleton aEquivalentVariable ()
-                            |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
+                        DictByTypeVariableFromContext.two aEquivalentVariable () bEquivalentVariable ()
                     , constraint = abConstraint
                     , overarchingRangeAsComparable =
                         rangeAsComparableOverarching
@@ -9514,8 +9513,7 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                 { variableToType = DictByTypeVariableFromContext.empty
                 , equivalentVariables =
                     [ { variables =
-                            DictByTypeVariableFromContext.singleton aVariable ()
-                                |> DictByTypeVariableFromContext.insert bVariable ()
+                            DictByTypeVariableFromContext.two aVariable () bVariable ()
                       , constraint = abConstraint
                       , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
