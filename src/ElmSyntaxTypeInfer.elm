@@ -14951,54 +14951,61 @@ moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declar
                                 soFar
 
                             Elm.Syntax.Declaration.FunctionDeclaration declarationValueOrFunction ->
-                                { soFar
-                                    | references =
-                                        soFar.references
-                                            |> FastDict.insert
-                                                ( []
-                                                , declarationValueOrFunction.declaration
-                                                    |> Elm.Syntax.Node.value
-                                                    |> .name
-                                                    |> Elm.Syntax.Node.value
-                                                )
-                                                []
+                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
+                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
+                                , typeConstructs = soFar.typeConstructs
+                                , references =
+                                    soFar.references
+                                        |> FastDict.insert
+                                            ( []
+                                            , declarationValueOrFunction.declaration
+                                                |> Elm.Syntax.Node.value
+                                                |> .name
+                                                |> Elm.Syntax.Node.value
+                                            )
+                                            []
                                 }
 
                             Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
-                                { soFar
-                                    | typeConstructs =
-                                        soFar.typeConstructs
-                                            |> FastDict.insert
-                                                ( [], declarationTypeAlias.name |> Elm.Syntax.Node.value )
-                                                []
+                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
+                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
+                                , references = soFar.references
+                                , typeConstructs =
+                                    soFar.typeConstructs
+                                        |> FastDict.insert
+                                            ( [], declarationTypeAlias.name |> Elm.Syntax.Node.value )
+                                            []
                                 }
 
                             Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
-                                { soFar
-                                    | typeConstructs =
-                                        soFar.typeConstructs
-                                            |> FastDict.insert
-                                                ( [], declarationChoiceType.name |> Elm.Syntax.Node.value )
-                                                []
-                                    , references =
-                                        declarationChoiceType.constructors
-                                            |> List.foldl
-                                                (\(Elm.Syntax.Node.Node _ variant) soFarReferencesIncludingVariantsSoFar ->
-                                                    soFarReferencesIncludingVariantsSoFar
-                                                        |> FastDict.insert
-                                                            ( [], variant.name |> Elm.Syntax.Node.value )
-                                                            []
-                                                )
-                                                soFar.references
+                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
+                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
+                                , typeConstructs =
+                                    soFar.typeConstructs
+                                        |> FastDict.insert
+                                            ( [], declarationChoiceType.name |> Elm.Syntax.Node.value )
+                                            []
+                                , references =
+                                    declarationChoiceType.constructors
+                                        |> List.foldl
+                                            (\(Elm.Syntax.Node.Node _ variant) soFarReferencesIncludingVariantsSoFar ->
+                                                soFarReferencesIncludingVariantsSoFar
+                                                    |> FastDict.insert
+                                                        ( [], variant.name |> Elm.Syntax.Node.value )
+                                                        []
+                                            )
+                                            soFar.references
                                 }
 
                             Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
-                                { soFar
-                                    | references =
-                                        soFar.references
-                                            |> FastDict.insert
-                                                ( [], declarationPortSignature.name |> Elm.Syntax.Node.value )
-                                                []
+                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
+                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
+                                , typeConstructs = soFar.typeConstructs
+                                , references =
+                                    soFar.references
+                                        |> FastDict.insert
+                                            ( [], declarationPortSignature.name |> Elm.Syntax.Node.value )
+                                            []
                                 }
                     )
                     moduleOriginLookupNotIncludingLocalDeclarations
