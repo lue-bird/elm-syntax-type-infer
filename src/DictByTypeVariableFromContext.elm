@@ -421,13 +421,8 @@ popMax dict =
 
 -}
 isEmpty : DictByTypeVariableFromContext v_ -> Bool
-isEmpty (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
-    case dict of
-        DictByTypeVariableFromContextInternal.Leaf ->
-            True
-
-        DictByTypeVariableFromContextInternal.InnerNode _ _ _ _ _ ->
-            False
+isEmpty (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext dictSize _) =
+    dictSize == 0
 
 
 {-| Insert a key-value pair into a dictionary. Replaces value when there is
