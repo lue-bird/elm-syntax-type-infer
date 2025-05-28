@@ -1522,31 +1522,38 @@ typeApplyVariableSubstitutions :
 typeApplyVariableSubstitutions context substitutions originalType =
     case substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            let
-                variableToCondensedLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-                variableToCondensedLookup =
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-                        |> createEquivalentVariablesToCondensedVariableLookup
-            in
             case
-                substitutions.variableToType
-                    |> variableToTypeSubstitutionsCondenseVariables context
-                        variableToCondensedLookup
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
-
-                Ok variableToTypeWithCondensedVariables ->
-                    typeApplyVariableSubstitutions context
-                        variableToTypeWithCondensedVariables
-                        (originalType
-                            |> typeMapVariables
-                                (\originalVariable ->
-                                    variableToCondensedLookup
-                                        |> FastDict.get originalVariable
-                                        |> Maybe.withDefault originalVariable
-                                )
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
                         )
+
+                Ok variableToCondensedLookup ->
+                    case
+                        substitutions.variableToType
+                            |> variableToTypeSubstitutionsCondenseVariables context
+                                variableToCondensedLookup
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeWithCondensedVariables ->
+                            typeApplyVariableSubstitutions context
+                                variableToTypeWithCondensedVariables
+                                (originalType
+                                    |> typeMapVariables
+                                        (\originalVariable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get originalVariable
+                                                |> Maybe.withDefault originalVariable
+                                        )
+                                )
 
         [] ->
             if substitutions.variableToType |> FastDict.isEmpty then
@@ -2806,25 +2813,8 @@ type alias VariableSubstitutions =
 type alias EquivalentVariableSet =
     { constraint : Maybe TypeVariableConstraint
     , overarchingRangeAsComparable : RangeAsComparable
-    , variable0 : TypeVariableFromContext
-    , otherVariables : FastSetFast TypeVariableFromContext
+    , variables : FastSetFast TypeVariableFromContext
     }
-
-
-equivalentVariableSetMember : TypeVariableFromContext -> EquivalentVariableSet -> Bool
-equivalentVariableSetMember variableToCheckFor equivalentVariableSet =
-    typeVariableFromContextEquals variableToCheckFor equivalentVariableSet.variable0
-        || (equivalentVariableSet.otherVariables |> FastDict.member variableToCheckFor)
-
-
-equivalentVariableSetShareVariables : EquivalentVariableSet -> EquivalentVariableSet -> Bool
-equivalentVariableSetShareVariables aEquivalentVariableSet bEquivalentVariableSet =
-    typeVariableFromContextEquals
-        aEquivalentVariableSet.variable0
-        bEquivalentVariableSet.variable0
-        || fastSetShareElements
-            aEquivalentVariableSet.otherVariables
-            bEquivalentVariableSet.otherVariables
 
 
 variableSubstitutionsNone : VariableSubstitutions
@@ -3024,20 +3014,20 @@ equivalentVariablesMergeWithSetOf2Into :
     -> List EquivalentVariableSet
     -> Result String (List EquivalentVariableSet)
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables originalFullEquivalentVariables =
-    let
-        ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
-            aEquivalentVariable
-
-        ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
-            bEquivalentVariable
-    in
     case equivalentVariables of
         [] ->
+            let
+                ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
+                    aEquivalentVariable
+
+                ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
+                    bEquivalentVariable
+            in
             Result.map
                 (\abConstraint ->
-                    { variable0 = aEquivalentVariable
-                    , otherVariables =
-                        FastDict.singleton bEquivalentVariable ()
+                    { variables =
+                        FastDict.singleton aEquivalentVariable ()
+                            |> FastDict.insert bEquivalentVariable ()
                     , constraint = abConstraint
                     , overarchingRangeAsComparable =
                         rangeAsComparableOverarching
@@ -3052,47 +3042,40 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            let
-                equivalentVariablesSet0ContainsAEquivalentVariable : Bool
-                equivalentVariablesSet0ContainsAEquivalentVariable =
-                    equivalentVariablesSet0 |> equivalentVariableSetMember aEquivalentVariable
-
-                equivalentVariablesSet0ContainsBEquivalentVariable : Bool
-                equivalentVariablesSet0ContainsBEquivalentVariable =
-                    equivalentVariablesSet0 |> equivalentVariableSetMember bEquivalentVariable
-            in
-            if equivalentVariablesSet0ContainsAEquivalentVariable then
-                if equivalentVariablesSet0ContainsBEquivalentVariable then
-                    Ok originalFullEquivalentVariables
-
-                else
-                    Result.map
-                        (\unifiedConstraint ->
-                            { variable0 = equivalentVariablesSet0.variable0
-                            , otherVariables =
-                                equivalentVariablesSet0.otherVariables
-                                    |> FastDict.insert bEquivalentVariable ()
-                            , constraint = unifiedConstraint
-                            , overarchingRangeAsComparable =
-                                rangeAsComparableOverarching
-                                    equivalentVariablesSet0.overarchingRangeAsComparable
-                                    bEquivalentVariableUseRangeAsComparable
-                            }
-                                :: listAppendFastButInReverseOrder
-                                    soFar
-                                    equivalentVariablesSet1Up
-                        )
-                        (maybeTypeVariableConstraintMerge
-                            equivalentVariablesSet0.constraint
-                            (bEquivalentVariableName |> typeVariableConstraint)
-                        )
-
-            else if equivalentVariablesSet0ContainsBEquivalentVariable then
+            if equivalentVariablesSet0.variables |> FastDict.member aEquivalentVariable then
+                let
+                    ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
+                        bEquivalentVariable
+                in
                 Result.map
                     (\unifiedConstraint ->
-                        { variable0 = equivalentVariablesSet0.variable0
-                        , otherVariables =
-                            equivalentVariablesSet0.otherVariables
+                        { variables =
+                            equivalentVariablesSet0.variables
+                                |> FastDict.insert bEquivalentVariable ()
+                        , constraint = unifiedConstraint
+                        , overarchingRangeAsComparable =
+                            rangeAsComparableOverarching
+                                equivalentVariablesSet0.overarchingRangeAsComparable
+                                bEquivalentVariableUseRangeAsComparable
+                        }
+                            :: listAppendFastButInReverseOrder
+                                soFar
+                                equivalentVariablesSet1Up
+                    )
+                    (maybeTypeVariableConstraintMerge
+                        equivalentVariablesSet0.constraint
+                        (bEquivalentVariableName |> typeVariableConstraint)
+                    )
+
+            else if equivalentVariablesSet0.variables |> FastDict.member bEquivalentVariable then
+                let
+                    ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
+                        aEquivalentVariable
+                in
+                Result.map
+                    (\unifiedConstraint ->
+                        { variables =
+                            equivalentVariablesSet0.variables
                                 |> FastDict.insert aEquivalentVariable ()
                         , constraint = unifiedConstraint
                         , overarchingRangeAsComparable =
@@ -3158,9 +3141,9 @@ equivalentVariableSetMerge a b =
                                             |> listMapAndFirstJustAndRemainingAnyOrder
                                                 (\bEquivalentVariableSet ->
                                                     if
-                                                        equivalentVariableSetShareVariables
-                                                            aEquivalentVariableSet
-                                                            bEquivalentVariableSet
+                                                        fastSetShareElements
+                                                            aEquivalentVariableSet.variables
+                                                            bEquivalentVariableSet.variables
                                                     then
                                                         Just bEquivalentVariableSet
 
@@ -3178,12 +3161,10 @@ equivalentVariableSetMerge a b =
                                             Result.map
                                                 (\unifiedConstraint ->
                                                     { sets =
-                                                        { variable0 = aEquivalentVariableSet.variable0
-                                                        , otherVariables =
+                                                        { variables =
                                                             FastDict.union
-                                                                aEquivalentVariableSet.otherVariables
-                                                                bEquivalentVariableSetAndRemaining.value.otherVariables
-                                                                |> FastDict.insert bEquivalentVariableSetAndRemaining.value.variable0 ()
+                                                                aEquivalentVariableSet.variables
+                                                                bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
                                                         , overarchingRangeAsComparable =
                                                             rangeAsComparableOverarching
@@ -9058,170 +9039,173 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
     in
     case substitutionsToApply.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            let
-                variableCondenseLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-                variableCondenseLookup =
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-                        |> createEquivalentVariablesToCondensedVariableLookup
-
-                variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
-                variableToCondensedIfNecessary variable =
-                    variableCondenseLookup
-                        |> FastDict.get variable
-                        |> Maybe.withDefault
-                            variable
-
-                valueAndFunctionDeclarationsCondensed :
-                    FastDict.Dict
-                        String
-                        (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
-                valueAndFunctionDeclarationsCondensed =
-                    valueAndFunctionDeclarationsSoFar
-                        |> FastDict.map
-                            (\_ declarationValueOrFunctionToCondenseVariablesIn ->
-                                declarationValueOrFunctionToCondenseVariablesIn
-                                    |> declarationValueOrFunctionInfoMapTypeVariables
-                                        variableToCondensedIfNecessary
-                            )
-
-                newSubstitutionsOrError : Result String VariableSubstitutions
-                newSubstitutionsOrError =
-                    Result.andThen
-                        (\variableSubstitutionsCondensed ->
-                            let
-                                moduleLevelPartiallyInferredDeclarations :
-                                    FastDict.Dict
-                                        String
-                                        { range : Elm.Syntax.Range.Range
-                                        , type_ : Type TypeVariableFromContext
-                                        }
-                                moduleLevelPartiallyInferredDeclarations =
-                                    valueAndFunctionDeclarationsSoFar
-                                        |> valueAndFunctionDeclarationsGetPartiallyInferred
-
-                                allUnannotatedInferredDeclarationsUsesAfterCondensing :
-                                    FastDict.Dict
-                                        String
-                                        (FastDict.Dict
-                                            RangeAsComparable
-                                            (Type TypeVariableFromContext)
-                                        )
-                                allUnannotatedInferredDeclarationsUsesAfterCondensing =
-                                    valueAndFunctionDeclarationsCondensed
-                                        |> valueAndFunctionDeclarationsUsesOfLocalReferences
-                                            moduleLevelPartiallyInferredDeclarations
-
-                                unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution :
-                                    List
-                                        { uses :
-                                            FastDict.Dict
-                                                RangeAsComparable
-                                                (Type TypeVariableFromContext)
-                                        , moreStrictInferredDeclarationType : Type TypeVariableFromContext
-                                        }
-                                unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution =
-                                    allUnannotatedInferredDeclarationsUsesAfterCondensing
-                                        |> FastDict.foldl
-                                            (\unannotatedInferredDeclarationName uses partialTypeVariableAmongEquivalentVariablesSoFar ->
-                                                case moduleLevelPartiallyInferredDeclarations |> FastDict.get unannotatedInferredDeclarationName of
-                                                    Nothing ->
-                                                        partialTypeVariableAmongEquivalentVariablesSoFar
-
-                                                    Just inferredDeclarationBeforeCondensing ->
-                                                        case valueAndFunctionDeclarationsCondensed |> FastDict.get unannotatedInferredDeclarationName of
-                                                            Nothing ->
-                                                                partialTypeVariableAmongEquivalentVariablesSoFar
-
-                                                            Just inferredDeclarationCondensed ->
-                                                                let
-                                                                    unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : FastSetFast TypeVariableFromContext
-                                                                    unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables =
-                                                                        inferredDeclarationBeforeCondensing.type_
-                                                                            |> typeContainedVariables
-                                                                in
-                                                                if
-                                                                    unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
-                                                                        |> fastSetFastAny
-                                                                            (\variableBeforeCondensing ->
-                                                                                variableCondenseLookup |> FastDict.member variableBeforeCondensing
-                                                                            )
-                                                                then
-                                                                    let
-                                                                        unannotatedInferredDeclarationTypeCondensedContainedVariables : FastSetFast TypeVariableFromContext
-                                                                        unannotatedInferredDeclarationTypeCondensedContainedVariables =
-                                                                            inferredDeclarationCondensed.type_
-                                                                                |> typeContainedVariables
-                                                                    in
-                                                                    -- if we don't check whether the condensed type
-                                                                    -- is _actually_ more strict, we could end up in an endless loop
-                                                                    -- if partially declared types cross-influence each other.
-                                                                    if
-                                                                        typesAreEquallyStrict
-                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
-                                                                            unannotatedInferredDeclarationTypeCondensedContainedVariables
-                                                                    then
-                                                                        partialTypeVariableAmongEquivalentVariablesSoFar
-
-                                                                    else
-                                                                        { moreStrictInferredDeclarationType =
-                                                                            inferredDeclarationCondensed.type_
-                                                                        , uses = uses
-                                                                        }
-                                                                            :: partialTypeVariableAmongEquivalentVariablesSoFar
-
-                                                                else
-                                                                    partialTypeVariableAmongEquivalentVariablesSoFar
-                                            )
-                                            []
-                            in
-                            unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution
-                                |> listFoldlWhileOkFrom
-                                    variableSubstitutionsCondensed
-                                    (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
-                                        partialTypeVariableAmongEquivalentVariables.uses
-                                            |> fastDictFoldlWhileOkFrom
-                                                substitutionsWithPartialUsesUpdatedSoFar
-                                                (\useRangeAsComparable useType unificationSubstitutionsSoFar ->
-                                                    let
-                                                        partialTypeNewInstance : Type TypeVariableFromContext
-                                                        partialTypeNewInstance =
-                                                            partialTypeVariableAmongEquivalentVariables.moreStrictInferredDeclarationType
-                                                                |> typeMapVariables
-                                                                    (\( _, variableName ) ->
-                                                                        ( useRangeAsComparable
-                                                                        , variableName
-                                                                        )
-                                                                    )
-                                                    in
-                                                    Result.andThen
-                                                        (\unified ->
-                                                            variableSubstitutionsMerge
-                                                                everywhereTypeContext
-                                                                unificationSubstitutionsSoFar
-                                                                unified.substitutions
-                                                        )
-                                                        (typeUnify everywhereTypeContext
-                                                            partialTypeNewInstance
-                                                            useType
-                                                        )
-                                                )
-                                    )
-                        )
-                        (substitutionsToApply.variableToType
-                            |> variableToTypeSubstitutionsCondenseVariables
-                                everywhereTypeContext
-                                variableCondenseLookup
-                        )
-            in
-            case newSubstitutionsOrError of
+            case
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
+            of
                 Err error ->
                     Err error
 
-                Ok newSubstitutions ->
-                    valueAndFunctionDeclarationsApplyVariableSubstitutions
-                        declarationTypes
-                        newSubstitutions
-                        valueAndFunctionDeclarationsCondensed
+                Ok variableCondenseLookup ->
+                    let
+                        variableToCondensedIfNecessary : TypeVariableFromContext -> TypeVariableFromContext
+                        variableToCondensedIfNecessary variable =
+                            variableCondenseLookup
+                                |> FastDict.get variable
+                                |> Maybe.withDefault
+                                    variable
+
+                        valueAndFunctionDeclarationsCondensed :
+                            FastDict.Dict
+                                String
+                                (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+                        valueAndFunctionDeclarationsCondensed =
+                            valueAndFunctionDeclarationsSoFar
+                                |> FastDict.map
+                                    (\_ declarationValueOrFunctionToCondenseVariablesIn ->
+                                        declarationValueOrFunctionToCondenseVariablesIn
+                                            |> declarationValueOrFunctionInfoMapTypeVariables
+                                                variableToCondensedIfNecessary
+                                    )
+
+                        newSubstitutionsOrError : Result String VariableSubstitutions
+                        newSubstitutionsOrError =
+                            Result.andThen
+                                (\variableSubstitutionsCondensed ->
+                                    let
+                                        moduleLevelPartiallyInferredDeclarations :
+                                            FastDict.Dict
+                                                String
+                                                { range : Elm.Syntax.Range.Range
+                                                , type_ : Type TypeVariableFromContext
+                                                }
+                                        moduleLevelPartiallyInferredDeclarations =
+                                            valueAndFunctionDeclarationsSoFar
+                                                |> valueAndFunctionDeclarationsGetPartiallyInferred
+
+                                        allUnannotatedInferredDeclarationsUsesAfterCondensing :
+                                            FastDict.Dict
+                                                String
+                                                (FastDict.Dict
+                                                    RangeAsComparable
+                                                    (Type TypeVariableFromContext)
+                                                )
+                                        allUnannotatedInferredDeclarationsUsesAfterCondensing =
+                                            valueAndFunctionDeclarationsCondensed
+                                                |> valueAndFunctionDeclarationsUsesOfLocalReferences
+                                                    moduleLevelPartiallyInferredDeclarations
+
+                                        unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution :
+                                            List
+                                                { uses :
+                                                    FastDict.Dict
+                                                        RangeAsComparable
+                                                        (Type TypeVariableFromContext)
+                                                , moreStrictInferredDeclarationType : Type TypeVariableFromContext
+                                                }
+                                        unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution =
+                                            allUnannotatedInferredDeclarationsUsesAfterCondensing
+                                                |> FastDict.foldl
+                                                    (\unannotatedInferredDeclarationName uses partialTypeVariableAmongEquivalentVariablesSoFar ->
+                                                        case moduleLevelPartiallyInferredDeclarations |> FastDict.get unannotatedInferredDeclarationName of
+                                                            Nothing ->
+                                                                partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                            Just inferredDeclarationBeforeCondensing ->
+                                                                case valueAndFunctionDeclarationsCondensed |> FastDict.get unannotatedInferredDeclarationName of
+                                                                    Nothing ->
+                                                                        partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                                    Just inferredDeclarationCondensed ->
+                                                                        let
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables : FastSetFast TypeVariableFromContext
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables =
+                                                                                inferredDeclarationBeforeCondensing.type_
+                                                                                    |> typeContainedVariables
+                                                                        in
+                                                                        if
+                                                                            unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
+                                                                                |> fastSetFastAny
+                                                                                    (\variableBeforeCondensing ->
+                                                                                        variableCondenseLookup |> FastDict.member variableBeforeCondensing
+                                                                                    )
+                                                                        then
+                                                                            let
+                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables : FastSetFast TypeVariableFromContext
+                                                                                unannotatedInferredDeclarationTypeCondensedContainedVariables =
+                                                                                    inferredDeclarationCondensed.type_
+                                                                                        |> typeContainedVariables
+                                                                            in
+                                                                            -- if we don't check whether the condensed type
+                                                                            -- is _actually_ more strict, we could end up in an endless loop
+                                                                            -- if partially declared types cross-influence each other.
+                                                                            if
+                                                                                typesAreEquallyStrict
+                                                                                    unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
+                                                                                    unannotatedInferredDeclarationTypeCondensedContainedVariables
+                                                                            then
+                                                                                partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                                            else
+                                                                                { moreStrictInferredDeclarationType =
+                                                                                    inferredDeclarationCondensed.type_
+                                                                                , uses = uses
+                                                                                }
+                                                                                    :: partialTypeVariableAmongEquivalentVariablesSoFar
+
+                                                                        else
+                                                                            partialTypeVariableAmongEquivalentVariablesSoFar
+                                                    )
+                                                    []
+                                    in
+                                    unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution
+                                        |> listFoldlWhileOkFrom
+                                            variableSubstitutionsCondensed
+                                            (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
+                                                partialTypeVariableAmongEquivalentVariables.uses
+                                                    |> fastDictFoldlWhileOkFrom
+                                                        substitutionsWithPartialUsesUpdatedSoFar
+                                                        (\useRangeAsComparable useType unificationSubstitutionsSoFar ->
+                                                            let
+                                                                partialTypeNewInstance : Type TypeVariableFromContext
+                                                                partialTypeNewInstance =
+                                                                    partialTypeVariableAmongEquivalentVariables.moreStrictInferredDeclarationType
+                                                                        |> typeMapVariables
+                                                                            (\( _, variableName ) ->
+                                                                                ( useRangeAsComparable
+                                                                                , variableName
+                                                                                )
+                                                                            )
+                                                            in
+                                                            Result.andThen
+                                                                (\unified ->
+                                                                    variableSubstitutionsMerge
+                                                                        everywhereTypeContext
+                                                                        unificationSubstitutionsSoFar
+                                                                        unified.substitutions
+                                                                )
+                                                                (typeUnify everywhereTypeContext
+                                                                    partialTypeNewInstance
+                                                                    useType
+                                                                )
+                                                        )
+                                            )
+                                )
+                                (substitutionsToApply.variableToType
+                                    |> variableToTypeSubstitutionsCondenseVariables
+                                        everywhereTypeContext
+                                        variableCondenseLookup
+                                )
+                    in
+                    case newSubstitutionsOrError of
+                        Err error ->
+                            Err error
+
+                        Ok newSubstitutions ->
+                            valueAndFunctionDeclarationsApplyVariableSubstitutions
+                                declarationTypes
+                                newSubstitutions
+                                valueAndFunctionDeclarationsCondensed
 
         [] ->
             if substitutionsToApply.variableToType |> FastDict.isEmpty then
@@ -9549,9 +9533,9 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
             (\abConstraint ->
                 { variableToType = FastDict.empty
                 , equivalentVariables =
-                    [ { variable0 = aVariable
-                      , otherVariables =
-                            FastDict.singleton bVariable ()
+                    [ { variables =
+                            FastDict.singleton aVariable ()
+                                |> FastDict.insert bVariable ()
                       , constraint = abConstraint
                       , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
@@ -10353,28 +10337,24 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 
 createEquivalentVariablesToCondensedVariableLookup :
     List EquivalentVariableSet
-    -> FastDict.Dict TypeVariableFromContext TypeVariableFromContext
+    -> Result String (FastDict.Dict TypeVariableFromContext TypeVariableFromContext)
 createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
     equivalentVariables
-        |> List.foldl
-            (\equivalentVariableSet soFar ->
-                let
-                    unifiedVariable : TypeVariableFromContext
-                    unifiedVariable =
-                        equivalentVariablesCreateCondensedVariable equivalentVariableSet
-                in
-                equivalentVariableSet.otherVariables
-                    |> FastDict.foldl
-                        (\variable () soFarInSet ->
-                            soFarInSet
-                                |> FastDict.insert variable unifiedVariable
-                        )
-                        (soFar
-                            |> FastDict.insert equivalentVariableSet.variable0
-                                unifiedVariable
-                        )
-            )
+        |> listFoldlWhileOkFrom
             FastDict.empty
+            (\equivalentVariableSet soFar ->
+                Result.map
+                    (\unifiedVariable ->
+                        equivalentVariableSet.variables
+                            |> FastDict.foldl
+                                (\variable () soFarInSet ->
+                                    soFarInSet
+                                        |> FastDict.insert variable unifiedVariable
+                                )
+                                soFar
+                    )
+                    (equivalentVariablesCreateCondensedVariable equivalentVariableSet)
+            )
 
 
 valueAndFunctionDeclarationsGetPartiallyInferred :
@@ -13572,50 +13552,57 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
     in
     case substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            let
-                variableToCondensedLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-                variableToCondensedLookup =
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-                        |> createEquivalentVariablesToCondensedVariableLookup
-            in
             case
-                substitutions.variableToType
-                    |> variableToTypeSubstitutionsCondenseVariables
-                        typeContext
-                        variableToCondensedLookup
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
+                    Err
+                        ("("
+                            ++ (expressionTypedNode.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                        )
 
-                Ok variableToTypeWithCondensedVariables ->
+                Ok variableToCondensedLookup ->
                     case
-                        expressionTypedNode
-                            |> expressionTypedNodeCondenseTypeVariables
-                                declarationTypes
-                                (\originalTypeVariable ->
-                                    variableToCondensedLookup
-                                        |> FastDict.get originalTypeVariable
-                                        |> Maybe.withDefault originalTypeVariable
-                                )
+                        substitutions.variableToType
+                            |> variableToTypeSubstitutionsCondenseVariables
+                                typeContext
+                                variableToCondensedLookup
                     of
                         Err error ->
                             Err error
 
-                        Ok condensedExpressionTypedNode ->
+                        Ok variableToTypeWithCondensedVariables ->
                             case
-                                variableSubstitutionsMerge
-                                    typeContext
-                                    variableToTypeWithCondensedVariables
-                                    condensedExpressionTypedNode.substitutions
+                                expressionTypedNode
+                                    |> expressionTypedNodeCondenseTypeVariables
+                                        declarationTypes
+                                        (\originalTypeVariable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get originalTypeVariable
+                                                |> Maybe.withDefault originalTypeVariable
+                                        )
                             of
                                 Err error ->
                                     Err error
 
-                                Ok fullSubstitutionsForNextIteration ->
-                                    expressionTypedNodeApplyVariableSubstitutions
-                                        declarationTypes
-                                        fullSubstitutionsForNextIteration
-                                        condensedExpressionTypedNode.node
+                                Ok condensedExpressionTypedNode ->
+                                    case
+                                        variableSubstitutionsMerge
+                                            typeContext
+                                            variableToTypeWithCondensedVariables
+                                            condensedExpressionTypedNode.substitutions
+                                    of
+                                        Err error ->
+                                            Err error
+
+                                        Ok fullSubstitutionsForNextIteration ->
+                                            expressionTypedNodeApplyVariableSubstitutions
+                                                declarationTypes
+                                                fullSubstitutionsForNextIteration
+                                                condensedExpressionTypedNode.node
 
         [] ->
             if substitutions.variableToType |> FastDict.isEmpty then
@@ -13672,32 +13659,39 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
     in
     case substitutions.equivalentVariables of
         equivalentVariableSet0 :: equivalentVariableSet1Up ->
-            let
-                variableToCondensedLookup : FastDict.Dict TypeVariableFromContext TypeVariableFromContext
-                variableToCondensedLookup =
-                    (equivalentVariableSet0 :: equivalentVariableSet1Up)
-                        |> createEquivalentVariablesToCondensedVariableLookup
-            in
             case
-                substitutions.variableToType
-                    |> variableToTypeSubstitutionsCondenseVariables
-                        typeContext
-                        variableToCondensedLookup
+                (equivalentVariableSet0 :: equivalentVariableSet1Up)
+                    |> createEquivalentVariablesToCondensedVariableLookup
             of
                 Err error ->
-                    Err error
-
-                Ok variableToTypeWithCondensedVariables ->
-                    patternTypedNodeApplyVariableSubstitutions declarationTypes
-                        variableToTypeWithCondensedVariables
-                        (patternTypedNode
-                            |> patternTypedNodeMapTypeVariables
-                                (\originalTypeVariable ->
-                                    variableToCondensedLookup
-                                        |> FastDict.get originalTypeVariable
-                                        |> Maybe.withDefault originalTypeVariable
-                                )
+                    Err
+                        ("("
+                            ++ (patternTypedNode.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
                         )
+
+                Ok variableToCondensedLookup ->
+                    case
+                        substitutions.variableToType
+                            |> variableToTypeSubstitutionsCondenseVariables
+                                typeContext
+                                variableToCondensedLookup
+                    of
+                        Err error ->
+                            Err error
+
+                        Ok variableToTypeWithCondensedVariables ->
+                            patternTypedNodeApplyVariableSubstitutions declarationTypes
+                                variableToTypeWithCondensedVariables
+                                (patternTypedNode
+                                    |> patternTypedNodeMapTypeVariables
+                                        (\originalTypeVariable ->
+                                            variableToCondensedLookup
+                                                |> FastDict.get originalTypeVariable
+                                                |> Maybe.withDefault originalTypeVariable
+                                        )
+                                )
 
         [] ->
             if substitutions.variableToType |> FastDict.isEmpty then
@@ -14544,21 +14538,26 @@ patternMapTypes typeChange pattern =
                 }
 
 
-equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> TypeVariableFromContext
+equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    ( set.overarchingRangeAsComparable
-    , case set.constraint of
+    case set.variables |> FastDict.popMin of
         Nothing ->
-            let
-                ( _, variable0Name ) =
-                    set.variable0
-            in
-            variable0Name
+            Err "implementation bug: equivalent variables set is empty"
 
-        Just unifiedConstraint ->
-            -- TODO still add variable0Name and only remove it when disambiguating variables
-            unifiedConstraint |> typeVariableConstraintToString
-    )
+        Just ( ( variable0, () ), _ ) ->
+            Ok
+                ( set.overarchingRangeAsComparable
+                , case set.constraint of
+                    Nothing ->
+                        let
+                            ( _, variable0Name ) =
+                                variable0
+                        in
+                        variable0Name
+
+                    Just unifiedConstraint ->
+                        unifiedConstraint |> typeVariableConstraintToString
+                )
 
 
 maybeTypeVariableConstraintToString : Maybe TypeVariableConstraint -> String
