@@ -1,7 +1,7 @@
 module DictByTypeVariableFromContext exposing
     ( DictByTypeVariableFromContext
-    , empty, singleton, two, insert, update, remove
-    , isEmpty, member, get, size, equals
+    , empty, singleton, twoDistinct, insert, update, remove
+    , isEmpty, member, get, size, equals, any
     , getMinKey, getMin, getMaxKey, getMax
     , popMin, popMax
     , keys, values, toList, fromList
@@ -23,12 +23,12 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Build
 
-@docs empty, singleton, two, insert, update, remove
+@docs empty, singleton, twoDistinct, insert, update, remove
 
 
 # Query
 
-@docs isEmpty, member, get, size, equals
+@docs isEmpty, member, get, size, equals, any
 
 
 # Min / Max
@@ -323,6 +323,36 @@ getMax (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ di
                     go r
     in
     go dict
+
+
+any :
+    (TypeVariableFromContext -> value -> Bool)
+    -> DictByTypeVariableFromContext value
+    -> Bool
+any isNeedle (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
+    anyInner isNeedle dict
+
+
+anyInner :
+    (TypeVariableFromContext -> value -> Bool)
+    -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext value
+    -> Bool
+anyInner isNeedle dict =
+    -- IGNORE TCO
+    case dict of
+        DictByTypeVariableFromContextInternal.Leaf ->
+            False
+
+        DictByTypeVariableFromContextInternal.InnerNode _ key value left right ->
+            -- not all in one || to get a bit of TCO action
+            if
+                isNeedle key value
+                    || anyInner isNeedle left
+            then
+                True
+
+            else
+                anyInner isNeedle right
 
 
 {-| Removes the key-value pair with the smallest key from the dictionary, and returns it.
@@ -776,27 +806,43 @@ singleton key value =
 
 
 {-| Faster equivalent of `singleton aKey aValue |> insert bKey bValue`
+in case you know with certainty that `aKey` and `bKey` are not equal
 -}
-two :
+twoDistinct :
     TypeVariableFromContext
     -> v
     -> TypeVariableFromContext
     -> v
     -> DictByTypeVariableFromContext v
-two aKey aValue bKey bValue =
+twoDistinct aKey aValue bKey bValue =
     DictByTypeVariableFromContext 2
-        (DictByTypeVariableFromContextInternal.InnerNode
-            False
-            bKey
-            bValue
-            (DictByTypeVariableFromContextInternal.InnerNode
-                True
+        (if TypeVariableFromContext.lessThan aKey bKey then
+            DictByTypeVariableFromContextInternal.InnerNode
+                False
+                bKey
+                bValue
+                (DictByTypeVariableFromContextInternal.InnerNode
+                    True
+                    aKey
+                    aValue
+                    DictByTypeVariableFromContextInternal.Leaf
+                    DictByTypeVariableFromContextInternal.Leaf
+                )
+                DictByTypeVariableFromContextInternal.Leaf
+
+         else
+            DictByTypeVariableFromContextInternal.InnerNode
+                False
                 aKey
                 aValue
+                (DictByTypeVariableFromContextInternal.InnerNode
+                    True
+                    bKey
+                    bValue
+                    DictByTypeVariableFromContextInternal.Leaf
+                    DictByTypeVariableFromContextInternal.Leaf
+                )
                 DictByTypeVariableFromContextInternal.Leaf
-                DictByTypeVariableFromContextInternal.Leaf
-            )
-            DictByTypeVariableFromContextInternal.Leaf
         )
 
 

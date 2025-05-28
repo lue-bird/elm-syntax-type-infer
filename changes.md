@@ -7,6 +7,8 @@ considering
 optimization ideas
 - avoid record update in moduleDeclarationsToTypes
 - optimize typeVariablesFromContextToDisambiguationLookup by adding a regular set for tracking disambiguated variables
+- optimize `DictByTypeVariableFromContext.member` by avoiding intermediate Maybe
+- optimize `DictByTypeVariableFromContext.isEmpty` by using size == 0
 - represent List EquivalentVariableSet as FastDict.Dict RangeAsComparable info
   to speed up merge with 2
 - check if we can only substitute patterns when applying substitutions from unifying with uses, and leave the result pattern as is

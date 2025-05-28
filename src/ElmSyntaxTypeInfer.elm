@@ -3004,7 +3004,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
             Result.map
                 (\abConstraint ->
                     { variables =
-                        DictByTypeVariableFromContext.two aEquivalentVariable () bEquivalentVariable ()
+                        DictByTypeVariableFromContext.twoDistinct aEquivalentVariable () bEquivalentVariable ()
                     , constraint = abConstraint
                     , overarchingRangeAsComparable =
                         rangeAsComparableOverarching
@@ -3164,7 +3164,11 @@ fastSetShareElements :
     -> TypeVariableFromContextSet
     -> Bool
 fastSetShareElements a b =
-    a |> typeVariableFromContextSetAny (\aKey -> b |> DictByTypeVariableFromContext.member aKey)
+    a
+        |> DictByTypeVariableFromContext.any
+            (\aKey () ->
+                b |> DictByTypeVariableFromContext.member aKey
+            )
 
 
 listMapAndFirstJustAndRemainingAnyOrder :
@@ -9104,8 +9108,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                                         in
                                                                         if
                                                                             unannotatedInferredDeclarationTypeBeforeCondensingContainedVariables
-                                                                                |> typeVariableFromContextSetAny
-                                                                                    (\variableBeforeCondensing ->
+                                                                                |> DictByTypeVariableFromContext.any
+                                                                                    (\variableBeforeCondensing () ->
                                                                                         variableCondenseLookup |> DictByTypeVariableFromContext.member variableBeforeCondensing
                                                                                     )
                                                                         then
@@ -9513,7 +9517,7 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                 { variableToType = DictByTypeVariableFromContext.empty
                 , equivalentVariables =
                     [ { variables =
-                            DictByTypeVariableFromContext.two aVariable () bVariable ()
+                            DictByTypeVariableFromContext.twoDistinct aVariable () bVariable ()
                       , constraint = abConstraint
                       , overarchingRangeAsComparable =
                             rangeAsComparableOverarching
@@ -15214,8 +15218,8 @@ typeVariablesFromContextToDisambiguationLookup variables =
                     alreadyExists : String -> Bool
                     alreadyExists toDisambiguate =
                         soFar
-                            |> dictByTypeFromContextAny
-                                (\diambiguatedVariableSoFar ->
+                            |> DictByTypeVariableFromContext.any
+                                (\_ diambiguatedVariableSoFar ->
                                     diambiguatedVariableSoFar == toDisambiguate
                                 )
 
@@ -15260,29 +15264,6 @@ fastDictAny valueIsFound dict =
         |> FastDict.restructure False
             (\state ->
                 valueIsFound state.value
-                    || state.left ()
-                    || state.right ()
-            )
-
-
-dictByTypeFromContextAny : (value -> Bool) -> DictByTypeVariableFromContext value -> Bool
-dictByTypeFromContextAny valueIsFound dict =
-    dict
-        |> DictByTypeVariableFromContext.restructure False
-            (\state ->
-                valueIsFound state.value
-                    || state.left ()
-                    || state.right ()
-            )
-
-
-typeVariableFromContextSetAny : (TypeVariableFromContext -> Bool) -> TypeVariableFromContextSet -> Bool
-typeVariableFromContextSetAny valueIsFound dict =
-    -- TODO optimize
-    dict
-        |> DictByTypeVariableFromContext.restructure False
-            (\state ->
-                valueIsFound state.key
                     || state.left ()
                     || state.right ()
             )
