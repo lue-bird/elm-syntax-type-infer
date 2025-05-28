@@ -2983,7 +2983,6 @@ equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equiv
             aEquivalentVariable
             bEquivalentVariable
             equivalentVariables
-            equivalentVariables
 
 
 equivalentVariablesMergeWithSetOf2Into :
@@ -2991,9 +2990,8 @@ equivalentVariablesMergeWithSetOf2Into :
     -> TypeVariableFromContext
     -> TypeVariableFromContext
     -> List EquivalentVariableSet
-    -> List EquivalentVariableSet
     -> Result String (List EquivalentVariableSet)
-equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables originalFullEquivalentVariables =
+equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
             let
@@ -3078,7 +3076,6 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     aEquivalentVariable
                     bEquivalentVariable
                     equivalentVariablesSet1Up
-                    originalFullEquivalentVariables
 
 
 listAppendFastButInReverseOrder : List a -> List a -> List a
