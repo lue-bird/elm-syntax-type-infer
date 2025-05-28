@@ -1,1 +1,2 @@
-- monomorphizing Type, Expression, Pattern (no to negative effect)
+- monomorphize Type, Expression, Pattern (no to negative effect)
+- optimize typeVariablesFromContextToDisambiguationLookup by adding a regular set for tracking disambiguated variables
