@@ -151,13 +151,26 @@ getInner targetKey dict =
 {-| Determine if a key is in a dictionary.
 -}
 member : TypeVariableFromContext -> DictByTypeVariableFromContext v_ -> Bool
-member key dict =
-    case get key dict of
-        Just _ ->
-            True
+member targetKey (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext _ dict) =
+    memberInner targetKey dict
 
-        Nothing ->
+
+memberInner : TypeVariableFromContext -> DictByTypeVariableFromContextInternal.InnerDictByTypeVariableFromContext v -> Bool
+memberInner targetKey dict =
+    case dict of
+        DictByTypeVariableFromContextInternal.Leaf ->
             False
+
+        DictByTypeVariableFromContextInternal.InnerNode _ key _ left right ->
+            case TypeVariableFromContext.compare targetKey key of
+                LT ->
+                    memberInner targetKey left
+
+                EQ ->
+                    True
+
+                GT ->
+                    memberInner targetKey right
 
 
 {-| Determine the number of key-value pairs in the dictionary.
