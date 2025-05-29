@@ -342,20 +342,22 @@ equalsHelp lList rList =
 -}
 getMinKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMinKey (DictByTypeVariableFromContext _ dict) =
-    let
-        go : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
-        go n =
-            case n of
-                Leaf ->
-                    Nothing
+    getMinKeyInner dict
 
-                InnerNode _ k _ Leaf _ ->
+
+getMinKeyInner : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMinKeyInner dict =
+    case dict of
+        Leaf ->
+            Nothing
+
+        InnerNode _ k _ left _ ->
+            case left of
+                Leaf ->
                     Just k
 
-                InnerNode _ _ _ l _ ->
-                    go l
-    in
-    go dict
+                _ ->
+                    getMinKeyInner left
 
 
 {-| Gets the biggest key in the dictionary.
@@ -373,20 +375,22 @@ getMinKey (DictByTypeVariableFromContext _ dict) =
 -}
 getMaxKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMaxKey (DictByTypeVariableFromContext _ dict) =
-    let
-        go : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
-        go n =
-            case n of
-                Leaf ->
-                    Nothing
+    getMaxKeyInner dict
 
-                InnerNode _ k _ _ Leaf ->
+
+getMaxKeyInner : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMaxKeyInner dict =
+    case dict of
+        Leaf ->
+            Nothing
+
+        InnerNode _ k _ _ right ->
+            case right of
+                Leaf ->
                     Just k
 
-                InnerNode _ _ _ _ r ->
-                    go r
-    in
-    go dict
+                _ ->
+                    getMaxKeyInner right
 
 
 {-| Gets the key-value pair with the smallest key.
@@ -413,11 +417,13 @@ getMinInner n =
         Leaf ->
             Nothing
 
-        InnerNode _ k v Leaf _ ->
-            Just ( k, v )
+        InnerNode _ k v left _ ->
+            case left of
+                Leaf ->
+                    Just ( k, v )
 
-        InnerNode _ _ _ l _ ->
-            getMinInner l
+                _ ->
+                    getMinInner left
 
 
 {-| Gets the key-value pair with the biggest key.
@@ -435,20 +441,22 @@ getMinInner n =
 -}
 getMax : DictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
 getMax (DictByTypeVariableFromContext _ dict) =
-    let
-        go : InnerDictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
-        go n =
-            case n of
-                Leaf ->
-                    Nothing
+    getMaxInner dict
 
-                InnerNode _ k v _ Leaf ->
+
+getMaxInner : InnerDictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
+getMaxInner dict =
+    case dict of
+        Leaf ->
+            Nothing
+
+        InnerNode _ k v _ right ->
+            case right of
+                Leaf ->
                     Just ( k, v )
 
-                InnerNode _ _ _ _ r ->
-                    go r
-    in
-    go dict
+                _ ->
+                    getMaxInner right
 
 
 any :
