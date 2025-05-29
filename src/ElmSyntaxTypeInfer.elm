@@ -6346,6 +6346,27 @@ expressionLetInTypeInfer :
 expressionLetInTypeInfer context syntaxExpressionLetIn =
     Result.andThen
         (\acrossLetInIncludingContextSoFar ->
+            let
+                inferContextAcrossLetIn :
+                    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+                    , locallyIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+                    , locallyIntroducedDeclarationTypes :
+                        FastDict.Dict
+                            String
+                            { type_ : Type TypeVariableFromContext
+                            , range : Elm.Syntax.Range.Range
+                            }
+                    , moduleOriginLookup : ModuleOriginLookup
+                    }
+                inferContextAcrossLetIn =
+                    { locallyIntroducedExpressionVariables =
+                        acrossLetInIncludingContextSoFar.introducedExpressionVariables
+                    , moduleOriginLookup = context.moduleOriginLookup
+                    , declarationTypes = context.declarationTypes
+                    , locallyIntroducedDeclarationTypes =
+                        acrossLetInIncludingContextSoFar.introducedDeclarationTypes
+                    }
+            in
             resultAndThen3
                 (\declaration0Inferred declaration1UpInferred resultInferred ->
                     let
@@ -6429,13 +6450,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                 )
                 (syntaxExpressionLetIn.declaration0
                     |> letDeclarationTypeInfer
-                        { locallyIntroducedExpressionVariables =
-                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                        , locallyIntroducedDeclarationTypes =
-                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                        , moduleOriginLookup = context.moduleOriginLookup
-                        , declarationTypes = context.declarationTypes
-                        }
+                        inferContextAcrossLetIn
                 )
                 (syntaxExpressionLetIn.declaration1Up
                     |> listFoldrWhileOkFrom
@@ -6447,25 +6462,13 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                 )
                                 (letDeclarationNode
                                     |> letDeclarationTypeInfer
-                                        { locallyIntroducedExpressionVariables =
-                                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                                        , locallyIntroducedDeclarationTypes =
-                                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                                        , moduleOriginLookup = context.moduleOriginLookup
-                                        , declarationTypes = context.declarationTypes
-                                        }
+                                        inferContextAcrossLetIn
                                 )
                         )
                 )
                 (syntaxExpressionLetIn.expression
                     |> expressionTypeInfer
-                        { locallyIntroducedExpressionVariables =
-                            acrossLetInIncludingContextSoFar.introducedExpressionVariables
-                        , moduleOriginLookup = context.moduleOriginLookup
-                        , declarationTypes = context.declarationTypes
-                        , locallyIntroducedDeclarationTypes =
-                            acrossLetInIncludingContextSoFar.introducedDeclarationTypes
-                        }
+                        inferContextAcrossLetIn
                 )
         )
         ((syntaxExpressionLetIn.declaration0 :: syntaxExpressionLetIn.declaration1Up)
