@@ -5,11 +5,10 @@ module DictByTypeVariableFromContext exposing
     , getMinKey, getMin, getMaxKey, getMax
     , popMin, popMax
     , keys, values, toList, fromList
-    , map, foldl, foldr, filter, partition
+    , map, foldl, foldr, foldlWhileOkFrom, filter, partition
     , union, intersect, diff, merge
     , toCoreDict, fromCoreDict
     , restructure
-    , foldlWhileOkFrom
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
@@ -46,7 +45,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Transform
 
-@docs map, foldl, foldr, filter, partition
+@docs map, foldl, foldr, foldlWhileOkFrom, filter, partition
 
 
 # Combine
@@ -269,7 +268,7 @@ member targetKey (DictByTypeVariableFromContext _ dict) =
     memberInner targetKey dict
 
 
-memberInner : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v -> Bool
+memberInner : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v_ -> Bool
 memberInner targetKey dict =
     case dict of
         Leaf ->
