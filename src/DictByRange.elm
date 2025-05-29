@@ -1,14 +1,11 @@
 module DictByRange exposing
     ( DictByRange
-    , empty, singleton, twoDistinct, insert, update, remove
+    , empty, singleton, insert, update, remove
     , isEmpty, member, get, size, equals, any
     , getMinKey, getMin, getMaxKey, getMax
-    , popMin, popMax
     , keys, values, toList, fromList
-    , map, foldl, foldr, foldlWhileOkFrom, filter, partition
+    , map, foldl, foldr, foldlWhileOkFrom, filter
     , union, intersect, diff, merge
-    , fromCoreDict
-    , restructure
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any Elm.Syntax.Range.Range
@@ -23,7 +20,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Build
 
-@docs empty, singleton, twoDistinct, insert, update, remove
+@docs empty, singleton, insert, update, remove
 
 
 # Query
@@ -35,9 +32,6 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 @docs getMinKey, getMin, getMaxKey, getMax
 
-@docs popMin, popMax
-
-
 # Lists
 
 @docs keys, values, toList, fromList
@@ -45,22 +39,12 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Transform
 
-@docs map, foldl, foldr, foldlWhileOkFrom, filter, partition
+@docs map, foldl, foldr, foldlWhileOkFrom, filter
 
 
 # Combine
 
 @docs union, intersect, diff, merge
-
-
-# Interoperability
-
-@docs fromCoreDict
-
-
-# Advanced functions
-
-@docs restructure
 
 -}
 
@@ -482,52 +466,6 @@ anyInner isNeedle dict =
                 anyInner isNeedle right
 
 
-{-| Removes the key-value pair with the smallest key from the dictionary, and returns it.
-
-    [ ( 1, 'z' ), ( 2, 'a' ) ]
-        |> fromList
-        |> popMin
-    --> Just ( ( 1, 'z' ), fromList [ ( 2, 'a' ) ] )
-
-
-    empty
-        |> popMin
-    --> Nothing
-
--}
-popMin : DictByRange v -> Maybe ( ( Elm.Syntax.Range.Range, v ), DictByRange v )
-popMin dict =
-    -- TODO: make faster by adapting `remove`
-    Maybe.map
-        (\(( k, _ ) as kv) ->
-            ( kv, remove k dict )
-        )
-        (getMin dict)
-
-
-{-| Removes the key-value pair with the biggest key from the dictionary, and returns it.
-
-    [ ( 1, 'z' ), ( 2, 'a' ) ]
-        |> fromList
-        |> popMax
-    --> Just ( ( 2, 'a' ), fromList [ ( 1, 'z' ) ] )
-
-
-    empty
-        |> popMax
-    --> Nothing
-
--}
-popMax : DictByRange v -> Maybe ( ( Elm.Syntax.Range.Range, v ), DictByRange v )
-popMax dict =
-    -- TODO: make faster by adapting `remove`
-    Maybe.map
-        (\(( k, _ ) as kv) ->
-            ( kv, remove k dict )
-        )
-        (getMax dict)
-
-
 {-| Determine if a dictionary is empty.
 
     isEmpty empty
@@ -927,47 +865,6 @@ singleton key value =
         )
 
 
-{-| Faster equivalent of `singleton aKey aValue |> insert bKey bValue`
-in case you know with certainty that `aKey` and `bKey` are not equal
--}
-twoDistinct :
-    Elm.Syntax.Range.Range
-    -> v
-    -> Elm.Syntax.Range.Range
-    -> v
-    -> DictByRange v
-twoDistinct aKey aValue bKey bValue =
-    DictByRange 2
-        (if TypeVariableFromContext.rangeLessThan aKey bKey then
-            InnerNode
-                False
-                bKey
-                bValue
-                (InnerNode
-                    True
-                    aKey
-                    aValue
-                    Leaf
-                    Leaf
-                )
-                Leaf
-
-         else
-            InnerNode
-                False
-                aKey
-                aValue
-                (InnerNode
-                    True
-                    bKey
-                    bValue
-                    Leaf
-                    Leaf
-                )
-                Leaf
-        )
-
-
 foldlWhileOkFrom :
     ok
     -> (Elm.Syntax.Range.Range -> value -> ok -> Result err ok)
@@ -1247,24 +1144,6 @@ filter isGood dict =
         dict
 
 
-{-| Partition a dictionary according to some test. The first dictionary
-contains all key-value pairs which passed the test, and the second contains
-the pairs that did not.
--}
-partition : (Elm.Syntax.Range.Range -> v -> Bool) -> DictByRange v -> ( DictByRange v, DictByRange v )
-partition isGood dict =
-    let
-        add : Elm.Syntax.Range.Range -> v -> ( DictByRange v, DictByRange v ) -> ( DictByRange v, DictByRange v )
-        add key value ( t1, t2 ) =
-            if isGood key value then
-                ( insert key value t1, t2 )
-
-            else
-                ( t1, insert key value t2 )
-    in
-    foldl add ( empty, empty ) dict
-
-
 
 -- LISTS
 
@@ -1342,62 +1221,6 @@ fromListFast assocs =
            List.sortWith (\( k1, _ ) ( k2, _ ) -> TypeVariableFromContext.rangeCompare k2 k1)
         |> dedup
         |> innerFromSortedList
-
-
-
--- INTEROPERABILITY
-
-
-{-| Convert the dictionary from an equivalent one from elm/core.
--}
-fromCoreDict : Dict.Dict Elm.Syntax.Range.Range v -> DictByRange v
-fromCoreDict dict =
-    Dict.foldl insert empty dict
-
-
-
--- ADVANCED
-
-
-{-| This allows you to take advantage of the tree structure of the dictionary to do some operations more efficiently.
-
-Calling `left` will give the result of calling `restructure` on the left subtree (lower keys), `right` on the right one (higher keys).
-
-If this is confusing you probably don't need this function!
-
-    any dict =
-        -- Notice how if `value` is `True` we don't call `left` nor `right`,
-        -- and if `value` is `False` but `left ()` is `True` we don't call right.
-        restructure False (\{ value, left, right } -> value || left () || right ())
-
--}
-restructure :
-    acc
-    -> ({ key : Elm.Syntax.Range.Range, value : value, left : () -> acc, right : () -> acc } -> acc)
-    -> DictByRange value
-    -> acc
-restructure leafFunc nodeFunc (DictByRange _ dict) =
-    restructureInner leafFunc nodeFunc dict
-
-
-restructureInner :
-    acc
-    -> ({ key : Elm.Syntax.Range.Range, value : value, left : () -> acc, right : () -> acc } -> acc)
-    -> InnerDictByTypeVariableFromContext value
-    -> acc
-restructureInner leafFunc nodeFunc dict =
-    -- IGNORE TCO
-    case dict of
-        Leaf ->
-            leafFunc
-
-        InnerNode _ key value left right ->
-            nodeFunc
-                { key = key
-                , value = value
-                , left = \() -> restructureInner leafFunc nodeFunc left
-                , right = \() -> restructureInner leafFunc nodeFunc right
-                }
 
 
 type alias ListWithLength a =

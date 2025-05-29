@@ -3,12 +3,9 @@ module DictByTypeVariableFromContext exposing
     , empty, singleton, twoDistinct, insert, update, remove
     , isEmpty, member, get, size, equals, any
     , getMinKey, getMin, getMaxKey, getMax
-    , popMin, popMax
     , keys, values, toList, fromList
-    , map, foldl, foldr, foldlWhileOkFrom, filter, partition
+    , map, foldl, foldr, foldlWhileOkFrom, filter
     , union, intersect, diff, merge
-    , fromCoreDict
-    , restructure
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
@@ -35,8 +32,6 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 @docs getMinKey, getMin, getMaxKey, getMax
 
-@docs popMin, popMax
-
 
 # Lists
 
@@ -45,26 +40,15 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Transform
 
-@docs map, foldl, foldr, foldlWhileOkFrom, filter, partition
+@docs map, foldl, foldr, foldlWhileOkFrom, filter
 
 
 # Combine
 
 @docs union, intersect, diff, merge
 
-
-# Interoperability
-
-@docs fromCoreDict
-
-
-# Advanced functions
-
-@docs restructure
-
 -}
 
-import Dict
 import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
@@ -345,7 +329,7 @@ getMinKey (DictByTypeVariableFromContext _ dict) =
     getMinKeyInner dict
 
 
-getMinKeyInner : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMinKeyInner : InnerDictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMinKeyInner dict =
     case dict of
         Leaf ->
@@ -378,7 +362,7 @@ getMaxKey (DictByTypeVariableFromContext _ dict) =
     getMaxKeyInner dict
 
 
-getMaxKeyInner : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+getMaxKeyInner : InnerDictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
 getMaxKeyInner dict =
     case dict of
         Leaf ->
@@ -487,52 +471,6 @@ anyInner isNeedle dict =
 
             else
                 anyInner isNeedle right
-
-
-{-| Removes the key-value pair with the smallest key from the dictionary, and returns it.
-
-    [ ( 1, 'z' ), ( 2, 'a' ) ]
-        |> fromList
-        |> popMin
-    --> Just ( ( 1, 'z' ), fromList [ ( 2, 'a' ) ] )
-
-
-    empty
-        |> popMin
-    --> Nothing
-
--}
-popMin : DictByTypeVariableFromContext v -> Maybe ( ( TypeVariableFromContext, v ), DictByTypeVariableFromContext v )
-popMin dict =
-    -- TODO: make faster by adapting `remove`
-    Maybe.map
-        (\(( k, _ ) as kv) ->
-            ( kv, remove k dict )
-        )
-        (getMin dict)
-
-
-{-| Removes the key-value pair with the biggest key from the dictionary, and returns it.
-
-    [ ( 1, 'z' ), ( 2, 'a' ) ]
-        |> fromList
-        |> popMax
-    --> Just ( ( 2, 'a' ), fromList [ ( 1, 'z' ) ] )
-
-
-    empty
-        |> popMax
-    --> Nothing
-
--}
-popMax : DictByTypeVariableFromContext v -> Maybe ( ( TypeVariableFromContext, v ), DictByTypeVariableFromContext v )
-popMax dict =
-    -- TODO: make faster by adapting `remove`
-    Maybe.map
-        (\(( k, _ ) as kv) ->
-            ( kv, remove k dict )
-        )
-        (getMax dict)
 
 
 {-| Determine if a dictionary is empty.
@@ -1204,6 +1142,7 @@ foldl func acc (DictByTypeVariableFromContext _ dict) =
 
 foldlInner : (TypeVariableFromContext -> v -> b -> b) -> b -> InnerDictByTypeVariableFromContext v -> b
 foldlInner func acc dict =
+    -- IGNORE TCO
     case dict of
         Leaf ->
             acc
@@ -1249,6 +1188,7 @@ foldrInner :
     -> InnerDictByTypeVariableFromContext v
     -> b
 foldrInner func acc t =
+    -- IGNORE TCO
     case t of
         Leaf ->
             acc
@@ -1271,24 +1211,6 @@ filter isGood dict =
         )
         empty
         dict
-
-
-{-| Partition a dictionary according to some test. The first dictionary
-contains all key-value pairs which passed the test, and the second contains
-the pairs that did not.
--}
-partition : (TypeVariableFromContext -> v -> Bool) -> DictByTypeVariableFromContext v -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v )
-partition isGood dict =
-    let
-        add : TypeVariableFromContext -> v -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v ) -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v )
-        add key value ( t1, t2 ) =
-            if isGood key value then
-                ( insert key value t1, t2 )
-
-            else
-                ( t1, insert key value t2 )
-    in
-    foldl add ( empty, empty ) dict
 
 
 
@@ -1329,101 +1251,6 @@ toList dict =
 fromList : List ( TypeVariableFromContext, v ) -> DictByTypeVariableFromContext v
 fromList assocs =
     List.foldl (\( key, value ) dict -> insert key value dict) empty assocs
-
-
-{-| Convert an association list into a dictionary.
--}
-fromListFast : List ( TypeVariableFromContext, v ) -> DictByTypeVariableFromContext v
-fromListFast assocs =
-    let
-        dedup : List ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v )
-        dedup xs =
-            case xs of
-                [] ->
-                    listWithLengthEmpty
-
-                head :: tail ->
-                    dedupHelp head tail listWithLengthEmpty
-
-        dedupHelp : ( TypeVariableFromContext, v ) -> List ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v )
-        dedupHelp (( lastKey, _ ) as last) todo acc =
-            case todo of
-                [] ->
-                    listWithLengthCons last acc
-
-                (( todoHeadKey, _ ) as todoHead) :: todoTail ->
-                    let
-                        newAcc : ListWithLength ( TypeVariableFromContext, v )
-                        newAcc =
-                            if TypeVariableFromContext.equals todoHeadKey lastKey then
-                                acc
-
-                            else
-                                listWithLengthCons last acc
-                    in
-                    dedupHelp todoHead todoTail newAcc
-    in
-    assocs
-        |> -- Intentionally swap k1 and k2 here to have a reverse sort so we can do dedup in one pass
-           List.sortWith (\( k1, _ ) ( k2, _ ) -> TypeVariableFromContext.compare k2 k1)
-        |> dedup
-        |> innerFromSortedList
-
-
-
--- INTEROPERABILITY
-
-
-{-| Convert the dictionary from an equivalent one from elm/core.
--}
-fromCoreDict : Dict.Dict TypeVariableFromContext v -> DictByTypeVariableFromContext v
-fromCoreDict dict =
-    Dict.foldl insert empty dict
-
-
-
--- ADVANCED
-
-
-{-| This allows you to take advantage of the tree structure of the dictionary to do some operations more efficiently.
-
-Calling `left` will give the result of calling `restructure` on the left subtree (lower keys), `right` on the right one (higher keys).
-
-If this is confusing you probably don't need this function!
-
-    any dict =
-        -- Notice how if `value` is `True` we don't call `left` nor `right`,
-        -- and if `value` is `False` but `left ()` is `True` we don't call right.
-        restructure False (\{ value, left, right } -> value || left () || right ())
-
--}
-restructure :
-    acc
-    -> ({ key : TypeVariableFromContext, value : value, left : () -> acc, right : () -> acc } -> acc)
-    -> DictByTypeVariableFromContext value
-    -> acc
-restructure leafFunc nodeFunc (DictByTypeVariableFromContext _ dict) =
-    restructureInner leafFunc nodeFunc dict
-
-
-restructureInner :
-    acc
-    -> ({ key : TypeVariableFromContext, value : value, left : () -> acc, right : () -> acc } -> acc)
-    -> InnerDictByTypeVariableFromContext value
-    -> acc
-restructureInner leafFunc nodeFunc dict =
-    -- IGNORE TCO
-    case dict of
-        Leaf ->
-            leafFunc
-
-        InnerNode _ key value left right ->
-            nodeFunc
-                { key = key
-                , value = value
-                , left = \() -> restructureInner leafFunc nodeFunc left
-                , right = \() -> restructureInner leafFunc nodeFunc right
-                }
 
 
 type alias ListWithLength a =
