@@ -3267,6 +3267,7 @@ typeUnify :
             , substitutions : VariableSubstitutions
             }
 typeUnify context a b =
+    -- TODO optimize away Result.maps
     case a of
         TypeNotVariable aTypeNotVariable ->
             case b of
@@ -4445,34 +4446,33 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             aRecordVariableSubstitutions
                             bRecordVariableSubstitutions
                     )
-                    -- TODO avoid double case-of
-                    (variableSubstitutionsFromVariableToType context.declarationTypes
-                        aRecordExtension.recordVariable
-                        (if aVariableReplacementFields |> FastDict.isEmpty then
-                            TypeVariable newBaseVariable
+                    (if aVariableReplacementFields |> FastDict.isEmpty then
+                        variableSubstitutionsFrom2EquivalentVariables
+                            aRecordExtension.recordVariable
+                            newBaseVariable
 
-                         else
-                            TypeNotVariable
-                                (TypeRecordExtension
-                                    { recordVariable = newBaseVariable
-                                    , fields = aVariableReplacementFields
-                                    }
-                                )
-                        )
+                     else
+                        variableSubstitutionsFromVariableToTypeNotVariableOrError context.declarationTypes
+                            aRecordExtension.recordVariable
+                            (TypeRecordExtension
+                                { recordVariable = newBaseVariable
+                                , fields = aVariableReplacementFields
+                                }
+                            )
                     )
-                    (variableSubstitutionsFromVariableToType context.declarationTypes
-                        bRecordExtension.recordVariable
-                        (if bVariableReplacementFields |> FastDict.isEmpty then
-                            TypeVariable newBaseVariable
+                    (if bVariableReplacementFields |> FastDict.isEmpty then
+                        variableSubstitutionsFrom2EquivalentVariables
+                            bRecordExtension.recordVariable
+                            newBaseVariable
 
-                         else
-                            TypeNotVariable
-                                (TypeRecordExtension
-                                    { recordVariable = newBaseVariable
-                                    , fields = bVariableReplacementFields
-                                    }
-                                )
-                        )
+                     else
+                        variableSubstitutionsFromVariableToTypeNotVariableOrError context.declarationTypes
+                            bRecordExtension.recordVariable
+                            (TypeRecordExtension
+                                { recordVariable = newBaseVariable
+                                , fields = bVariableReplacementFields
+                                }
+                            )
                     )
                 )
         )
