@@ -1,84 +1,63 @@
 module TypeVariableFromContext exposing (TypeVariableFromContext, compare, equals, greaterThan, lessThan)
 
+import Elm.Syntax.Range
+
 
 type alias TypeVariableFromContext =
     ( -- combined Range from all uses
-      RangeAsComparable
+      Elm.Syntax.Range.Range
     , String
     )
 
 
-type alias RangeAsComparable =
-    ( -- start
-      LocationAsComparable
-    , -- end
-      LocationAsComparable
-    )
-
-
-type alias LocationAsComparable =
-    ( -- row
-      Int
-    , -- column
-      Int
-    )
-
-
 equals : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-equals ( aRangeAsComparable, aName ) ( bRangeAsComparable, bName ) =
+equals ( aRange, aName ) ( bRange, bName ) =
     (aName == bName)
-        && rangeAsComparableEquals aRangeAsComparable bRangeAsComparable
+        && rangeEquals aRange bRange
 
 
-rangeAsComparableEquals : RangeAsComparable -> RangeAsComparable -> Bool
-rangeAsComparableEquals ( aStart, aEnd ) ( bStart, bEnd ) =
-    locationAsComparableEquals aStart bStart
-        && locationAsComparableEquals aEnd bEnd
+rangeEquals : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
+rangeEquals a b =
+    locationEquals a.start b.start
+        && locationEquals a.end b.end
 
 
-locationAsComparableEquals : LocationAsComparable -> LocationAsComparable -> Bool
-locationAsComparableEquals ( aRow, aColumn ) ( bRow, bColumn ) =
-    (aRow - bRow == 0)
-        && (aColumn - bColumn == 0)
+locationEquals : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
+locationEquals a b =
+    (a.row - b.row == 0)
+        && (a.column - b.column == 0)
 
 
-rangeAsComparableCompare : RangeAsComparable -> RangeAsComparable -> Order
-rangeAsComparableCompare ( aStart, aEnd ) ( bStart, bEnd ) =
-    let
-        ( aStartRow, aStartColumn ) =
-            aStart
-
-        ( bStartRow, bStartColumn ) =
-            bStart
-    in
-    if aStartRow - bStartRow < 0 then
+rangeCompare : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Order
+rangeCompare a b =
+    if a.start.row - b.start.row < 0 then
         LT
 
-    else if aStartRow - bStartRow > 0 then
+    else if a.start.row - b.start.row > 0 then
         GT
 
-    else if aStartColumn - bStartColumn < 0 then
+    else if a.start.column - b.start.column < 0 then
         LT
 
-    else if aStartColumn - bStartColumn > 0 then
+    else if a.start.column - b.start.column > 0 then
         GT
 
     else
-        locationAsComparableCompare aEnd bEnd
+        locationCompare a.end b.end
 
 
-locationAsComparableCompare : LocationAsComparable -> LocationAsComparable -> Order
-locationAsComparableCompare ( aRow, aColumn ) ( bRow, bColumn ) =
-    if aRow - bRow < 0 then
+locationCompare : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Order
+locationCompare a b =
+    if a.row - b.row < 0 then
         LT
 
-    else if aRow - bRow > 0 then
+    else if a.row - b.row > 0 then
         GT
 
-    else if aColumn - bColumn < 0 then
+    else if a.column - b.column < 0 then
         LT
 
-    else if aColumn - bColumn > 0 then
+    else if a.column - b.column > 0 then
         GT
 
     else
@@ -86,97 +65,83 @@ locationAsComparableCompare ( aRow, aColumn ) ( bRow, bColumn ) =
 
 
 compare : TypeVariableFromContext -> TypeVariableFromContext -> Order
-compare ( aRangeAsComparable, aName ) ( bRangeAsComparable, bName ) =
-    if rangeAsComparableEquals aRangeAsComparable bRangeAsComparable then
+compare ( aRange, aName ) ( bRange, bName ) =
+    if rangeEquals aRange bRange then
         Basics.compare aName bName
 
     else
-        rangeAsComparableCompare aRangeAsComparable bRangeAsComparable
+        rangeCompare aRange bRange
 
 
 lessThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-lessThan ( ( aStart, aEnd ), aName ) ( ( bStart, bEnd ), bName ) =
-    let
-        ( aStartRow, aStartColumn ) =
-            aStart
-
-        ( bStartRow, bStartColumn ) =
-            bStart
-    in
-    if aStartRow - bStartRow < 0 then
+lessThan ( aRange, aName ) ( bRange, bName ) =
+    if aRange.start.row - bRange.start.row < 0 then
         True
 
-    else if aStartRow - bStartRow > 0 then
+    else if aRange.start.row - bRange.start.row > 0 then
         False
 
     else
-    -- aStartRow == bStartRow
+    -- a.start.row == b.start.row
     if
-        aStartColumn - bStartColumn < 0
+        aRange.start.column - bRange.start.column < 0
     then
         True
 
-    else if aStartColumn - bStartColumn > 0 then
+    else if aRange.start.column - bRange.start.column > 0 then
         False
 
     else
-    -- bStart == bEnd
+    -- b.start == b.end
     if
-        locationAsComparableEquals aEnd bEnd
+        locationEquals aRange.end bRange.end
     then
         aName < bName
 
     else
-        locationAsComparableLessThen aEnd bEnd
+        locationLessThen aRange.end bRange.end
 
 
-locationAsComparableLessThen : LocationAsComparable -> LocationAsComparable -> Bool
-locationAsComparableLessThen ( aRow, aColumn ) ( bRow, bColumn ) =
-    (aRow - bRow < 0)
-        || ((aRow - bRow == 0)
-                && (aColumn - bColumn < 0)
+locationLessThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
+locationLessThen a b =
+    (a.row - b.row < 0)
+        || ((a.row - b.row == 0)
+                && (a.column - b.column < 0)
            )
 
 
 greaterThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-greaterThan ( ( aStart, aEnd ), aName ) ( ( bStart, bEnd ), bName ) =
-    let
-        ( aStartRow, aStartColumn ) =
-            aStart
-
-        ( bStartRow, bStartColumn ) =
-            bStart
-    in
-    if aStartRow - bStartRow > 0 then
+greaterThan ( aRange, aName ) ( bRange, bName ) =
+    if aRange.start.row - bRange.start.row > 0 then
         True
 
-    else if aStartRow - bStartRow < 0 then
+    else if aRange.start.row - bRange.start.row < 0 then
         False
 
     else
-    -- aStartRow == bStartRow
+    -- a.start.row == b.start.row
     if
-        aStartColumn - bStartColumn > 0
+        aRange.start.column - bRange.start.column > 0
     then
         True
 
-    else if aStartColumn - bStartColumn < 0 then
+    else if aRange.start.column - bRange.start.column < 0 then
         False
 
     else
-    -- aStart == bStart
+    -- a.start == b.start
     if
-        locationAsComparableEquals aEnd bEnd
+        locationEquals aRange.end bRange.end
     then
         aName > bName
 
     else
-        locationAsComparableGreaterThen aEnd bEnd
+        locationGreaterThen aRange.end bRange.end
 
 
-locationAsComparableGreaterThen : LocationAsComparable -> LocationAsComparable -> Bool
-locationAsComparableGreaterThen ( aRow, aColumn ) ( bRow, bColumn ) =
-    (aRow - bRow > 0)
-        || ((aRow - bRow == 0)
-                && (aColumn - bColumn > 0)
+locationGreaterThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
+locationGreaterThen a b =
+    (a.row - b.row > 0)
+        || ((a.row - b.row == 0)
+                && (a.column - b.column > 0)
            )

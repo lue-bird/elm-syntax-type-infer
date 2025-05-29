@@ -122,13 +122,10 @@ is "forall" (as in: should be instantiated on use) or not
 by checking whether its range extends to outside the let declaration body.
 There might be some other way to track this but I couldn't think of one.
 
-Performance note: `TypeVariableFromContext` is a tuple to allow for internal use as a dict key.
-See also `RangeAsComparable`
-
 -}
 type alias TypeVariableFromContext =
     ( -- combined Range from all uses
-      RangeAsComparable
+      Elm.Syntax.Range.Range
     , String
     )
 
@@ -1713,7 +1710,7 @@ typeToInfoString type_ =
 
 typeVariableFromContextToInfoString : TypeVariableFromContext -> String
 typeVariableFromContextToInfoString ( range, variable ) =
-    variable ++ "(" ++ (range |> rangeFromAsComparable |> rangeToInfoString) ++ ")"
+    variable ++ "(" ++ (range |> rangeToInfoString) ++ ")"
 
 
 typeNotVariableToInfoString : TypeNotVariable TypeVariableFromContext -> String
@@ -2719,7 +2716,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                             , parameterToTypeNotVariable =
                                                 soFar.parameterToTypeNotVariable
                                                     |> DictByTypeVariableFromContext.insert
-                                                        ( rangeAsComparableEmpty, parameterName )
+                                                        ( Elm.Syntax.Range.empty, parameterName )
                                                         argumentTypeNotVariable
                                             }
                                 )
@@ -2737,7 +2734,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                                 variable
 
                                             Nothing ->
-                                                ( rangeAsComparableEmpty, parameterName )
+                                                ( Elm.Syntax.Range.empty, parameterName )
                                     )
                     in
                     if
@@ -2792,7 +2789,7 @@ type alias VariableSubstitutions =
 
 type alias EquivalentVariableSet =
     { constraint : Maybe TypeVariableConstraint
-    , overarchingRangeAsComparable : RangeAsComparable
+    , overarchingRange : Elm.Syntax.Range.Range
     , variables : TypeVariableFromContextSet
     }
 
@@ -3006,8 +3003,8 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     { variables =
                         DictByTypeVariableFromContext.twoDistinct aEquivalentVariable () bEquivalentVariable ()
                     , constraint = abConstraint
-                    , overarchingRangeAsComparable =
-                        rangeAsComparableOverarching
+                    , overarchingRange =
+                        rangeOverarching
                             aEquivalentVariableUseRangeAsComparable
                             bEquivalentVariableUseRangeAsComparable
                     }
@@ -3030,9 +3027,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                             equivalentVariablesSet0.variables
                                 |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
                         , constraint = unifiedConstraint
-                        , overarchingRangeAsComparable =
-                            rangeAsComparableOverarching
-                                equivalentVariablesSet0.overarchingRangeAsComparable
+                        , overarchingRange =
+                            rangeOverarching
+                                equivalentVariablesSet0.overarchingRange
                                 bEquivalentVariableUseRangeAsComparable
                         }
                             :: listAppendFastButInReverseOrder
@@ -3055,9 +3052,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                             equivalentVariablesSet0.variables
                                 |> DictByTypeVariableFromContext.insert aEquivalentVariable ()
                         , constraint = unifiedConstraint
-                        , overarchingRangeAsComparable =
-                            rangeAsComparableOverarching
-                                equivalentVariablesSet0.overarchingRangeAsComparable
+                        , overarchingRange =
+                            rangeOverarching
+                                equivalentVariablesSet0.overarchingRange
                                 aEquivalentVariableUseRangeAsComparable
                         }
                             :: listAppendFastButInReverseOrder
@@ -3142,10 +3139,10 @@ equivalentVariableSetMerge a b =
                                                                 aEquivalentVariableSet.variables
                                                                 bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
-                                                        , overarchingRangeAsComparable =
-                                                            rangeAsComparableOverarching
-                                                                aEquivalentVariableSet.overarchingRangeAsComparable
-                                                                bEquivalentVariableSetAndRemaining.value.overarchingRangeAsComparable
+                                                        , overarchingRange =
+                                                            rangeOverarching
+                                                                aEquivalentVariableSet.overarchingRange
+                                                                bEquivalentVariableSetAndRemaining.value.overarchingRange
                                                         }
                                                             :: soFar.sets
                                                     , bRemaining = bEquivalentVariableSetAndRemaining.remaining
@@ -4189,7 +4186,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                 aOriginAliasDeclaration.type_
                                     |> typeMapVariables
                                         (\aliasVariable ->
-                                            ( context.range |> rangeToAsComparable
+                                            ( context.range
                                             , prefix ++ (aliasVariable |> stringFirstCharToUpper)
                                             )
                                         )
@@ -4214,7 +4211,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                     (constructedAliasedTypeSoFar.type_
                                         |> typeSubstituteVariable context
                                             { variable =
-                                                ( context.range |> rangeToAsComparable
+                                                ( context.range
                                                 , prefix ++ (parameterName |> stringFirstCharToUpper)
                                                 )
                                             , type_ = argument
@@ -4409,7 +4406,7 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
 
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    ( rangeAsComparableOverarching
+                    ( rangeOverarching
                         aRecordExtensionRecordVariableUsesRangeAsComparable
                         bRecordExtensionRecordVariableUsesRangeAsComparable
                     , aRecordExtensionRecordVariableName
@@ -4964,7 +4961,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Ok
                 { range = fullRange
                 , value = PatternIgnored
-                , type_ = TypeVariable ( fullRange |> rangeToAsComparable, "ignored" )
+                , type_ = TypeVariable ( fullRange, "ignored" )
                 }
 
         Elm.Syntax.Pattern.UnitPattern ->
@@ -5006,7 +5003,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Ok
                 { range = fullRange
                 , value = PatternVariable variableName
-                , type_ = TypeVariable ( fullRange |> rangeToAsComparable, variableName )
+                , type_ = TypeVariable ( fullRange, variableName )
                 }
 
         Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
@@ -5128,7 +5125,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 , value = fieldName
                                 , type_ =
                                     TypeVariable
-                                        ( fieldRange |> rangeToAsComparable
+                                        ( fieldRange
                                         , fieldName
                                         )
                                 }
@@ -5141,7 +5138,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     TypeNotVariable
                         (TypeRecordExtension
                             { recordVariable =
-                                ( fullRange |> rangeToAsComparable, "record" )
+                                ( fullRange, "record" )
                             , fields =
                                 fieldTypedNodes
                                     |> listMapToFastDict
@@ -5201,7 +5198,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         , value = patternListExactEmpty
                         , type_ =
                             typeListList
-                                (TypeVariable ( fullRange |> rangeToAsComparable, "element" ))
+                                (TypeVariable ( fullRange, "element" ))
                         }
 
                 head :: tail ->
@@ -5400,7 +5397,7 @@ patternVariantTypeInfer context patternVariant =
                                 |> List.map
                                     (\parameter ->
                                         TypeVariable
-                                            ( patternVariant.fullRange |> rangeToAsComparable
+                                            ( patternVariant.fullRange
                                             , parameter
                                             )
                                     )
@@ -5445,7 +5442,7 @@ patternVariantTypeInfer context patternVariant =
                                 (typeInVariant
                                     |> typeMapVariables
                                         (\variableName ->
-                                            ( patternVariant.fullRange |> rangeToAsComparable
+                                            ( patternVariant.fullRange
                                             , variableName
                                             )
                                         )
@@ -5505,14 +5502,14 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
             Ok
                 { range = fullRange
                 , value = ExpressionInteger { base = Base10, value = intValue }
-                , type_ = TypeVariable ( fullRange |> rangeToAsComparable, "number" )
+                , type_ = TypeVariable ( fullRange, "number" )
                 }
 
         Elm.Syntax.Expression.Hex intValue ->
             Ok
                 { range = fullRange
                 , value = ExpressionInteger { base = Base16, value = intValue }
-                , type_ = TypeVariable ( fullRange |> rangeToAsComparable, "number" )
+                , type_ = TypeVariable ( fullRange, "number" )
                 }
 
         Elm.Syntax.Expression.Floatable floatValue ->
@@ -5597,7 +5594,6 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 }
                           , end = fullRange.end
                           }
-                            |> rangeToAsComparable
                         , fieldName
                         )
             in
@@ -5612,7 +5608,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 TypeNotVariable
                                     (TypeRecordExtension
                                         { recordVariable =
-                                            ( fullRange |> rangeToAsComparable
+                                            ( fullRange
                                             , "record"
                                             )
                                         , fields =
@@ -5651,7 +5647,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     substitutionsFromUnifyingNegatedWithNumber
                         )
                         (variableSubstitutionsFromVariableToType context.declarationTypes
-                            ( fullRange |> rangeToAsComparable, "number" )
+                            ( fullRange, "number" )
                             negatedInferred.type_
                         )
                 )
@@ -5667,7 +5663,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         introducedFieldValueTypeVariable : Type TypeVariableFromContext
                         introducedFieldValueTypeVariable =
                             TypeVariable
-                                ( fieldRange |> rangeToAsComparable
+                                ( fieldRange
                                 , fieldName
                                 )
                     in
@@ -5693,7 +5689,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             }
                             (TypeRecordExtension
                                 { recordVariable =
-                                    ( fullRange |> rangeToAsComparable
+                                    ( fullRange
                                     , "record"
                                     )
                                 , fields =
@@ -5843,7 +5839,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         , value = expressionListEmpty
                         , type_ =
                             typeListList
-                                (TypeVariable ( fullRange |> rangeToAsComparable, "element" ))
+                                (TypeVariable ( fullRange, "element" ))
                         }
 
                 head :: tail ->
@@ -5905,7 +5901,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 introducedResultTypeVariable : Type TypeVariableFromContext
                                 introducedResultTypeVariable =
                                     TypeVariable
-                                        ( fullRange |> rangeToAsComparable, "callResult" )
+                                        ( fullRange, "callResult" )
                             in
                             Result.andThen
                                 (\callTypeUnified ->
@@ -6044,7 +6040,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     (TypeNotVariable
                                         (TypeRecordExtension
                                             { recordVariable =
-                                                ( fullRange |> rangeToAsComparable, recordVariableInferred.value.name )
+                                                ( fullRange, recordVariableInferred.value.name )
                                             , fields =
                                                 field1UpInferred
                                                     |> List.foldl
@@ -6524,7 +6520,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                     { range = letDeclarationRange
                                                     , type_ =
                                                         TypeVariable
-                                                            ( letDeclarationRangeAsComparable
+                                                            ( letDeclarationRange
                                                             , name
                                                             )
                                                     }
@@ -6543,7 +6539,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                             type_
                                                                 |> typeMapVariables
                                                                     (\variable ->
-                                                                        ( letDeclarationRangeAsComparable
+                                                                        ( letDeclarationRange
                                                                         , variable
                                                                         )
                                                                     )
@@ -6646,10 +6642,10 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                                         in
                                                         if
                                                             inferredDeclarationType.range
-                                                                |> rangeIncludesRangeAsComparable
+                                                                |> rangeIncludesRange
                                                                     inferredDeclarationTypeVariableUsesRangeAsComparable
                                                         then
-                                                            ( useRangeAsComparable
+                                                            ( useRangeAsComparable |> rangeFromAsComparable
                                                             , inferredDeclarationTypeVariableName
                                                             )
 
@@ -6741,7 +6737,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                                             ( _, inferredDeclarationTypeVariableName ) =
                                                                 inferredDeclarationTypeVariable
                                                         in
-                                                        ( useRangeAsComparable
+                                                        ( useRangeAsComparable |> rangeFromAsComparable
                                                         , inferredDeclarationTypeVariableName
                                                         )
                                                     )
@@ -6950,15 +6946,15 @@ expressionReferenceTypeInfer context expressionReference =
                                                 |> typeMapVariables
                                                     (\partiallyInferredTypeVariable ->
                                                         let
-                                                            ( partiallyInferredTypeVariableRangeAsComparable, partiallyInferredTypeVariableName ) =
+                                                            ( partiallyInferredTypeVariableRange, partiallyInferredTypeVariableName ) =
                                                                 partiallyInferredTypeVariable
                                                         in
                                                         if
                                                             locallyIntroducedDeclarationType.range
-                                                                |> rangeIncludesRangeAsComparable
-                                                                    partiallyInferredTypeVariableRangeAsComparable
+                                                                |> rangeIncludesRange
+                                                                    partiallyInferredTypeVariableRange
                                                         then
-                                                            ( expressionReference.fullRange |> rangeToAsComparable
+                                                            ( expressionReference.fullRange
                                                             , partiallyInferredTypeVariableName
                                                             )
 
@@ -7026,7 +7022,7 @@ expressionReferenceTypeInfer context expressionReference =
                                             signatureType
                                                 |> typeMapVariables
                                                     (\variableName ->
-                                                        ( expressionReference.fullRange |> rangeToAsComparable
+                                                        ( expressionReference.fullRange
                                                         , variableName
                                                         )
                                                     )
@@ -7070,7 +7066,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                                     |> List.map
                                                                         (\parameter ->
                                                                             TypeVariable
-                                                                                ( expressionReference.fullRange |> rangeToAsComparable
+                                                                                ( expressionReference.fullRange
                                                                                 , parameter
                                                                                 )
                                                                         )
@@ -7088,7 +7084,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                                             argument
                                                                                 |> typeMapVariables
                                                                                     (\variableName ->
-                                                                                        ( expressionReference.fullRange |> rangeToAsComparable
+                                                                                        ( expressionReference.fullRange
                                                                                         , variableName
                                                                                         )
                                                                                     )
@@ -7140,7 +7136,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                                     fieldValueType
                                                                                                         |> typeMapVariables
                                                                                                             (\name ->
-                                                                                                                ( expressionReference.fullRange |> rangeToAsComparable
+                                                                                                                ( expressionReference.fullRange
                                                                                                                 , name
                                                                                                                 )
                                                                                                             )
@@ -7157,7 +7153,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                             |> List.map
                                                                                                 (\parameterName ->
                                                                                                     TypeVariable
-                                                                                                        ( expressionReference.fullRange |> rangeToAsComparable
+                                                                                                        ( expressionReference.fullRange
                                                                                                         , parameterName
                                                                                                         )
                                                                                                 )
@@ -7254,6 +7250,20 @@ rangeIncludesRangeAsComparable startToCheckForAsComparable baseRange =
         False
 
 
+rangeIncludesRange : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
+rangeIncludesRange toCheckForInclusion baseRange =
+    ((baseRange.start.row < toCheckForInclusion.start.row)
+        || ((baseRange.start.row - toCheckForInclusion.start.row == 0)
+                && (baseRange.start.column <= toCheckForInclusion.start.column)
+           )
+    )
+        && ((baseRange.end.row > toCheckForInclusion.end.row)
+                || ((baseRange.end.row - toCheckForInclusion.end.row == 0)
+                        && (baseRange.end.column >= toCheckForInclusion.end.column)
+                   )
+           )
+
+
 rangeAsComparableOverarching : RangeAsComparable -> RangeAsComparable -> RangeAsComparable
 rangeAsComparableOverarching ( aStartAsComparable, aEndAsComparable ) ( bStartAsComparable, bEndAsComparable ) =
     ( locationAsComparableMin aStartAsComparable bStartAsComparable
@@ -7297,6 +7307,41 @@ locationAsComparableMax aLocationAsComparable bLocationAsComparable =
 
     else
         ( aRow, Basics.max aColumn bColumn )
+
+
+rangeOverarching : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range
+rangeOverarching a b =
+    { start = locationMin a.start b.start
+    , end = locationMax a.end b.end
+    }
+
+
+locationMin : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location
+locationMin aLocation bLocation =
+    if aLocation.row < bLocation.row then
+        aLocation
+
+    else if bLocation.row < aLocation.row then
+        bLocation
+
+    else
+        { row = aLocation.row
+        , column = Basics.min aLocation.column bLocation.column
+        }
+
+
+locationMax : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location
+locationMax aLocation bLocation =
+    if aLocation.row > bLocation.row then
+        aLocation
+
+    else if bLocation.row > aLocation.row then
+        bLocation
+
+    else
+        { row = aLocation.row
+        , column = Basics.max aLocation.column bLocation.column
+        }
 
 
 letDeclarationTypeInfer :
@@ -7481,7 +7526,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             (TypeVariable
                                                 ( letValueOrFunction
                                                     |> syntaxValueOrFunctionDeclarationRange
-                                                    |> rangeToAsComparable
                                                 , name
                                                 )
                                             )
@@ -7499,7 +7543,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             (\variable ->
                                                 ( letValueOrFunction
                                                     |> syntaxValueOrFunctionDeclarationRange
-                                                    |> rangeToAsComparable
                                                 , variable
                                                 )
                                             )
@@ -7815,17 +7858,13 @@ operatorFunctionType context operator =
     case operator of
         "|>" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7842,17 +7881,13 @@ operatorFunctionType context operator =
 
         "<|" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7869,21 +7904,17 @@ operatorFunctionType context operator =
 
         ">>" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( rangeAsComparable, "c" )
+                    TypeVariable ( context.range, "c" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7912,21 +7943,17 @@ operatorFunctionType context operator =
 
         "<<" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( rangeAsComparable, "c" )
+                    TypeVariable ( context.range, "c" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7955,13 +7982,9 @@ operatorFunctionType context operator =
 
         "++" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 appendable : Type TypeVariableFromContext
                 appendable =
-                    TypeVariable ( rangeAsComparable, "appendable" )
+                    TypeVariable ( context.range, "appendable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7974,7 +7997,7 @@ operatorFunctionType context operator =
             let
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "equatable" )
+                    TypeVariable ( context.range, "equatable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7987,7 +8010,7 @@ operatorFunctionType context operator =
             let
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "equatable" )
+                    TypeVariable ( context.range, "equatable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8000,7 +8023,7 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range |> rangeToAsComparable, "element" )
+                    TypeVariable ( context.range, "element" )
             in
             Ok
                 { moduleOrigin = moduleNameList
@@ -8013,7 +8036,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
+                    TypeVariable ( context.range, "number" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8026,7 +8049,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
+                    TypeVariable ( context.range, "number" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8039,7 +8062,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
+                    TypeVariable ( context.range, "number" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8055,7 +8078,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range |> rangeToAsComparable, "number" )
+                    TypeVariable ( context.range, "number" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8068,7 +8091,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
+                    TypeVariable ( context.range, "comparable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8081,7 +8104,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
+                    TypeVariable ( context.range, "comparable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8094,7 +8117,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
+                    TypeVariable ( context.range, "comparable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8107,7 +8130,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range |> rangeToAsComparable, "comparable" )
+                    TypeVariable ( context.range, "comparable" )
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8126,29 +8149,24 @@ operatorFunctionType context operator =
             okOrOperatorInfo
 
         "|." ->
-            let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-            in
             Ok
                 (if context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced then
                     let
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( rangeAsComparable, "context" )
+                            TypeVariable ( context.range, "context" )
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( rangeAsComparable, "problem" )
+                            TypeVariable ( context.range, "problem" )
 
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( rangeAsComparable, "keep" )
+                            TypeVariable ( context.range, "keep" )
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( rangeAsComparable, "ignore" )
+                            TypeVariable ( context.range, "ignore" )
                     in
                     { moduleOrigin = moduleNameParserAdvanced
                     , leftType = typeParserAdvancedParser varContext problem keep
@@ -8160,11 +8178,11 @@ operatorFunctionType context operator =
                     let
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( rangeAsComparable, "keep" )
+                            TypeVariable ( context.range, "keep" )
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( rangeAsComparable, "ignore" )
+                            TypeVariable ( context.range, "ignore" )
                     in
                     { moduleOrigin = moduleNameParser
                     , leftType = typeParserParser keep
@@ -8174,29 +8192,24 @@ operatorFunctionType context operator =
                 )
 
         "|=" ->
-            let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-            in
             Ok
                 (if context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced then
                     let
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( rangeAsComparable, "context" )
+                            TypeVariable ( context.range, "context" )
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( rangeAsComparable, "problem" )
+                            TypeVariable ( context.range, "problem" )
 
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( rangeAsComparable, "a" )
+                            TypeVariable ( context.range, "a" )
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( rangeAsComparable, "b" )
+                            TypeVariable ( context.range, "b" )
                     in
                     { moduleOrigin = moduleNameParserAdvanced
                     , leftType =
@@ -8218,11 +8231,11 @@ operatorFunctionType context operator =
                     let
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( rangeAsComparable, "a" )
+                            TypeVariable ( context.range, "a" )
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( rangeAsComparable, "b" )
+                            TypeVariable ( context.range, "b" )
                     in
                     { moduleOrigin = moduleNameParser
                     , leftType =
@@ -8241,21 +8254,17 @@ operatorFunctionType context operator =
 
         "</>" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( rangeAsComparable, "c" )
+                    TypeVariable ( context.range, "c" )
             in
             Ok
                 { moduleOrigin = moduleNameUrlParser
@@ -8266,21 +8275,17 @@ operatorFunctionType context operator =
 
         "<?>" ->
             let
-                rangeAsComparable : RangeAsComparable
-                rangeAsComparable =
-                    context.range |> rangeToAsComparable
-
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( rangeAsComparable, "a" )
+                    TypeVariable ( context.range, "a" )
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( rangeAsComparable, "b" )
+                    TypeVariable ( context.range, "b" )
 
                 query : Type TypeVariableFromContext
                 query =
-                    TypeVariable ( rangeAsComparable, "query" )
+                    TypeVariable ( context.range, "query" )
             in
             Ok
                 { moduleOrigin = moduleNameUrlParser
@@ -8606,7 +8611,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         |> FastDict.insert name
                                             { type_ =
                                                 TypeVariable
-                                                    ( declarationRange |> rangeToAsComparable
+                                                    ( declarationRange
                                                     , name
                                                     )
                                             , range = declarationRange
@@ -8771,7 +8776,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                     |> FastDict.insert name
                                                         (TypeVariable
                                                             ( valueOrFunctionDeclarationToInferRange
-                                                                |> rangeToAsComparable
                                                             , name
                                                             )
                                                         )
@@ -8817,7 +8821,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             |> typeMapVariables
                                                                 (\variable ->
                                                                     ( valueOrFunctionDeclarationToInferRange
-                                                                        |> rangeToAsComparable
                                                                     , variable
                                                                     )
                                                                 )
@@ -9156,7 +9159,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                                     partialTypeVariableAmongEquivalentVariables.moreStrictInferredDeclarationType
                                                                         |> typeMapVariables
                                                                             (\( _, variableName ) ->
-                                                                                ( useRangeAsComparable
+                                                                                ( useRangeAsComparable |> rangeFromAsComparable
                                                                                 , variableName
                                                                                 )
                                                                             )
@@ -9285,7 +9288,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                                         substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
                                                                             |> typeMapVariables
                                                                                 (\( _, variableName ) ->
-                                                                                    ( useRangeAsComparable
+                                                                                    ( useRangeAsComparable |> rangeFromAsComparable
                                                                                     , variableName
                                                                                     )
                                                                                 )
@@ -9516,8 +9519,8 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                     [ { variables =
                             DictByTypeVariableFromContext.twoDistinct aVariable () bVariable ()
                       , constraint = abConstraint
-                      , overarchingRangeAsComparable =
-                            rangeAsComparableOverarching
+                      , overarchingRange =
+                            rangeOverarching
                                 aVariableUseRangeAsComparable
                                 bVariableUseRangeAsComparable
                       }
@@ -11910,7 +11913,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                                                             ( _, inferredDeclarationTypeVariableName ) =
                                                                                                 inferredDeclarationTypeVariable
                                                                                         in
-                                                                                        ( useRangeAsComparable
+                                                                                        ( useRangeAsComparable |> rangeFromAsComparable
                                                                                         , inferredDeclarationTypeVariableName
                                                                                         )
 
@@ -12887,7 +12890,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                                                         ( _, inferredDeclarationTypeVariableName ) =
                                                                                             inferredDeclarationTypeVariable
                                                                                     in
-                                                                                    ( useRangeAsComparable
+                                                                                    ( useRangeAsComparable |> rangeFromAsComparable
                                                                                     , inferredDeclarationTypeVariableName
                                                                                     )
 
@@ -14521,7 +14524,7 @@ equivalentVariablesCreateCondensedVariable set =
 
         Just variable0 ->
             Ok
-                ( set.overarchingRangeAsComparable
+                ( set.overarchingRange
                 , case set.constraint of
                     Nothing ->
                         let

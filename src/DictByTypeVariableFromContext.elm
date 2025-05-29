@@ -7,7 +7,7 @@ module DictByTypeVariableFromContext exposing
     , keys, values, toList, fromList
     , map, foldl, foldr, foldlWhileOkFrom, filter, partition
     , union, intersect, diff, merge
-    , toCoreDict, fromCoreDict
+    , fromCoreDict
     , restructure
     )
 
@@ -1345,13 +1345,6 @@ fromListFast assocs =
 
 
 -- INTEROPERABILITY
-
-
-{-| Convert the dictionary into an equivalent one from elm/core.
--}
-toCoreDict : DictByTypeVariableFromContext v -> Dict.Dict TypeVariableFromContext v
-toCoreDict dict =
-    foldl Dict.insert Dict.empty dict
 
 
 {-| Convert the dictionary from an equivalent one from elm/core.
