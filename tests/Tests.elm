@@ -4165,6 +4165,119 @@ eat yum = ()
                             )
                         )
             )
+        , Test.test "inner types are consistent in unindent : List String -> List String ; unindent lines = lines |> List.map identity"
+            (\() ->
+                """module A exposing (..)
+unindent : List String -> List String
+unindent lines = lines |> List.map identity
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map
+                        (FastDict.map
+                            (\_ inferred ->
+                                { result = inferred.result
+                                , parameters = inferred.parameters
+                                }
+                            )
+                        )
+                    |> Expect.equal
+                        (Ok
+                            (FastDict.singleton "unindent"
+                                { parameters =
+                                    [ { range = { end = { column = 15, row = 3 }, start = { column = 10, row = 3 } }
+                                      , type_ = typeList typeString
+                                      , value =
+                                            ElmSyntaxTypeInfer.PatternVariable "lines"
+                                      }
+                                    ]
+                                , result =
+                                    { range = { end = { column = 44, row = 3 }, start = { column = 18, row = 3 } }
+                                    , type_ = typeList typeString
+                                    , value =
+                                        ElmSyntaxTypeInfer.ExpressionInfixOperation
+                                            { left =
+                                                { range = { end = { column = 23, row = 3 }, start = { column = 18, row = 3 } }
+                                                , type_ = typeList typeString
+                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "lines", qualification = [] }
+                                                }
+                                            , operator =
+                                                { moduleOrigin = [ "Basics" ]
+                                                , symbol = "|>"
+                                                , type_ =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                            { input = typeList typeString
+                                                            , output =
+                                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                                        { input =
+                                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                                    { input = typeList typeString
+                                                                                    , output = typeList typeString
+                                                                                    }
+                                                                                )
+                                                                        , output = typeList typeString
+                                                                        }
+                                                                    )
+                                                            }
+                                                        )
+                                                }
+                                            , right =
+                                                { range = { end = { column = 44, row = 3 }, start = { column = 27, row = 3 } }
+                                                , type_ =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                            { input = typeList typeString
+                                                            , output = typeList typeString
+                                                            }
+                                                        )
+                                                , value =
+                                                    ElmSyntaxTypeInfer.ExpressionCall
+                                                        { argument0 =
+                                                            { range = { end = { column = 44, row = 3 }, start = { column = 36, row = 3 } }
+                                                            , type_ =
+                                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                                        { input = typeString
+                                                                        , output = typeString
+                                                                        }
+                                                                    )
+                                                            , value =
+                                                                ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "Basics" ], name = "identity", qualification = [] }
+                                                            }
+                                                        , argument1Up = []
+                                                        , called =
+                                                            { range = { end = { column = 35, row = 3 }, start = { column = 27, row = 3 } }
+                                                            , type_ =
+                                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                                        { input =
+                                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                                    { input = typeString
+                                                                                    , output = typeString
+                                                                                    }
+                                                                                )
+                                                                        , output =
+                                                                            ElmSyntaxTypeInfer.TypeNotVariable
+                                                                                (ElmSyntaxTypeInfer.TypeFunction
+                                                                                    { input = typeList typeString
+                                                                                    , output = typeList typeString
+                                                                                    }
+                                                                                )
+                                                                        }
+                                                                    )
+                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
+                                                            }
+                                                        }
+                                                }
+                                            }
+                                    }
+                                }
+                            )
+                        )
+            )
         , Test.test "inner types are consistent in unindent : List String -> List String ; unindent lines = lines |> List.map (\\line -> line)"
             (\() ->
                 """module A exposing (..)
