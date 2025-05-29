@@ -2806,6 +2806,7 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge context a b =
     -- IGNORE TCO
+    -- TODO inline to get rid of Result.maps
     if a.variableToType |> DictByTypeVariableFromContext.isEmpty then
         case a.equivalentVariables of
             [] ->
@@ -6391,40 +6392,25 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                             { declarationTypes = context.declarationTypes
                             , range = syntaxExpressionLetIn.fullRange
                             }
-                    in
-                    Result.andThen
-                        (\fullSubstitutions ->
-                            letInTypedNodeInferred
-                                |> expressionTypedNodeApplyVariableSubstitutions
-                                    context.declarationTypes
-                                    fullSubstitutions
-                        )
-                        (resultAndThen2
-                            (\destructuringUseUnificationSubstitutions declarationUseUnificationSubstitutions ->
-                                variableSubstitutionsMerge
-                                    typeContext
-                                    destructuringUseUnificationSubstitutions
-                                    declarationUseUnificationSubstitutions
-                            )
-                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
-                                typeContext
-                                ((declaration0Inferred :: declaration1UpInferred)
-                                    |> listMapToFastDictsAndUnify
-                                        (\declarationInferred ->
-                                            case declarationInferred.declaration of
-                                                LetDestructuring letDestructuring ->
-                                                    letDestructuring.pattern
-                                                        |> patternTypedNodeIntroducedVariables
 
-                                                LetValueOrFunctionDeclaration _ ->
-                                                    FastDict.empty
-                                        )
-                                )
-                                letInTypedNodeInferred
-                            )
-                            (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
-                                typeContext
-                                ((declaration0Inferred :: declaration1UpInferred)
+                        inferredIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+                        inferredIntroducedExpressionVariables =
+                            (declaration0Inferred :: declaration1UpInferred)
+                                |> listMapToFastDictsAndUnify
+                                    (\declarationInferred ->
+                                        case declarationInferred.declaration of
+                                            LetDestructuring letDestructuring ->
+                                                letDestructuring.pattern
+                                                    |> patternTypedNodeIntroducedVariables
+
+                                            LetValueOrFunctionDeclaration _ ->
+                                                FastDict.empty
+                                    )
+
+                        inferredUnannotatedDeclarationTypes : FastDict.Dict String { range : Elm.Syntax.Range.Range, type_ : Type TypeVariableFromContext }
+                        inferredUnannotatedDeclarationTypes =
+                            if acrossLetInIncludingContextSoFar.unannotatedDeclarationsExist then
+                                (declaration0Inferred :: declaration1UpInferred)
                                     |> listMapToFastDictsAndUnify
                                         (\declarationInferred ->
                                             case declarationInferred.declaration of
@@ -6443,7 +6429,32 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                                 , type_ = letValueOrFunctionDeclaration.type_
                                                                 }
                                         )
-                                )
+
+                            else
+                                FastDict.empty
+                    in
+                    Result.andThen
+                        (\fullSubstitutions ->
+                            letInTypedNodeInferred
+                                |> expressionTypedNodeApplyVariableSubstitutions
+                                    context.declarationTypes
+                                    fullSubstitutions
+                        )
+                        (resultAndThen2
+                            (\destructuringUseUnificationSubstitutions declarationUseUnificationSubstitutions ->
+                                variableSubstitutionsMerge
+                                    typeContext
+                                    destructuringUseUnificationSubstitutions
+                                    declarationUseUnificationSubstitutions
+                            )
+                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                typeContext
+                                inferredIntroducedExpressionVariables
+                                letInTypedNodeInferred
+                            )
+                            (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
+                                typeContext
+                                inferredUnannotatedDeclarationTypes
                                 letInTypedNodeInferred
                             )
                         )
@@ -6473,7 +6484,8 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
         )
         ((syntaxExpressionLetIn.declaration0 :: syntaxExpressionLetIn.declaration1Up)
             |> listFoldlWhileOkFrom
-                { introducedExpressionVariables =
+                { unannotatedDeclarationsExist = False
+                , introducedExpressionVariables =
                     context.locallyIntroducedExpressionVariables
                 , introducedDeclarationTypes =
                     context.locallyIntroducedDeclarationTypes
@@ -6483,7 +6495,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         Elm.Syntax.Expression.LetDestructuring patternNode _ ->
                             Result.map
                                 (\patternInferred ->
-                                    { introducedDeclarationTypes =
+                                    { unannotatedDeclarationsExist =
+                                        soFar.unannotatedDeclarationsExist
+                                    , introducedDeclarationTypes =
                                         soFar.introducedDeclarationTypes
                                     , introducedExpressionVariables =
                                         FastDict.union soFar.introducedExpressionVariables
@@ -6507,7 +6521,8 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                             case letValueOrFunctionDeclaration.signature of
                                 Nothing ->
                                     Ok
-                                        { introducedExpressionVariables =
+                                        { unannotatedDeclarationsExist = True
+                                        , introducedExpressionVariables =
                                             soFar.introducedExpressionVariables
                                         , introducedDeclarationTypes =
                                             soFar.introducedDeclarationTypes
@@ -6524,7 +6539,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                 Just (Elm.Syntax.Node.Node _ signature) ->
                                     Result.map
                                         (\type_ ->
-                                            { introducedExpressionVariables =
+                                            { unannotatedDeclarationsExist =
+                                                soFar.unannotatedDeclarationsExist
+                                            , introducedExpressionVariables =
                                                 soFar.introducedExpressionVariables
                                             , introducedDeclarationTypes =
                                                 soFar.introducedDeclarationTypes
