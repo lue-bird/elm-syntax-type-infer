@@ -12,8 +12,8 @@ type alias TypeVariableFromContext =
 
 equals : TypeVariableFromContext -> TypeVariableFromContext -> Bool
 equals ( aRange, aName ) ( bRange, bName ) =
-    (aName == bName)
-        && rangeEquals aRange bRange
+    rangeEquals aRange bRange
+        && (aName == bName)
 
 
 rangeEquals : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool

@@ -7179,14 +7179,14 @@ expressionReferenceTypeInfer context expressionReference =
 
 rangeIncludesRange : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
 rangeIncludesRange toCheckForInclusion baseRange =
-    ((baseRange.start.row < toCheckForInclusion.start.row)
+    ((baseRange.start.row - toCheckForInclusion.start.row < 0)
         || ((baseRange.start.row - toCheckForInclusion.start.row == 0)
-                && (baseRange.start.column <= toCheckForInclusion.start.column)
+                && (baseRange.start.column - toCheckForInclusion.start.column <= 0)
            )
     )
-        && ((baseRange.end.row > toCheckForInclusion.end.row)
+        && ((baseRange.end.row - toCheckForInclusion.end.row > 0)
                 || ((baseRange.end.row - toCheckForInclusion.end.row == 0)
-                        && (baseRange.end.column >= toCheckForInclusion.end.column)
+                        && (baseRange.end.column - toCheckForInclusion.end.column >= 0)
                    )
            )
 
@@ -7200,30 +7200,40 @@ rangeOverarching a b =
 
 locationMin : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location
 locationMin aLocation bLocation =
-    if aLocation.row < bLocation.row then
+    if aLocation.row - bLocation.row < 0 then
         aLocation
 
-    else if bLocation.row < aLocation.row then
+    else if bLocation.row - aLocation.row < 0 then
         bLocation
 
     else
-        { row = aLocation.row
-        , column = Basics.min aLocation.column bLocation.column
-        }
+    -- bLocation.row == aLocation.row
+    if
+        aLocation.column - bLocation.column < 0
+    then
+        aLocation
+
+    else
+        bLocation
 
 
 locationMax : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location
 locationMax aLocation bLocation =
-    if aLocation.row > bLocation.row then
+    if aLocation.row - bLocation.row > 0 then
         aLocation
 
-    else if bLocation.row > aLocation.row then
+    else if bLocation.row - aLocation.row > 0 then
         bLocation
 
     else
-        { row = aLocation.row
-        , column = Basics.max aLocation.column bLocation.column
-        }
+    -- bLocation.row == aLocation.row
+    if
+        aLocation.column - bLocation.column > 0
+    then
+        aLocation
+
+    else
+        bLocation
 
 
 letDeclarationTypeInfer :
