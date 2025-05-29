@@ -4445,7 +4445,8 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             aRecordVariableSubstitutions
                             bRecordVariableSubstitutions
                     )
-                    (variableSubstitutionsFromVariableToType
+                    -- TODO avoid double case-of
+                    (variableSubstitutionsFromVariableToType context.declarationTypes
                         aRecordExtension.recordVariable
                         (if aVariableReplacementFields |> FastDict.isEmpty then
                             TypeVariable newBaseVariable
@@ -4459,7 +4460,7 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                                 )
                         )
                     )
-                    (variableSubstitutionsFromVariableToType
+                    (variableSubstitutionsFromVariableToType context.declarationTypes
                         bRecordExtension.recordVariable
                         (if bVariableReplacementFields |> FastDict.isEmpty then
                             TypeVariable newBaseVariable
@@ -5649,7 +5650,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     context.declarationTypes
                                     substitutionsFromUnifyingNegatedWithNumber
                         )
-                        (variableSubstitutionsFromVariableToType
+                        (variableSubstitutionsFromVariableToType context.declarationTypes
                             ( fullRange |> rangeToAsComparable, "number" )
                             negatedInferred.type_
                         )
@@ -9475,20 +9476,16 @@ typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
 
 
 variableSubstitutionsFromVariableToType :
-    TypeVariableFromContext
+    ModuleLevelDeclarationTypesAvailableInModule
+    -> TypeVariableFromContext
     -> Type TypeVariableFromContext
     -> Result String VariableSubstitutions
-variableSubstitutionsFromVariableToType variableToReplace replacementType =
+variableSubstitutionsFromVariableToType declarationsTypes variableToReplace replacementType =
     case replacementType of
         TypeNotVariable replacementTypeNotVariable ->
-            -- TODO use variableSubstitutionsFromVariableToTypeNotVariableOrError
-            -- to detect self-referential substitution
-            Ok
-                { variableToType =
-                    DictByTypeVariableFromContext.singleton variableToReplace
-                        replacementTypeNotVariable
-                , equivalentVariables = []
-                }
+            variableSubstitutionsFromVariableToTypeNotVariableOrError declarationsTypes
+                variableToReplace
+                replacementTypeNotVariable
 
         TypeVariable replacementVariable ->
             variableSubstitutionsFrom2EquivalentVariables
