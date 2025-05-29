@@ -5,11 +5,12 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
-- check if we can only substitute patterns when applying substitutions from unifying with uses, and leave the result pattern as is
+- (!!) skip substitutions when range does not include variable-to-replace' use range
+- optimize typeListUnify. unifying long lists of uses takes ages
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
-- represent LocationAsComparable as row + startColumn * 2^24 to save memory
+- shortcut traversing all inferred module-level declarations for un-annotated ones when none exist
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration
