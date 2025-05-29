@@ -27,6 +27,7 @@ If you are interested in exposing helpers like `expressionMapType`,
 
 -}
 
+import DictByRange exposing (DictByRange)
 import DictByTypeVariableFromContext exposing (DictByTypeVariableFromContext)
 import Elm.Docs
 import Elm.Syntax.Declaration
@@ -2764,11 +2765,6 @@ parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty =
     { parameterToVariable = FastDict.empty
     , parameterToTypeNotVariable = DictByTypeVariableFromContext.empty
     }
-
-
-rangeAsComparableEmpty : RangeAsComparable
-rangeAsComparableEmpty =
-    ( ( 0, 0 ), ( 0, 0 ) )
 
 
 {-| All you need to turn a generic type with variables
@@ -6504,10 +6500,6 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                     letValueOrFunctionDeclaration.declaration
                                         |> Elm.Syntax.Node.value
                                         |> .name
-
-                                letDeclarationRangeAsComparable : RangeAsComparable
-                                letDeclarationRangeAsComparable =
-                                    letDeclarationRange |> rangeToAsComparable
                             in
                             case letValueOrFunctionDeclaration.signature of
                                 Nothing ->
@@ -6589,7 +6581,7 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context intr
                             (listFilledMapAndTypesUnify context
                                 Basics.identity
                                 ( variableParameterType
-                                , usesInLambdaResult |> FastDict.values
+                                , usesInLambdaResult |> DictByRange.values
                                 )
                             )
             )
@@ -6627,9 +6619,9 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
 
                     Just inferredDeclarationType ->
                         usesInLambdaResult
-                            |> fastDictFoldlWhileOkFrom
+                            |> DictByRange.foldlWhileOkFrom
                                 soFar
-                                (\useRangeAsComparable useType soFarWithUses ->
+                                (\useRange useType soFarWithUses ->
                                     let
                                         newDeclarationTypeInstanceForUse : Type TypeVariableFromContext
                                         newDeclarationTypeInstanceForUse =
@@ -6645,7 +6637,7 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                                                 |> rangeIncludesRange
                                                                     inferredDeclarationTypeVariableUsesRangeAsComparable
                                                         then
-                                                            ( useRangeAsComparable |> rangeFromAsComparable
+                                                            ( useRange
                                                             , inferredDeclarationTypeVariableName
                                                             )
 
@@ -6724,9 +6716,9 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
 
                     Just inferredDeclarationType ->
                         usesInLambdaResult
-                            |> fastDictFoldlWhileOkFrom
+                            |> DictByRange.foldlWhileOkFrom
                                 soFar
-                                (\useRangeAsComparable useType soFarWithUses ->
+                                (\useRange useType soFarWithUses ->
                                     let
                                         newDeclarationTypeInstanceForUse : Type TypeVariableFromContext
                                         newDeclarationTypeInstanceForUse =
@@ -6737,7 +6729,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                                             ( _, inferredDeclarationTypeVariableName ) =
                                                                 inferredDeclarationTypeVariable
                                                         in
-                                                        ( useRangeAsComparable |> rangeFromAsComparable
+                                                        ( useRange
                                                         , inferredDeclarationTypeVariableName
                                                         )
                                                     )
@@ -7185,71 +7177,6 @@ expressionReferenceTypeInfer context expressionReference =
                                                                 )
 
 
-type alias RangeAsComparable =
-    ( -- start
-      LocationAsComparable
-    , -- end
-      LocationAsComparable
-    )
-
-
-type alias LocationAsComparable =
-    ( -- row
-      Int
-    , -- column
-      Int
-    )
-
-
-rangeToAsComparable : Elm.Syntax.Range.Range -> RangeAsComparable
-rangeToAsComparable range =
-    ( range.start |> locationToAsComparable
-    , range.end |> locationToAsComparable
-    )
-
-
-locationToAsComparable : Elm.Syntax.Range.Location -> LocationAsComparable
-locationToAsComparable location =
-    ( location.row, location.column )
-
-
-rangeFromAsComparable : RangeAsComparable -> Elm.Syntax.Range.Range
-rangeFromAsComparable ( rangeStart, rangeEnd ) =
-    { start = rangeStart |> locationFromAsComparable
-    , end = rangeEnd |> locationFromAsComparable
-    }
-
-
-locationFromAsComparable : LocationAsComparable -> Elm.Syntax.Range.Location
-locationFromAsComparable ( locationRow, locationColumn ) =
-    { row = locationRow, column = locationColumn }
-
-
-rangeIncludesRangeAsComparable : RangeAsComparable -> Elm.Syntax.Range.Range -> Bool
-rangeIncludesRangeAsComparable startToCheckForAsComparable baseRange =
-    let
-        ( ( toCheckForInnerStartRow, toCheckForInnerStartColumn ), toCheckForInnerEndAsComparable ) =
-            startToCheckForAsComparable
-    in
-    if
-        (baseRange.start.row < toCheckForInnerStartRow)
-            || ((baseRange.start.row - toCheckForInnerStartRow == 0)
-                    && (baseRange.start.column <= toCheckForInnerStartColumn)
-               )
-    then
-        let
-            ( toCheckForInnerEndRow, toCheckForInnerEndColumn ) =
-                toCheckForInnerEndAsComparable
-        in
-        (baseRange.end.row > toCheckForInnerEndRow)
-            || ((baseRange.end.row - toCheckForInnerEndRow == 0)
-                    && (baseRange.end.column >= toCheckForInnerEndColumn)
-               )
-
-    else
-        False
-
-
 rangeIncludesRange : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
 rangeIncludesRange toCheckForInclusion baseRange =
     ((baseRange.start.row < toCheckForInclusion.start.row)
@@ -7262,51 +7189,6 @@ rangeIncludesRange toCheckForInclusion baseRange =
                         && (baseRange.end.column >= toCheckForInclusion.end.column)
                    )
            )
-
-
-rangeAsComparableOverarching : RangeAsComparable -> RangeAsComparable -> RangeAsComparable
-rangeAsComparableOverarching ( aStartAsComparable, aEndAsComparable ) ( bStartAsComparable, bEndAsComparable ) =
-    ( locationAsComparableMin aStartAsComparable bStartAsComparable
-    , locationAsComparableMax aEndAsComparable bEndAsComparable
-    )
-
-
-locationAsComparableMin : LocationAsComparable -> LocationAsComparable -> LocationAsComparable
-locationAsComparableMin aLocationAsComparable bLocationAsComparable =
-    let
-        ( aRow, aColumn ) =
-            aLocationAsComparable
-
-        ( bRow, bColumn ) =
-            bLocationAsComparable
-    in
-    if aRow < bRow then
-        aLocationAsComparable
-
-    else if bRow < aRow then
-        bLocationAsComparable
-
-    else
-        ( aRow, Basics.min aColumn bColumn )
-
-
-locationAsComparableMax : LocationAsComparable -> LocationAsComparable -> LocationAsComparable
-locationAsComparableMax aLocationAsComparable bLocationAsComparable =
-    let
-        ( aRow, aColumn ) =
-            aLocationAsComparable
-
-        ( bRow, bColumn ) =
-            bLocationAsComparable
-    in
-    if aRow > bRow then
-        aLocationAsComparable
-
-    else if bRow > aRow then
-        bLocationAsComparable
-
-    else
-        ( aRow, Basics.max aColumn bColumn )
 
 
 rangeOverarching : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range
@@ -9073,8 +8955,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                         allUnannotatedInferredDeclarationsUsesAfterCondensing :
                                             FastDict.Dict
                                                 String
-                                                (FastDict.Dict
-                                                    RangeAsComparable
+                                                (DictByRange
                                                     (Type TypeVariableFromContext)
                                                 )
                                         allUnannotatedInferredDeclarationsUsesAfterCondensing =
@@ -9085,8 +8966,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                         unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution :
                                             List
                                                 { uses :
-                                                    FastDict.Dict
-                                                        RangeAsComparable
+                                                    DictByRange
                                                         (Type TypeVariableFromContext)
                                                 , moreStrictInferredDeclarationType : Type TypeVariableFromContext
                                                 }
@@ -9150,16 +9030,16 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                             variableSubstitutionsCondensed
                                             (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
                                                 partialTypeVariableAmongEquivalentVariables.uses
-                                                    |> fastDictFoldlWhileOkFrom
+                                                    |> DictByRange.foldlWhileOkFrom
                                                         substitutionsWithPartialUsesUpdatedSoFar
-                                                        (\useRangeAsComparable useType unificationSubstitutionsSoFar ->
+                                                        (\useRange useType unificationSubstitutionsSoFar ->
                                                             let
                                                                 partialTypeNewInstance : Type TypeVariableFromContext
                                                                 partialTypeNewInstance =
                                                                     partialTypeVariableAmongEquivalentVariables.moreStrictInferredDeclarationType
                                                                         |> typeMapVariables
                                                                             (\( _, variableName ) ->
-                                                                                ( useRangeAsComparable |> rangeFromAsComparable
+                                                                                ( useRange
                                                                                 , variableName
                                                                                 )
                                                                             )
@@ -9231,8 +9111,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     allPartiallyInferredDeclarationsAndUsesAfterSubstitution :
                                         FastDict.Dict
                                             String
-                                            (FastDict.Dict
-                                                RangeAsComparable
+                                            (DictByRange
                                                 (Type TypeVariableFromContext)
                                             )
                                     allPartiallyInferredDeclarationsAndUsesAfterSubstitution =
@@ -9243,8 +9122,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     substitutionsOfPartiallyInferredDeclarationUses :
                                         List
                                             { uses :
-                                                FastDict.Dict
-                                                    RangeAsComparable
+                                                DictByRange
                                                     (Type TypeVariableFromContext)
                                             , partiallyInferredDeclarationType : Type TypeVariableFromContext
                                             }
@@ -9279,16 +9157,16 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                 variableSubstitutionsNone
                                                 (\substitutionOfPartiallyInferredDeclaration substitutionsSoFar ->
                                                     substitutionOfPartiallyInferredDeclaration.uses
-                                                        |> fastDictFoldlWhileOkFrom
+                                                        |> DictByRange.foldlWhileOkFrom
                                                             substitutionsSoFar
-                                                            (\useRangeAsComparable useType unificationSubstitutionsWithUsesSoFar ->
+                                                            (\useRange useType unificationSubstitutionsWithUsesSoFar ->
                                                                 let
                                                                     partialTypeNewInstance : Type TypeVariableFromContext
                                                                     partialTypeNewInstance =
                                                                         substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
                                                                             |> typeMapVariables
                                                                                 (\( _, variableName ) ->
-                                                                                    ( useRangeAsComparable |> rangeFromAsComparable
+                                                                                    ( useRange
                                                                                     , variableName
                                                                                     )
                                                                                 )
@@ -9737,8 +9615,7 @@ valueAndFunctionDeclarationsUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (FastDict.Dict
-                RangeAsComparable
+            (DictByRange
                 (Type TypeVariableFromContext)
             )
 valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect inferredValueAndFunctionDeclarations =
@@ -9764,8 +9641,7 @@ expressionTypedNodeUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (FastDict.Dict
-                RangeAsComparable
+            (DictByRange
                 (Type TypeVariableFromContext)
             )
 expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionTypedNode =
@@ -9794,8 +9670,8 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
                 [] ->
                     if localReferencesToCollect |> FastDict.member reference.name then
                         FastDict.singleton reference.name
-                            (FastDict.singleton
-                                (expressionTypedNode.range |> rangeToAsComparable)
+                            (DictByRange.singleton
+                                expressionTypedNode.range
                                 expressionTypedNode.type_
                             )
 
@@ -9909,8 +9785,8 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
         ExpressionRecordUpdate expressionRecordUpdate ->
             (if localReferencesToCollect |> FastDict.member expressionRecordUpdate.recordVariable.value.name then
                 FastDict.singleton expressionRecordUpdate.recordVariable.value.name
-                    (FastDict.singleton
-                        (expressionRecordUpdate.recordVariable.range |> rangeToAsComparable)
+                    (DictByRange.singleton
+                        expressionRecordUpdate.recordVariable.range
                         expressionRecordUpdate.recordVariable.type_
                     )
 
@@ -9974,7 +9850,7 @@ expressionLetInUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (FastDict.Dict RangeAsComparable (Type TypeVariableFromContext))
+            (DictByRange (Type TypeVariableFromContext))
 expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
     expressionLetIn.declaration1Up
         |> List.foldl
@@ -10000,7 +9876,7 @@ letDeclarationUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (FastDict.Dict RangeAsComparable (Type TypeVariableFromContext))
+            (DictByRange (Type TypeVariableFromContext))
 letDeclarationUsesOfLocalReferences localReferencesToCollect letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
@@ -10015,18 +9891,18 @@ letDeclarationUsesOfLocalReferences localReferencesToCollect letDeclaration =
 collectedLocalReferenceUsesMerge :
     FastDict.Dict
         String
-        (FastDict.Dict RangeAsComparable (Type TypeVariableFromContext))
+        (DictByRange (Type TypeVariableFromContext))
     ->
         FastDict.Dict
             String
-            (FastDict.Dict RangeAsComparable (Type TypeVariableFromContext))
+            (DictByRange (Type TypeVariableFromContext))
     ->
         FastDict.Dict
             String
-            (FastDict.Dict RangeAsComparable (Type TypeVariableFromContext))
+            (DictByRange (Type TypeVariableFromContext))
 collectedLocalReferenceUsesMerge a b =
     fastDictUnionWith
-        (\_ aUses bUses -> FastDict.union aUses bUses)
+        (\_ aUses bUses -> DictByRange.union aUses bUses)
         a
         b
 
@@ -11895,9 +11771,9 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
 
                                                 Just inferredDeclarationType ->
                                                     uses
-                                                        |> fastDictFoldlWhileOkFrom
+                                                        |> DictByRange.foldlWhileOkFrom
                                                             soFar
-                                                            (\useRangeAsComparable useType soFarWithUses ->
+                                                            (\useRange useType soFarWithUses ->
                                                                 let
                                                                     letDeclarationTypeNewInstanceForUse : Type TypeVariableFromContext
                                                                     letDeclarationTypeNewInstanceForUse =
@@ -11906,14 +11782,14 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
                                                                                 (\inferredDeclarationTypeVariable ->
                                                                                     if
                                                                                         inferredDeclarationType.range
-                                                                                            |> rangeIncludesRangeAsComparable
-                                                                                                useRangeAsComparable
+                                                                                            |> rangeIncludesRange
+                                                                                                useRange
                                                                                     then
                                                                                         let
                                                                                             ( _, inferredDeclarationTypeVariableName ) =
                                                                                                 inferredDeclarationTypeVariable
                                                                                         in
-                                                                                        ( useRangeAsComparable |> rangeFromAsComparable
+                                                                                        ( useRange
                                                                                         , inferredDeclarationTypeVariableName
                                                                                         )
 
@@ -12869,9 +12745,9 @@ expressionCondenseTypeVariables context typeVariableChange expression =
 
                                             Just inferredDeclarationType ->
                                                 uses
-                                                    |> fastDictFoldlWhileOkFrom
+                                                    |> DictByRange.foldlWhileOkFrom
                                                         soFar
-                                                        (\useRangeAsComparable useType soFarWithUses ->
+                                                        (\useRange useType soFarWithUses ->
                                                             let
                                                                 partialTypeNewInstance :
                                                                     { type_ : Type TypeVariableFromContext
@@ -12883,14 +12759,14 @@ expressionCondenseTypeVariables context typeVariableChange expression =
                                                                             (\inferredDeclarationTypeVariable ->
                                                                                 if
                                                                                     inferredDeclarationType.range
-                                                                                        |> rangeIncludesRangeAsComparable
-                                                                                            useRangeAsComparable
+                                                                                        |> rangeIncludesRange
+                                                                                            useRange
                                                                                 then
                                                                                     let
                                                                                         ( _, inferredDeclarationTypeVariableName ) =
                                                                                             inferredDeclarationTypeVariable
                                                                                     in
-                                                                                    ( useRangeAsComparable |> rangeFromAsComparable
+                                                                                    ( useRange
                                                                                     , inferredDeclarationTypeVariableName
                                                                                     )
 

@@ -1,5 +1,5 @@
-module DictByTypeVariableFromContext exposing
-    ( DictByTypeVariableFromContext
+module DictByRange exposing
+    ( DictByRange
     , empty, singleton, twoDistinct, insert, update, remove
     , isEmpty, member, get, size, equals, any
     , getMinKey, getMin, getMaxKey, getMax
@@ -11,14 +11,14 @@ module DictByTypeVariableFromContext exposing
     , restructure
     )
 
-{-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
+{-| A dictionary mapping unique keys to values. The keys can be any Elm.Syntax.Range.Range
 type. This includes `Int`, `Float`, `Time`, `Char`, `String`, and tuples or
-lists of TypeVariableFromContext types.
+lists of Elm.Syntax.Range.Range types.
 
 Insert, remove, and query operations all take _O(log n)_ time.
 
 
-@docs DictByTypeVariableFromContext
+@docs DictByRange
 
 
 # Build
@@ -65,7 +65,8 @@ Insert, remove, and query operations all take _O(log n)_ time.
 -}
 
 import Dict
-import TypeVariableFromContext exposing (TypeVariableFromContext)
+import Elm.Syntax.Range
+import TypeVariableFromContext
 
 
 
@@ -94,8 +95,8 @@ that lets you look up a `String` (such as user names) and find the associated
         }
 
 -}
-type DictByTypeVariableFromContext v
-    = DictByTypeVariableFromContext Int (InnerDictByTypeVariableFromContext v)
+type DictByRange v
+    = DictByRange Int (InnerDictByTypeVariableFromContext v)
 
 
 
@@ -103,7 +104,7 @@ type DictByTypeVariableFromContext v
 
 
 type InnerDictByTypeVariableFromContext v
-    = InnerNode {- True = Red, False = Black -} Bool TypeVariableFromContext v (InnerDictByTypeVariableFromContext v) (InnerDictByTypeVariableFromContext v)
+    = InnerNode {- True = Red, False = Black -} Bool Elm.Syntax.Range.Range v (InnerDictByTypeVariableFromContext v) (InnerDictByTypeVariableFromContext v)
     | Leaf
 
 
@@ -113,8 +114,8 @@ WARNING: This does _not_ check that the list is sorted.
 
 -}
 innerFromSortedList :
-    { length : Int, list : List ( TypeVariableFromContext, v ) }
-    -> DictByTypeVariableFromContext v
+    { length : Int, list : List ( Elm.Syntax.Range.Range, v ) }
+    -> DictByRange v
 innerFromSortedList associationList =
     let
         redLayer : Int
@@ -123,10 +124,10 @@ innerFromSortedList associationList =
     in
     innerFromSortedListHelp redLayer 0 0 associationList.length associationList.list
         |> Tuple.first
-        |> DictByTypeVariableFromContext associationList.length
+        |> DictByRange associationList.length
 
 
-innerFromSortedListHelp : Int -> Int -> Int -> Int -> List ( TypeVariableFromContext, v ) -> ( InnerDictByTypeVariableFromContext v, List ( TypeVariableFromContext, v ) )
+innerFromSortedListHelp : Int -> Int -> Int -> Int -> List ( Elm.Syntax.Range.Range, v ) -> ( InnerDictByTypeVariableFromContext v, List ( Elm.Syntax.Range.Range, v ) )
 innerFromSortedListHelp redLayer layer fromIncluded toExcluded acc =
     -- IGNORE TCO
     if fromIncluded >= toExcluded then
@@ -163,7 +164,7 @@ type alias VisitQueue v =
 
 {-| Try getting the biggest key/value pair from the visit queue
 -}
-unconsBiggest : VisitQueue v -> Maybe ( TypeVariableFromContext, v, VisitQueue v )
+unconsBiggest : VisitQueue v -> Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v )
 unconsBiggest queue =
     case queue of
         [] ->
@@ -186,7 +187,7 @@ unconsBiggest queue =
 
 {-| Try getting the biggest key/value pair from the visit queue, while dropping all values greater than the given key
 -}
-unconsBiggestWhileDroppingGT : TypeVariableFromContext -> VisitQueue v -> Maybe ( TypeVariableFromContext, v, VisitQueue v )
+unconsBiggestWhileDroppingGT : Elm.Syntax.Range.Range -> VisitQueue v -> Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v )
 unconsBiggestWhileDroppingGT compareKey queue =
     case queue of
         [] ->
@@ -195,10 +196,10 @@ unconsBiggestWhileDroppingGT compareKey queue =
         h :: t ->
             case h of
                 InnerNode color key value childLT childGT ->
-                    if TypeVariableFromContext.greaterThan key compareKey then
+                    if TypeVariableFromContext.rangeGreaterThan key compareKey then
                         unconsBiggestWhileDroppingGT compareKey (childLT :: t)
 
-                    else if TypeVariableFromContext.equals key compareKey then
+                    else if TypeVariableFromContext.rangeEquals key compareKey then
                         Just ( key, value, childLT :: t )
 
                     else
@@ -215,9 +216,9 @@ unconsBiggestWhileDroppingGT compareKey queue =
 
 {-| Create an empty dictionary.
 -}
-empty : DictByTypeVariableFromContext v_
+empty : DictByRange v_
 empty =
-    DictByTypeVariableFromContext 0 Leaf
+    DictByRange 0 Leaf
 
 
 {-| Get the value associated with a key. If the key is not found, return
@@ -238,19 +239,19 @@ dictionary.
     --> Nothing
 
 -}
-get : TypeVariableFromContext -> DictByTypeVariableFromContext v -> Maybe v
-get targetKey (DictByTypeVariableFromContext _ dict) =
+get : Elm.Syntax.Range.Range -> DictByRange v -> Maybe v
+get targetKey (DictByRange _ dict) =
     getInner targetKey dict
 
 
-getInner : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v -> Maybe v
+getInner : Elm.Syntax.Range.Range -> InnerDictByTypeVariableFromContext v -> Maybe v
 getInner targetKey dict =
     case dict of
         Leaf ->
             Nothing
 
         InnerNode _ key value left right ->
-            case TypeVariableFromContext.compare targetKey key of
+            case TypeVariableFromContext.rangeCompare targetKey key of
                 LT ->
                     getInner targetKey left
 
@@ -263,19 +264,19 @@ getInner targetKey dict =
 
 {-| Determine if a key is in a dictionary.
 -}
-member : TypeVariableFromContext -> DictByTypeVariableFromContext v_ -> Bool
-member targetKey (DictByTypeVariableFromContext _ dict) =
+member : Elm.Syntax.Range.Range -> DictByRange v_ -> Bool
+member targetKey (DictByRange _ dict) =
     memberInner targetKey dict
 
 
-memberInner : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v_ -> Bool
+memberInner : Elm.Syntax.Range.Range -> InnerDictByTypeVariableFromContext v_ -> Bool
 memberInner targetKey dict =
     case dict of
         Leaf ->
             False
 
         InnerNode _ key _ left right ->
-            case TypeVariableFromContext.compare targetKey key of
+            case TypeVariableFromContext.rangeCompare targetKey key of
                 LT ->
                     memberInner targetKey left
 
@@ -288,21 +289,21 @@ memberInner targetKey dict =
 
 {-| Determine the number of key-value pairs in the dictionary.
 -}
-size : DictByTypeVariableFromContext v_ -> Int
-size (DictByTypeVariableFromContext sz _) =
+size : DictByRange v_ -> Int
+size (DictByRange sz _) =
     sz
 
 
 {-| Determine if two dictionaries are equal. This is needed because the structure could be different depending on insertion order.
 -}
-equals : DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v -> Bool
-equals (DictByTypeVariableFromContext lsz lRoot) (DictByTypeVariableFromContext rsz rRoot) =
+equals : DictByRange v -> DictByRange v -> Bool
+equals (DictByRange lsz lRoot) (DictByRange rsz rRoot) =
     (lsz - rsz == 0)
         && equalsHelp (unconsBiggest [ lRoot ])
             (unconsBiggest [ rRoot ])
 
 
-equalsHelp : Maybe ( TypeVariableFromContext, v, VisitQueue v ) -> Maybe ( TypeVariableFromContext, v, VisitQueue v ) -> Bool
+equalsHelp : Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v ) -> Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v ) -> Bool
 equalsHelp lList rList =
     case lList of
         Nothing ->
@@ -320,7 +321,7 @@ equalsHelp lList rList =
 
                 Just ( rk, rv, rRest ) ->
                     -- for TCO
-                    if TypeVariableFromContext.equals lk rk && (lv == rv) then
+                    if TypeVariableFromContext.rangeEquals lk rk && (lv == rv) then
                         equalsHelp (unconsBiggest lRest) (unconsBiggest rRest)
 
                     else
@@ -340,10 +341,10 @@ equalsHelp lList rList =
     --> Nothing
 
 -}
-getMinKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
-getMinKey (DictByTypeVariableFromContext _ dict) =
+getMinKey : DictByRange v_ -> Maybe Elm.Syntax.Range.Range
+getMinKey (DictByRange _ dict) =
     let
-        go : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+        go : InnerDictByTypeVariableFromContext v -> Maybe Elm.Syntax.Range.Range
         go n =
             case n of
                 Leaf ->
@@ -371,10 +372,10 @@ getMinKey (DictByTypeVariableFromContext _ dict) =
     --> Nothing
 
 -}
-getMaxKey : DictByTypeVariableFromContext v_ -> Maybe TypeVariableFromContext
-getMaxKey (DictByTypeVariableFromContext _ dict) =
+getMaxKey : DictByRange v_ -> Maybe Elm.Syntax.Range.Range
+getMaxKey (DictByRange _ dict) =
     let
-        go : InnerDictByTypeVariableFromContext v -> Maybe TypeVariableFromContext
+        go : InnerDictByTypeVariableFromContext v -> Maybe Elm.Syntax.Range.Range
         go n =
             case n of
                 Leaf ->
@@ -402,12 +403,12 @@ getMaxKey (DictByTypeVariableFromContext _ dict) =
     --> Nothing
 
 -}
-getMin : DictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
-getMin (DictByTypeVariableFromContext _ dict) =
+getMin : DictByRange v -> Maybe ( Elm.Syntax.Range.Range, v )
+getMin (DictByRange _ dict) =
     getMinInner dict
 
 
-getMinInner : InnerDictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
+getMinInner : InnerDictByTypeVariableFromContext v -> Maybe ( Elm.Syntax.Range.Range, v )
 getMinInner n =
     case n of
         Leaf ->
@@ -433,10 +434,10 @@ getMinInner n =
     --> Nothing
 
 -}
-getMax : DictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
-getMax (DictByTypeVariableFromContext _ dict) =
+getMax : DictByRange v -> Maybe ( Elm.Syntax.Range.Range, v )
+getMax (DictByRange _ dict) =
     let
-        go : InnerDictByTypeVariableFromContext v -> Maybe ( TypeVariableFromContext, v )
+        go : InnerDictByTypeVariableFromContext v -> Maybe ( Elm.Syntax.Range.Range, v )
         go n =
             case n of
                 Leaf ->
@@ -452,15 +453,15 @@ getMax (DictByTypeVariableFromContext _ dict) =
 
 
 any :
-    (TypeVariableFromContext -> value -> Bool)
-    -> DictByTypeVariableFromContext value
+    (Elm.Syntax.Range.Range -> value -> Bool)
+    -> DictByRange value
     -> Bool
-any isNeedle (DictByTypeVariableFromContext _ dict) =
+any isNeedle (DictByRange _ dict) =
     anyInner isNeedle dict
 
 
 anyInner :
-    (TypeVariableFromContext -> value -> Bool)
+    (Elm.Syntax.Range.Range -> value -> Bool)
     -> InnerDictByTypeVariableFromContext value
     -> Bool
 anyInner isNeedle dict =
@@ -494,7 +495,7 @@ anyInner isNeedle dict =
     --> Nothing
 
 -}
-popMin : DictByTypeVariableFromContext v -> Maybe ( ( TypeVariableFromContext, v ), DictByTypeVariableFromContext v )
+popMin : DictByRange v -> Maybe ( ( Elm.Syntax.Range.Range, v ), DictByRange v )
 popMin dict =
     -- TODO: make faster by adapting `remove`
     Maybe.map
@@ -517,7 +518,7 @@ popMin dict =
     --> Nothing
 
 -}
-popMax : DictByTypeVariableFromContext v -> Maybe ( ( TypeVariableFromContext, v ), DictByTypeVariableFromContext v )
+popMax : DictByRange v -> Maybe ( ( Elm.Syntax.Range.Range, v ), DictByRange v )
 popMax dict =
     -- TODO: make faster by adapting `remove`
     Maybe.map
@@ -533,41 +534,41 @@ popMax dict =
     --> True
 
 -}
-isEmpty : DictByTypeVariableFromContext v_ -> Bool
-isEmpty (DictByTypeVariableFromContext dictSize _) =
+isEmpty : DictByRange v_ -> Bool
+isEmpty (DictByRange dictSize _) =
     dictSize == 0
 
 
 {-| Insert a key-value pair into a dictionary. Replaces value when there is
 a collision.
 -}
-insert : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-insert key value (DictByTypeVariableFromContext sz dict) =
+insert : Elm.Syntax.Range.Range -> v -> DictByRange v -> DictByRange v
+insert key value (DictByRange sz dict) =
     let
         ( result, isNew ) =
             insertInner key value dict
     in
     if isNew then
-        DictByTypeVariableFromContext (sz + 1) result
+        DictByRange (sz + 1) result
 
     else
-        DictByTypeVariableFromContext sz result
+        DictByRange sz result
 
 
-insertNoReplace : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-insertNoReplace key value (DictByTypeVariableFromContext sz dict) =
+insertNoReplace : Elm.Syntax.Range.Range -> v -> DictByRange v -> DictByRange v
+insertNoReplace key value (DictByRange sz dict) =
     let
         ( result, isNew ) =
             insertInnerNoReplace key value dict
     in
     if isNew then
-        DictByTypeVariableFromContext (sz + 1) result
+        DictByRange (sz + 1) result
 
     else
-        DictByTypeVariableFromContext sz result
+        DictByRange sz result
 
 
-insertInner : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+insertInner : Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 insertInner key value dict =
     -- Root node is always False
     case insertHelp key value dict of
@@ -578,7 +579,7 @@ insertInner key value dict =
             x
 
 
-insertInnerNoReplace : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+insertInnerNoReplace : Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 insertInnerNoReplace key value dict =
     -- Root node is always False
     case insertHelpNoReplace key value dict of
@@ -589,7 +590,7 @@ insertInnerNoReplace key value dict =
             x
 
 
-insertHelp : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+insertHelp : Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 insertHelp key value dict =
     -- IGNORE TCO
     case dict of
@@ -599,7 +600,7 @@ insertHelp key value dict =
             ( InnerNode True key value Leaf Leaf, True )
 
         InnerNode nColor nKey nValue nLeft nRight ->
-            case TypeVariableFromContext.compare key nKey of
+            case TypeVariableFromContext.rangeCompare key nKey of
                 LT ->
                     let
                         ( newLeft, isNew ) =
@@ -618,7 +619,7 @@ insertHelp key value dict =
                     ( balance nColor nKey nValue nLeft newRight, isNew )
 
 
-insertHelpNoReplace : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+insertHelpNoReplace : Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 insertHelpNoReplace key value dict =
     -- IGNORE TCO
     case dict of
@@ -628,7 +629,7 @@ insertHelpNoReplace key value dict =
             ( InnerNode True key value Leaf Leaf, True )
 
         InnerNode nColor nKey nValue nLeft nRight ->
-            case TypeVariableFromContext.compare key nKey of
+            case TypeVariableFromContext.rangeCompare key nKey of
                 LT ->
                     let
                         ( newLeft, isNew ) =
@@ -647,7 +648,7 @@ insertHelpNoReplace key value dict =
                     ( balance nColor nKey nValue nLeft newRight, isNew )
 
 
-balance : Bool -> TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v
+balance : Bool -> Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v
 balance color key value left right =
     case right of
         InnerNode True rK rV rLeft rRight ->
@@ -680,20 +681,20 @@ balance color key value left right =
 {-| Remove a key-value pair from a dictionary. If the key is not found,
 no changes are made.
 -}
-remove : TypeVariableFromContext -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-remove key ((DictByTypeVariableFromContext sz dict) as orig) =
+remove : Elm.Syntax.Range.Range -> DictByRange v -> DictByRange v
+remove key ((DictByRange sz dict) as orig) =
     let
         ( result, wasMember ) =
             removeInner key dict
     in
     if wasMember then
-        DictByTypeVariableFromContext (sz - 1) result
+        DictByRange (sz - 1) result
 
     else
         orig
 
 
-removeInner : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+removeInner : Elm.Syntax.Range.Range -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 removeInner key dict =
     -- Root node is always False
     case removeHelp key dict of
@@ -710,7 +711,7 @@ makes sure that the bottom node is red by moving red colors down the tree throug
 and color flips. Any violations this will cause, can easily be fixed by balancing on the way
 up again.
 -}
-removeHelp : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+removeHelp : Elm.Syntax.Range.Range -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 removeHelp targetKey dict =
     -- IGNORE TCO
     case dict of
@@ -718,7 +719,7 @@ removeHelp targetKey dict =
             ( Leaf, False )
 
         InnerNode color key value left right ->
-            if TypeVariableFromContext.lessThan targetKey key then
+            if TypeVariableFromContext.rangeLessThan targetKey key then
                 case left of
                     InnerNode False _ _ lLeft _ ->
                         case lLeft of
@@ -731,7 +732,7 @@ removeHelp targetKey dict =
 
                             _ ->
                                 let
-                                    res : { color : Bool, k : TypeVariableFromContext, v : v, left : InnerDictByTypeVariableFromContext v, right : InnerDictByTypeVariableFromContext v }
+                                    res : { color : Bool, k : Elm.Syntax.Range.Range, v : v, left : InnerDictByTypeVariableFromContext v, right : InnerDictByTypeVariableFromContext v }
                                     res =
                                         moveRedLeft color key value left right
 
@@ -751,7 +752,7 @@ removeHelp targetKey dict =
                 removeHelpEQGT targetKey (removeHelpPrepEQGT dict color key value left right)
 
 
-removeHelpPrepEQGT : InnerDictByTypeVariableFromContext v -> Bool -> TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v
+removeHelpPrepEQGT : InnerDictByTypeVariableFromContext v -> Bool -> Elm.Syntax.Range.Range -> v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v
 removeHelpPrepEQGT dict color key value left right =
     case left of
         InnerNode True lK lV lLeft lRight ->
@@ -780,11 +781,11 @@ removeHelpPrepEQGT dict color key value left right =
 {-| When we find the node we are looking for, we can remove by replacing the key-value
 pair with the key-value pair of the left-most node on the right side (the closest pair).
 -}
-removeHelpEQGT : TypeVariableFromContext -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
+removeHelpEQGT : Elm.Syntax.Range.Range -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 removeHelpEQGT targetKey dict =
     case dict of
         InnerNode color key value left right ->
-            if TypeVariableFromContext.equals targetKey key then
+            if TypeVariableFromContext.rangeEquals targetKey key then
                 case getMinInner right of
                     Just ( minKey, minValue ) ->
                         ( balance color minKey minValue left (removeMin right), True )
@@ -818,7 +819,7 @@ removeMin dict =
 
                     _ ->
                         let
-                            res : { color : Bool, k : TypeVariableFromContext, v : v, left : InnerDictByTypeVariableFromContext v, right : InnerDictByTypeVariableFromContext v }
+                            res : { color : Bool, k : Elm.Syntax.Range.Range, v : v, left : InnerDictByTypeVariableFromContext v, right : InnerDictByTypeVariableFromContext v }
                             res =
                                 moveRedLeft color key value left right
                         in
@@ -830,13 +831,13 @@ removeMin dict =
 
 moveRedLeft :
     Bool
-    -> TypeVariableFromContext
+    -> Elm.Syntax.Range.Range
     -> v
     -> InnerDictByTypeVariableFromContext v
     -> InnerDictByTypeVariableFromContext v
     ->
         { color : Bool
-        , k : TypeVariableFromContext
+        , k : Elm.Syntax.Range.Range
         , v : v
         , left : InnerDictByTypeVariableFromContext v
         , right : InnerDictByTypeVariableFromContext v
@@ -869,13 +870,13 @@ moveRedLeft clr k v left right =
 
 
 moveRedRight :
-    TypeVariableFromContext
+    Elm.Syntax.Range.Range
     -> v
-    -> TypeVariableFromContext
+    -> Elm.Syntax.Range.Range
     -> v
     -> InnerDictByTypeVariableFromContext v
     -> InnerDictByTypeVariableFromContext v
-    -> TypeVariableFromContext
+    -> Elm.Syntax.Range.Range
     -> v
     -> InnerDictByTypeVariableFromContext v
     -> InnerDictByTypeVariableFromContext v
@@ -901,7 +902,7 @@ moveRedRight key value lK lV lLeft lRight rK rV rLeft rRight =
 
 {-| Update the value of a dictionary for a specific key with a given function.
 -}
-update : TypeVariableFromContext -> (Maybe v -> Maybe v) -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
+update : Elm.Syntax.Range.Range -> (Maybe v -> Maybe v) -> DictByRange v -> DictByRange v
 update targetKey alter dictionary =
     case alter (get targetKey dictionary) of
         Just value ->
@@ -913,10 +914,10 @@ update targetKey alter dictionary =
 
 {-| Create a dictionary with one key-value pair.
 -}
-singleton : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v
+singleton : Elm.Syntax.Range.Range -> v -> DictByRange v
 singleton key value =
     -- Root node is always False
-    DictByTypeVariableFromContext 1
+    DictByRange 1
         (InnerNode
             False
             key
@@ -930,14 +931,14 @@ singleton key value =
 in case you know with certainty that `aKey` and `bKey` are not equal
 -}
 twoDistinct :
-    TypeVariableFromContext
+    Elm.Syntax.Range.Range
     -> v
-    -> TypeVariableFromContext
+    -> Elm.Syntax.Range.Range
     -> v
-    -> DictByTypeVariableFromContext v
+    -> DictByRange v
 twoDistinct aKey aValue bKey bValue =
-    DictByTypeVariableFromContext 2
-        (if TypeVariableFromContext.lessThan aKey bKey then
+    DictByRange 2
+        (if TypeVariableFromContext.rangeLessThan aKey bKey then
             InnerNode
                 False
                 bKey
@@ -969,15 +970,15 @@ twoDistinct aKey aValue bKey bValue =
 
 foldlWhileOkFrom :
     ok
-    -> (TypeVariableFromContext -> value -> ok -> Result err ok)
-    -> DictByTypeVariableFromContext value
+    -> (Elm.Syntax.Range.Range -> value -> ok -> Result err ok)
+    -> DictByRange value
     -> Result err ok
-foldlWhileOkFrom initialFolded reduceToResult (DictByTypeVariableFromContext _ dict) =
+foldlWhileOkFrom initialFolded reduceToResult (DictByRange _ dict) =
     dict |> foldlWhileOkFromInner reduceToResult initialFolded
 
 
 foldlWhileOkFromInner :
-    (TypeVariableFromContext -> value -> ok -> Result err ok)
+    (Elm.Syntax.Range.Range -> value -> ok -> Result err ok)
     -> ok
     -> InnerDictByTypeVariableFromContext value
     -> Result err ok
@@ -1008,8 +1009,8 @@ foldlWhileOkFromInner func initialFolded dict =
 {-| Combine two dictionaries. If there is a collision, preference is given
 to the first dictionary.
 -}
-union : DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-union ((DictByTypeVariableFromContext s1 _) as t1) ((DictByTypeVariableFromContext s2 _) as t2) =
+union : DictByRange v -> DictByRange v -> DictByRange v
+union ((DictByRange s1 _) as t1) ((DictByRange s2 _) as t2) =
     -- -- TODO: Find a data-based heuristic instead of the vibe-based "2 *"
     -- if s1 > 2 * s2 then
     --     foldl insertNoReplace t1 t2
@@ -1027,8 +1028,8 @@ union ((DictByTypeVariableFromContext s1 _) as t1) ((DictByTypeVariableFromConte
 {-| Keep a key-value pair when its key appears in the second dictionary.
 Preference is given to values in the first dictionary.
 -}
-intersect : DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-intersect (DictByTypeVariableFromContext sz1 t1) (DictByTypeVariableFromContext sz2 t2) =
+intersect : DictByRange v -> DictByRange v -> DictByRange v
+intersect (DictByRange sz1 t1) (DictByRange sz2 t2) =
     -- possible optimization: sz1 * sz2 == 0
     if sz1 == 0 || sz2 == 0 then
         empty
@@ -1043,10 +1044,10 @@ intersect (DictByTypeVariableFromContext sz1 t1) (DictByTypeVariableFromContext 
 
 
 intersectFromZipper :
-    ListWithLength ( TypeVariableFromContext, v )
-    -> Maybe ( TypeVariableFromContext, v, VisitQueue v )
-    -> Maybe ( TypeVariableFromContext, v, VisitQueue v )
-    -> ListWithLength ( TypeVariableFromContext, v )
+    ListWithLength ( Elm.Syntax.Range.Range, v )
+    -> Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v )
+    -> Maybe ( Elm.Syntax.Range.Range, v, VisitQueue v )
+    -> ListWithLength ( Elm.Syntax.Range.Range, v )
 intersectFromZipper dacc lleft rleft =
     case lleft of
         Nothing ->
@@ -1058,10 +1059,10 @@ intersectFromZipper dacc lleft rleft =
                     dacc
 
                 Just ( rkey, _, rtail ) ->
-                    if TypeVariableFromContext.greaterThan lkey rkey then
+                    if TypeVariableFromContext.rangeGreaterThan lkey rkey then
                         intersectFromZipper dacc (unconsBiggestWhileDroppingGT rkey ltail) rleft
 
-                    else if TypeVariableFromContext.greaterThan rkey lkey then
+                    else if TypeVariableFromContext.rangeGreaterThan rkey lkey then
                         intersectFromZipper dacc lleft (unconsBiggestWhileDroppingGT lkey rtail)
 
                     else
@@ -1070,8 +1071,8 @@ intersectFromZipper dacc lleft rleft =
 
 {-| Keep a key-value pair when its key does not appear in the second dictionary.
 -}
-diff : DictByTypeVariableFromContext a -> DictByTypeVariableFromContext b_ -> DictByTypeVariableFromContext a
-diff ((DictByTypeVariableFromContext sz1 _) as t1) t2 =
+diff : DictByRange a -> DictByRange b_ -> DictByRange a
+diff ((DictByRange sz1 _) as t1) t2 =
     if sz1 == 0 then
         empty
 
@@ -1091,26 +1092,26 @@ you want.
 
 -}
 merge :
-    (TypeVariableFromContext -> a -> result -> result)
-    -> (TypeVariableFromContext -> a -> b -> result -> result)
-    -> (TypeVariableFromContext -> b -> result -> result)
-    -> DictByTypeVariableFromContext a
-    -> DictByTypeVariableFromContext b
+    (Elm.Syntax.Range.Range -> a -> result -> result)
+    -> (Elm.Syntax.Range.Range -> a -> b -> result -> result)
+    -> (Elm.Syntax.Range.Range -> b -> result -> result)
+    -> DictByRange a
+    -> DictByRange b
     -> result
     -> result
 merge leftStep bothStep rightStep leftDict rightDict initialResult =
     let
-        stepState : TypeVariableFromContext -> b -> ( List ( TypeVariableFromContext, a ), result ) -> ( List ( TypeVariableFromContext, a ), result )
+        stepState : Elm.Syntax.Range.Range -> b -> ( List ( Elm.Syntax.Range.Range, a ), result ) -> ( List ( Elm.Syntax.Range.Range, a ), result )
         stepState rKey rValue ( list, result ) =
             case list of
                 [] ->
                     ( list, rightStep rKey rValue result )
 
                 ( lKey, lValue ) :: rest ->
-                    if TypeVariableFromContext.lessThan lKey rKey then
+                    if TypeVariableFromContext.rangeLessThan lKey rKey then
                         stepState rKey rValue ( rest, leftStep lKey lValue result )
 
-                    else if TypeVariableFromContext.greaterThan lKey rKey then
+                    else if TypeVariableFromContext.rangeGreaterThan lKey rKey then
                         ( list, rightStep rKey rValue result )
 
                     else
@@ -1128,12 +1129,12 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
 
 {-| Apply a function to all values in a dictionary.
 -}
-map : (TypeVariableFromContext -> a -> b) -> DictByTypeVariableFromContext a -> DictByTypeVariableFromContext b
-map func (DictByTypeVariableFromContext sz dict) =
-    DictByTypeVariableFromContext sz (mapInner func dict)
+map : (Elm.Syntax.Range.Range -> a -> b) -> DictByRange a -> DictByRange b
+map func (DictByRange sz dict) =
+    DictByRange sz (mapInner func dict)
 
 
-mapInner : (TypeVariableFromContext -> a -> b) -> InnerDictByTypeVariableFromContext a -> InnerDictByTypeVariableFromContext b
+mapInner : (Elm.Syntax.Range.Range -> a -> b) -> InnerDictByTypeVariableFromContext a -> InnerDictByTypeVariableFromContext b
 mapInner func dict =
     -- IGNORE TCO
     case dict of
@@ -1170,12 +1171,12 @@ mapInner func dict =
     --> [ 33, 19, 28 ]
 
 -}
-foldl : (TypeVariableFromContext -> v -> b -> b) -> b -> DictByTypeVariableFromContext v -> b
-foldl func acc (DictByTypeVariableFromContext _ dict) =
+foldl : (Elm.Syntax.Range.Range -> v -> b -> b) -> b -> DictByRange v -> b
+foldl func acc (DictByRange _ dict) =
     foldlInner func acc dict
 
 
-foldlInner : (TypeVariableFromContext -> v -> b -> b) -> b -> InnerDictByTypeVariableFromContext v -> b
+foldlInner : (Elm.Syntax.Range.Range -> v -> b -> b) -> b -> InnerDictByTypeVariableFromContext v -> b
 foldlInner func acc dict =
     case dict of
         Leaf ->
@@ -1211,13 +1212,13 @@ foldlInner func acc dict =
     --> [ 28, 19, 33 ]
 
 -}
-foldr : (TypeVariableFromContext -> v -> b -> b) -> b -> DictByTypeVariableFromContext v -> b
-foldr func acc (DictByTypeVariableFromContext _ dict) =
+foldr : (Elm.Syntax.Range.Range -> v -> b -> b) -> b -> DictByRange v -> b
+foldr func acc (DictByRange _ dict) =
     foldrInner func acc dict
 
 
 foldrInner :
-    (TypeVariableFromContext -> v -> b -> b)
+    (Elm.Syntax.Range.Range -> v -> b -> b)
     -> b
     -> InnerDictByTypeVariableFromContext v
     -> b
@@ -1232,7 +1233,7 @@ foldrInner func acc t =
 
 {-| Keep only the key-value pairs that pass the given test.
 -}
-filter : (TypeVariableFromContext -> v -> Bool) -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
+filter : (Elm.Syntax.Range.Range -> v -> Bool) -> DictByRange v -> DictByRange v
 filter isGood dict =
     foldl
         (\k v d ->
@@ -1250,10 +1251,10 @@ filter isGood dict =
 contains all key-value pairs which passed the test, and the second contains
 the pairs that did not.
 -}
-partition : (TypeVariableFromContext -> v -> Bool) -> DictByTypeVariableFromContext v -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v )
+partition : (Elm.Syntax.Range.Range -> v -> Bool) -> DictByRange v -> ( DictByRange v, DictByRange v )
 partition isGood dict =
     let
-        add : TypeVariableFromContext -> v -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v ) -> ( DictByTypeVariableFromContext v, DictByTypeVariableFromContext v )
+        add : Elm.Syntax.Range.Range -> v -> ( DictByRange v, DictByRange v ) -> ( DictByRange v, DictByRange v )
         add key value ( t1, t2 ) =
             if isGood key value then
                 ( insert key value t1, t2 )
@@ -1274,7 +1275,7 @@ partition isGood dict =
     --> [ 0, 1 ]
 
 -}
-keys : DictByTypeVariableFromContext v_ -> List TypeVariableFromContext
+keys : DictByRange v_ -> List Elm.Syntax.Range.Range
 keys dict =
     foldr (\key _ keyList -> key :: keyList) [] dict
 
@@ -1285,31 +1286,31 @@ keys dict =
     --> [ "Alice", "Bob" ]
 
 -}
-values : DictByTypeVariableFromContext v -> List v
+values : DictByRange v -> List v
 values dict =
     foldr (\_ value valueList -> value :: valueList) [] dict
 
 
 {-| Convert a dictionary into an association list of key-value pairs, sorted by keys.
 -}
-toList : DictByTypeVariableFromContext v -> List ( TypeVariableFromContext, v )
+toList : DictByRange v -> List ( Elm.Syntax.Range.Range, v )
 toList dict =
     foldr (\key value list -> ( key, value ) :: list) [] dict
 
 
 {-| Convert an association list into a dictionary.
 -}
-fromList : List ( TypeVariableFromContext, v ) -> DictByTypeVariableFromContext v
+fromList : List ( Elm.Syntax.Range.Range, v ) -> DictByRange v
 fromList assocs =
     List.foldl (\( key, value ) dict -> insert key value dict) empty assocs
 
 
 {-| Convert an association list into a dictionary.
 -}
-fromListFast : List ( TypeVariableFromContext, v ) -> DictByTypeVariableFromContext v
+fromListFast : List ( Elm.Syntax.Range.Range, v ) -> DictByRange v
 fromListFast assocs =
     let
-        dedup : List ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v )
+        dedup : List ( Elm.Syntax.Range.Range, v ) -> ListWithLength ( Elm.Syntax.Range.Range, v )
         dedup xs =
             case xs of
                 [] ->
@@ -1318,7 +1319,7 @@ fromListFast assocs =
                 head :: tail ->
                     dedupHelp head tail listWithLengthEmpty
 
-        dedupHelp : ( TypeVariableFromContext, v ) -> List ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v )
+        dedupHelp : ( Elm.Syntax.Range.Range, v ) -> List ( Elm.Syntax.Range.Range, v ) -> ListWithLength ( Elm.Syntax.Range.Range, v ) -> ListWithLength ( Elm.Syntax.Range.Range, v )
         dedupHelp (( lastKey, _ ) as last) todo acc =
             case todo of
                 [] ->
@@ -1326,9 +1327,9 @@ fromListFast assocs =
 
                 (( todoHeadKey, _ ) as todoHead) :: todoTail ->
                     let
-                        newAcc : ListWithLength ( TypeVariableFromContext, v )
+                        newAcc : ListWithLength ( Elm.Syntax.Range.Range, v )
                         newAcc =
-                            if TypeVariableFromContext.equals todoHeadKey lastKey then
+                            if TypeVariableFromContext.rangeEquals todoHeadKey lastKey then
                                 acc
 
                             else
@@ -1338,7 +1339,7 @@ fromListFast assocs =
     in
     assocs
         |> -- Intentionally swap k1 and k2 here to have a reverse sort so we can do dedup in one pass
-           List.sortWith (\( k1, _ ) ( k2, _ ) -> TypeVariableFromContext.compare k2 k1)
+           List.sortWith (\( k1, _ ) ( k2, _ ) -> TypeVariableFromContext.rangeCompare k2 k1)
         |> dedup
         |> innerFromSortedList
 
@@ -1349,7 +1350,7 @@ fromListFast assocs =
 
 {-| Convert the dictionary from an equivalent one from elm/core.
 -}
-fromCoreDict : Dict.Dict TypeVariableFromContext v -> DictByTypeVariableFromContext v
+fromCoreDict : Dict.Dict Elm.Syntax.Range.Range v -> DictByRange v
 fromCoreDict dict =
     Dict.foldl insert empty dict
 
@@ -1372,16 +1373,16 @@ If this is confusing you probably don't need this function!
 -}
 restructure :
     acc
-    -> ({ key : TypeVariableFromContext, value : value, left : () -> acc, right : () -> acc } -> acc)
-    -> DictByTypeVariableFromContext value
+    -> ({ key : Elm.Syntax.Range.Range, value : value, left : () -> acc, right : () -> acc } -> acc)
+    -> DictByRange value
     -> acc
-restructure leafFunc nodeFunc (DictByTypeVariableFromContext _ dict) =
+restructure leafFunc nodeFunc (DictByRange _ dict) =
     restructureInner leafFunc nodeFunc dict
 
 
 restructureInner :
     acc
-    -> ({ key : TypeVariableFromContext, value : value, left : () -> acc, right : () -> acc } -> acc)
+    -> ({ key : Elm.Syntax.Range.Range, value : value, left : () -> acc, right : () -> acc } -> acc)
     -> InnerDictByTypeVariableFromContext value
     -> acc
 restructureInner leafFunc nodeFunc dict =
