@@ -5,8 +5,10 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
-- (!!) skip substitutions when range does not include variable-to-replace' use range
-- optimize typeListUnify. unifying long lists of uses takes ages
+- for annotated let and top-level declarations, unify parameters and annotation types _before_
+- optimize typeListUnify. unifying long lists of uses takes ages.
+  Prefer either ane-after-another unification in existing traversal.
+  Especially useful for things like substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression!
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
