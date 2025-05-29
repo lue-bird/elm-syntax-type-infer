@@ -12,7 +12,6 @@ optimization ideas
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
 - lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
-- shortcut traversing all inferred module-level declarations for un-annotated ones when none exist
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration
