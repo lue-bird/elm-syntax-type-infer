@@ -8489,7 +8489,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
             }
 
         acrossValueAndFunctionDeclarationsToInfer :
-            { partiallyInferredDeclarationTypes :
+            { unannotatedInferredDeclarationTypes :
                 FastDict.Dict
                     String
                     { type_ : Type TypeVariableFromContext
@@ -8518,8 +8518,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                             |> syntaxValueOrFunctionDeclarationRange
                                 in
                                 { annotated = soFar.annotated
-                                , partiallyInferredDeclarationTypes =
-                                    soFar.partiallyInferredDeclarationTypes
+                                , unannotatedInferredDeclarationTypes =
+                                    soFar.unannotatedInferredDeclarationTypes
                                         |> FastDict.insert name
                                             { type_ =
                                                 TypeVariable
@@ -8541,14 +8541,14 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         soFar
 
                                     Ok type_ ->
-                                        { partiallyInferredDeclarationTypes =
-                                            soFar.partiallyInferredDeclarationTypes
+                                        { unannotatedInferredDeclarationTypes =
+                                            soFar.unannotatedInferredDeclarationTypes
                                         , annotated =
                                             soFar.annotated
                                                 |> FastDict.insert name type_
                                         }
                     )
-                    partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty
+                    unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty
 
         declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
         declarationTypes =
@@ -8692,7 +8692,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             )
                                                         )
                                             , locallyIntroducedDeclarationTypes =
-                                                acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                                acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
                                                     |> FastDict.remove name
                                             , moduleOriginLookup = moduleOriginLookup
                                             }
@@ -8805,7 +8805,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                         parametersInferred.nodes
                                                             |> listMapToFastDictsAndUnify patternTypedNodeIntroducedVariables
                                                     , locallyIntroducedDeclarationTypes =
-                                                        acrossValueAndFunctionDeclarationsToInfer.partiallyInferredDeclarationTypes
+                                                        acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
                                                     , moduleOriginLookup = moduleOriginLookup
                                                     }
                                             )
@@ -8824,62 +8824,69 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
             )
         |> Result.andThen
             (\declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations ->
-                let
-                    unannotatedDeclarationTypes :
-                        FastDict.Dict
-                            String
-                            { range : Elm.Syntax.Range.Range
-                            , type_ : Type TypeVariableFromContext
-                            }
-                    unannotatedDeclarationTypes =
-                        declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                            |> FastDict.foldl
-                                (\declarationName declaration soFar ->
-                                    case declaration.signature of
-                                        Just _ ->
-                                            soFar
+                if
+                    acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
+                        |> FastDict.isEmpty
+                then
+                    Ok declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
 
-                                        Nothing ->
-                                            soFar
-                                                |> FastDict.insert declarationName
-                                                    { type_ = declaration.type_
-                                                    , range =
-                                                        declaration
-                                                            |> valueOrFunctionDeclarationInfoRange
-                                                    }
+                else
+                    let
+                        unannotatedDeclarationTypes :
+                            FastDict.Dict
+                                String
+                                { range : Elm.Syntax.Range.Range
+                                , type_ : Type TypeVariableFromContext
+                                }
+                        unannotatedDeclarationTypes =
+                            declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
+                                |> FastDict.foldl
+                                    (\declarationName declaration soFar ->
+                                        case declaration.signature of
+                                            Just _ ->
+                                                soFar
+
+                                            Nothing ->
+                                                soFar
+                                                    |> FastDict.insert declarationName
+                                                        { type_ = declaration.type_
+                                                        , range =
+                                                            declaration
+                                                                |> valueOrFunctionDeclarationInfoRange
+                                                        }
+                                    )
+                                    FastDict.empty
+                    in
+                    -- TODO optimization: if declaration is annotated, apply subs directly
+                    Result.andThen
+                        (\substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses ->
+                            declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
+                                |> valueAndFunctionDeclarationsApplyVariableSubstitutions
+                                    declarationTypes
+                                    substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
+                        )
+                        (declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
+                            |> fastDictFoldlWhileOkFrom
+                                variableSubstitutionsNone
+                                (\_ declarationInfo soFar ->
+                                    Result.andThen
+                                        (\resultSubstitutions ->
+                                            variableSubstitutionsMerge
+                                                { declarationTypes = declarationTypes
+                                                , range = everywhereRange
+                                                }
+                                                soFar
+                                                resultSubstitutions
+                                        )
+                                        (declarationInfo.result
+                                            |> substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression
+                                                { declarationTypes = declarationTypes
+                                                , range = declarationInfo |> valueOrFunctionDeclarationInfoRange
+                                                }
+                                                unannotatedDeclarationTypes
+                                        )
                                 )
-                                FastDict.empty
-                in
-                -- TODO optimization: if declaration is annotated, apply subs directly
-                Result.andThen
-                    (\substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses ->
-                        declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                            |> valueAndFunctionDeclarationsApplyVariableSubstitutions
-                                declarationTypes
-                                substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
-                    )
-                    (declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                        |> fastDictFoldlWhileOkFrom
-                            variableSubstitutionsNone
-                            (\_ declarationInfo soFar ->
-                                Result.andThen
-                                    (\resultSubstitutions ->
-                                        variableSubstitutionsMerge
-                                            { declarationTypes = declarationTypes
-                                            , range = everywhereRange
-                                            }
-                                            soFar
-                                            resultSubstitutions
-                                    )
-                                    (declarationInfo.result
-                                        |> substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression
-                                            { declarationTypes = declarationTypes
-                                            , range = declarationInfo |> valueOrFunctionDeclarationInfoRange
-                                            }
-                                            unannotatedDeclarationTypes
-                                    )
-                            )
-                    )
+                        )
             )
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
@@ -9237,8 +9244,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                     valueAndFunctionDeclarationsSubstituted.declarations
 
 
-partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty :
-    { partiallyInferredDeclarationTypes :
+unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty :
+    { unannotatedInferredDeclarationTypes :
         FastDict.Dict
             String
             { type_ : Type TypeVariableFromContext
@@ -9246,8 +9253,8 @@ partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty :
             }
     , annotated : FastDict.Dict String (Type String)
     }
-partiallyInferredDeclarationTypesEmptyAndAnnotatedEmpty =
-    { partiallyInferredDeclarationTypes = FastDict.empty
+unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty =
+    { unannotatedInferredDeclarationTypes = FastDict.empty
     , annotated = FastDict.empty
     }
 
