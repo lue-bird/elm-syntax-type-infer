@@ -1107,14 +1107,15 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
                     ( list, rightStep rKey rValue result )
 
                 ( lKey, lValue ) :: rest ->
-                    if TypeVariableFromContext.lessThan lKey rKey then
-                        stepState rKey rValue ( rest, leftStep lKey lValue result )
+                    case TypeVariableFromContext.compare lKey rKey of
+                        LT ->
+                            stepState rKey rValue ( rest, leftStep lKey lValue result )
 
-                    else if TypeVariableFromContext.greaterThan lKey rKey then
-                        ( list, rightStep rKey rValue result )
+                        GT ->
+                            ( list, rightStep rKey rValue result )
 
-                    else
-                        ( rest, bothStep lKey lValue rValue result )
+                        EQ ->
+                            ( rest, bothStep lKey lValue rValue result )
 
         ( leftovers, intermediateResult ) =
             foldl stepState ( toList leftDict, initialResult ) rightDict

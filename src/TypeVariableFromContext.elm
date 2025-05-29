@@ -66,11 +66,37 @@ locationCompare a b =
 
 compare : TypeVariableFromContext -> TypeVariableFromContext -> Order
 compare ( aRange, aName ) ( bRange, bName ) =
-    if rangeEquals aRange bRange then
-        Basics.compare aName bName
+    if aRange.start.row - bRange.start.row < 0 then
+        LT
+
+    else if aRange.start.row - bRange.start.row > 0 then
+        GT
+
+    else if aRange.start.column - bRange.start.column < 0 then
+        LT
+
+    else if aRange.start.column - bRange.start.column > 0 then
+        GT
 
     else
-        rangeCompare aRange bRange
+    -- aRange.start == bRange.start
+    if
+        aRange.end.row - bRange.end.row < 0
+    then
+        LT
+
+    else if aRange.end.row - bRange.end.row > 0 then
+        GT
+
+    else if aRange.end.column - bRange.end.column < 0 then
+        LT
+
+    else if aRange.end.column - bRange.end.column > 0 then
+        GT
+
+    else
+        -- aRange == bRange
+        Basics.compare aName bName
 
 
 lessThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
