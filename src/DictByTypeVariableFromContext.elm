@@ -1100,27 +1100,45 @@ merge :
     -> result
 merge leftStep bothStep rightStep leftDict rightDict initialResult =
     let
-        stepState : TypeVariableFromContext -> b -> ( List ( TypeVariableFromContext, a ), result ) -> ( List ( TypeVariableFromContext, a ), result )
-        stepState rKey rValue ( list, result ) =
-            case list of
-                [] ->
-                    ( list, rightStep rKey rValue result )
-
-                ( lKey, lValue ) :: rest ->
-                    case TypeVariableFromContext.compare lKey rKey of
-                        LT ->
-                            stepState rKey rValue ( rest, leftStep lKey lValue result )
-
-                        GT ->
-                            ( list, rightStep rKey rValue result )
-
-                        EQ ->
-                            ( rest, bothStep lKey lValue rValue result )
-
         ( leftovers, intermediateResult ) =
-            foldl stepState ( toList leftDict, initialResult ) rightDict
+            foldl
+                (\rKey rValue soFar ->
+                    mergeStep leftStep bothStep rightStep rKey rValue soFar
+                )
+                ( toList leftDict, initialResult )
+                rightDict
     in
     List.foldl (\( k, v ) result -> leftStep k v result) intermediateResult leftovers
+
+
+mergeStep :
+    (TypeVariableFromContext -> a -> result -> result)
+    -> (TypeVariableFromContext -> a -> b -> result -> result)
+    -> (TypeVariableFromContext -> b -> result -> result)
+    -> TypeVariableFromContext
+    -> b
+    -> ( List ( TypeVariableFromContext, a ), result )
+    -> ( List ( TypeVariableFromContext, a ), result )
+mergeStep leftStep bothStep rightStep rKey rValue ( list, result ) =
+    case list of
+        [] ->
+            ( list, rightStep rKey rValue result )
+
+        ( lKey, lValue ) :: rest ->
+            case TypeVariableFromContext.compare lKey rKey of
+                LT ->
+                    mergeStep leftStep
+                        bothStep
+                        rightStep
+                        rKey
+                        rValue
+                        ( rest, leftStep lKey lValue result )
+
+                GT ->
+                    ( list, rightStep rKey rValue result )
+
+                EQ ->
+                    ( rest, bothStep lKey lValue rValue result )
 
 
 
