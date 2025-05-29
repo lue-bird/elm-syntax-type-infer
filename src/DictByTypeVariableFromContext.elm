@@ -67,7 +67,6 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 import Dict
 import DictByTypeVariableFromContextInternal exposing (DictByTypeVariableFromContext(..))
-import ListWithLength exposing (ListWithLength)
 import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
@@ -924,7 +923,7 @@ intersect (DictByTypeVariableFromContextInternal.DictByTypeVariableFromContext s
     else
         -- Now t1 and t2 are never leaves, so we have an invariant that queues never contain leaves
         intersectFromZipper
-            ListWithLength.empty
+            listWithLengthEmpty
             (DictByTypeVariableFromContextInternal.unconsBiggest [ t1 ])
             (DictByTypeVariableFromContextInternal.unconsBiggest [ t2 ])
             |> DictByTypeVariableFromContextInternal.fromSortedList
@@ -953,7 +952,7 @@ intersectFromZipper dacc lleft rleft =
                         intersectFromZipper dacc lleft (DictByTypeVariableFromContextInternal.unconsBiggestWhileDroppingGT lkey rtail)
 
                     else
-                        intersectFromZipper (ListWithLength.cons ( lkey, lvalue ) dacc) (DictByTypeVariableFromContextInternal.unconsBiggest ltail) (DictByTypeVariableFromContextInternal.unconsBiggest rtail)
+                        intersectFromZipper (listWithLengthCons ( lkey, lvalue ) dacc) (DictByTypeVariableFromContextInternal.unconsBiggest ltail) (DictByTypeVariableFromContextInternal.unconsBiggest rtail)
 
 
 {-| Keep a key-value pair when its key does not appear in the second dictionary.
@@ -1201,16 +1200,16 @@ fromListFast assocs =
         dedup xs =
             case xs of
                 [] ->
-                    ListWithLength.empty
+                    listWithLengthEmpty
 
                 head :: tail ->
-                    dedupHelp head tail ListWithLength.empty
+                    dedupHelp head tail listWithLengthEmpty
 
         dedupHelp : ( TypeVariableFromContext, v ) -> List ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v ) -> ListWithLength ( TypeVariableFromContext, v )
         dedupHelp (( lastKey, _ ) as last) todo acc =
             case todo of
                 [] ->
-                    ListWithLength.cons last acc
+                    listWithLengthCons last acc
 
                 (( todoHeadKey, _ ) as todoHead) :: todoTail ->
                     let
@@ -1220,7 +1219,7 @@ fromListFast assocs =
                                 acc
 
                             else
-                                ListWithLength.cons last acc
+                                listWithLengthCons last acc
                     in
                     dedupHelp todoHead todoTail newAcc
     in
@@ -1292,3 +1291,24 @@ restructureInner leafFunc nodeFunc dict =
                 , left = \() -> restructureInner leafFunc nodeFunc left
                 , right = \() -> restructureInner leafFunc nodeFunc right
                 }
+
+
+type alias ListWithLength a =
+    { length : Int, list : List a }
+
+
+listWithLengthEmpty : ListWithLength a_
+listWithLengthEmpty =
+    { length = 0, list = [] }
+
+
+{-| Prepend an element to the list.
+
+This function is O(1).
+
+-}
+listWithLengthCons : a -> ListWithLength a -> ListWithLength a
+listWithLengthCons newHead listWithLength =
+    { length = listWithLength.length + 1
+    , list = newHead :: listWithLength.list
+    }

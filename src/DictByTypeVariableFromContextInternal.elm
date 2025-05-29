@@ -1,6 +1,5 @@
 module DictByTypeVariableFromContextInternal exposing (DictByTypeVariableFromContext(..), InnerDictByTypeVariableFromContext(..), VisitQueue, fromSortedList, unconsBiggest, unconsBiggestWhileDroppingGT)
 
-import ListWithLength exposing (ListWithLength)
 import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
@@ -22,20 +21,18 @@ type DictByTypeVariableFromContext v
 WARNING: This does _not_ check that the list is sorted.
 
 -}
-fromSortedList : ListWithLength ( TypeVariableFromContext, v ) -> DictByTypeVariableFromContext v
-fromSortedList dacc =
+fromSortedList :
+    { length : Int, list : List ( TypeVariableFromContext, v ) }
+    -> DictByTypeVariableFromContext v
+fromSortedList associationList =
     let
-        len : Int
-        len =
-            ListWithLength.length dacc
-
         redLayer : Int
         redLayer =
-            floor (logBase 2 (toFloat len))
+            floor (logBase 2 (toFloat associationList.length))
     in
-    fromSortedListHelp redLayer 0 0 len (ListWithLength.toList dacc)
+    fromSortedListHelp redLayer 0 0 associationList.length associationList.list
         |> Tuple.first
-        |> DictByTypeVariableFromContext len
+        |> DictByTypeVariableFromContext associationList.length
 
 
 fromSortedListHelp : Int -> Int -> Int -> Int -> List ( TypeVariableFromContext, v ) -> ( InnerDictByTypeVariableFromContext v, List ( TypeVariableFromContext, v ) )
