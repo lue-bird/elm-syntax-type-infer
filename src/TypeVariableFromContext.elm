@@ -1,4 +1,4 @@
-module TypeVariableFromContext exposing (TypeVariableFromContext, compare, equals, greaterThan, lessThan, rangeCompare, rangeEquals, rangeGreaterThan, rangeLessThan)
+module TypeVariableFromContext exposing (TypeVariableFromContext, compare, equals, greaterThan, lessThan)
 
 import Elm.Syntax.Range
 
@@ -26,24 +26,6 @@ locationEquals : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
 locationEquals a b =
     (a.row - b.row == 0)
         && (a.column - b.column == 0)
-
-
-rangeCompare : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Order
-rangeCompare a b =
-    if a.start.row - b.start.row < 0 then
-        LT
-
-    else if a.start.row - b.start.row > 0 then
-        GT
-
-    else if a.start.column - b.start.column < 0 then
-        LT
-
-    else if a.start.column - b.start.column > 0 then
-        GT
-
-    else
-        locationCompare a.end b.end
 
 
 locationCompare : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Order
@@ -128,29 +110,6 @@ lessThan ( aRange, aName ) ( bRange, bName ) =
         locationLessThen aRange.end bRange.end
 
 
-rangeLessThan : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
-rangeLessThan aRange bRange =
-    if aRange.start.row - bRange.start.row < 0 then
-        True
-
-    else if aRange.start.row - bRange.start.row > 0 then
-        False
-
-    else
-    -- a.start.row == b.start.row
-    if
-        aRange.start.column - bRange.start.column < 0
-    then
-        True
-
-    else if aRange.start.column - bRange.start.column > 0 then
-        False
-
-    else
-        -- b.start == b.end
-        locationLessThen aRange.end bRange.end
-
-
 locationLessThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
 locationLessThen a b =
     (a.row - b.row < 0)
@@ -185,29 +144,6 @@ greaterThan ( aRange, aName ) ( bRange, bName ) =
         aName > bName
 
     else
-        locationGreaterThen aRange.end bRange.end
-
-
-rangeGreaterThan : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
-rangeGreaterThan aRange bRange =
-    if aRange.start.row - bRange.start.row > 0 then
-        True
-
-    else if aRange.start.row - bRange.start.row < 0 then
-        False
-
-    else
-    -- a.start.row == b.start.row
-    if
-        aRange.start.column - bRange.start.column > 0
-    then
-        True
-
-    else if aRange.start.column - bRange.start.column < 0 then
-        False
-
-    else
-        -- a.start == b.start
         locationGreaterThen aRange.end bRange.end
 
 

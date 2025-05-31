@@ -27,7 +27,6 @@ If you are interested in exposing helpers like `expressionMapType`,
 
 -}
 
-import DictByRange exposing (DictByRange)
 import DictByTypeVariableFromContext exposing (DictByTypeVariableFromContext)
 import Elm.Docs
 import Elm.Syntax.Declaration
@@ -6592,18 +6591,31 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context intr
                             )
 
                     Just variableParameterType ->
-                        Result.andThen
-                            (\variableUsesAndParameterUnified ->
-                                variableSubstitutionsMerge context
-                                    soFar
-                                    variableUsesAndParameterUnified.substitutions
-                            )
-                            (listFilledMapAndTypesUnify context
-                                Basics.identity
-                                ( variableParameterType
-                                , usesInLambdaResult |> DictByRange.values
+                        usesInLambdaResult
+                            |> ropeFoldlWhileOkFrom
+                                { substitutions = soFar
+                                , type_ = variableParameterType
+                                }
+                                (\_ useInLambdaResultType unifiedAcrossUsesSoFar ->
+                                    Result.andThen
+                                        (\unifiedSoFarWithUse ->
+                                            Result.map
+                                                (\unificationWithSoFarSubstitutions ->
+                                                    { type_ = unifiedSoFarWithUse.type_
+                                                    , substitutions = unificationWithSoFarSubstitutions
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge context
+                                                    unifiedAcrossUsesSoFar.substitutions
+                                                    unifiedSoFarWithUse.substitutions
+                                                )
+                                        )
+                                        (typeUnify context
+                                            useInLambdaResultType
+                                            unifiedAcrossUsesSoFar.type_
+                                        )
                                 )
-                            )
+                            |> Result.map .substitutions
             )
 
 
@@ -6639,7 +6651,7 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
 
                     Just inferredDeclarationType ->
                         usesInLambdaResult
-                            |> DictByRange.foldlWhileOkFrom
+                            |> ropeFoldlWhileOkFrom
                                 soFar
                                 (\useRange useType soFarWithUses ->
                                     let
@@ -6736,7 +6748,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
 
                     Just inferredDeclarationType ->
                         usesInLambdaResult
-                            |> DictByRange.foldlWhileOkFrom
+                            |> ropeFoldlWhileOkFrom
                                 soFar
                                 (\useRange useType soFarWithUses ->
                                     let
@@ -8992,7 +9004,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                         allUnannotatedInferredDeclarationsUsesAfterCondensing :
                                             FastDict.Dict
                                                 String
-                                                (DictByRange
+                                                (Rope
+                                                    Elm.Syntax.Range.Range
                                                     (Type TypeVariableFromContext)
                                                 )
                                         allUnannotatedInferredDeclarationsUsesAfterCondensing =
@@ -9003,7 +9016,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                         unannotatedDeclarationsAndUsesThatGotMoreStrictAfterSubstitution :
                                             List
                                                 { uses :
-                                                    DictByRange
+                                                    Rope
+                                                        Elm.Syntax.Range.Range
                                                         (Type TypeVariableFromContext)
                                                 , moreStrictInferredDeclarationType : Type TypeVariableFromContext
                                                 }
@@ -9067,7 +9081,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                             variableSubstitutionsCondensed
                                             (\partialTypeVariableAmongEquivalentVariables substitutionsWithPartialUsesUpdatedSoFar ->
                                                 partialTypeVariableAmongEquivalentVariables.uses
-                                                    |> DictByRange.foldlWhileOkFrom
+                                                    |> ropeFoldlWhileOkFrom
                                                         substitutionsWithPartialUsesUpdatedSoFar
                                                         (\useRange useType unificationSubstitutionsSoFar ->
                                                             let
@@ -9148,7 +9162,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     allPartiallyInferredDeclarationsAndUsesAfterSubstitution :
                                         FastDict.Dict
                                             String
-                                            (DictByRange
+                                            (Rope
+                                                Elm.Syntax.Range.Range
                                                 (Type TypeVariableFromContext)
                                             )
                                     allPartiallyInferredDeclarationsAndUsesAfterSubstitution =
@@ -9159,7 +9174,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     substitutionsOfPartiallyInferredDeclarationUses :
                                         List
                                             { uses :
-                                                DictByRange
+                                                Rope
+                                                    Elm.Syntax.Range.Range
                                                     (Type TypeVariableFromContext)
                                             , partiallyInferredDeclarationType : Type TypeVariableFromContext
                                             }
@@ -9194,7 +9210,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                 variableSubstitutionsNone
                                                 (\substitutionOfPartiallyInferredDeclaration substitutionsSoFar ->
                                                     substitutionOfPartiallyInferredDeclaration.uses
-                                                        |> DictByRange.foldlWhileOkFrom
+                                                        |> ropeFoldlWhileOkFrom
                                                             substitutionsSoFar
                                                             (\useRange useType unificationSubstitutionsWithUsesSoFar ->
                                                                 let
@@ -9643,6 +9659,34 @@ listMapToFastDictsAndUnify elementToSet elements =
             FastDict.empty
 
 
+type Rope key value
+    = RopeLeaf key value
+    | RopeBranch (Rope key value) (Rope key value)
+
+
+ropeFoldlWhileOkFrom :
+    state
+    -> (key -> value -> state -> Result error state)
+    -> Rope key value
+    -> Result error state
+ropeFoldlWhileOkFrom initialState reduceToResult rope =
+    -- IGNORE TCO
+    case rope of
+        RopeLeaf key value ->
+            reduceToResult key value initialState
+
+        RopeBranch left right ->
+            case ropeFoldlWhileOkFrom initialState reduceToResult left of
+                Err error ->
+                    Err error
+
+                Ok leftState ->
+                    ropeFoldlWhileOkFrom
+                        leftState
+                        reduceToResult
+                        right
+
+
 valueAndFunctionDeclarationsUsesOfLocalReferences :
     FastDict.Dict String whatever_
     ->
@@ -9652,7 +9696,8 @@ valueAndFunctionDeclarationsUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (DictByRange
+            (Rope
+                Elm.Syntax.Range.Range
                 (Type TypeVariableFromContext)
             )
 valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect inferredValueAndFunctionDeclarations =
@@ -9669,6 +9714,8 @@ valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect infer
             FastDict.empty
 
 
+{-| Figure out why changing the order can lead to type check failures (self-referential type variable substitution: r -> { r | field })
+-}
 expressionTypedNodeUsesOfLocalReferences :
     FastDict.Dict String whatever_
     ->
@@ -9678,7 +9725,8 @@ expressionTypedNodeUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (DictByRange
+            (Rope
+                Elm.Syntax.Range.Range
                 (Type TypeVariableFromContext)
             )
 expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionTypedNode =
@@ -9707,7 +9755,7 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
                 [] ->
                     if localReferencesToCollect |> FastDict.member reference.name then
                         FastDict.singleton reference.name
-                            (DictByRange.singleton
+                            (RopeLeaf
                                 expressionTypedNode.range
                                 expressionTypedNode.type_
                             )
@@ -9752,28 +9800,32 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
                 )
 
         ExpressionTriple parts ->
-            parts.part0
-                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                |> collectedLocalReferenceUsesMerge
+            collectedLocalReferenceUsesMerge
+                (parts.part0
+                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                )
+                (collectedLocalReferenceUsesMerge
                     (parts.part1
                         |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                     )
-                |> collectedLocalReferenceUsesMerge
                     (parts.part2
                         |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                     )
+                )
 
         ExpressionIfThenElse expressionIfThenElse ->
-            expressionIfThenElse.condition
-                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                |> collectedLocalReferenceUsesMerge
+            collectedLocalReferenceUsesMerge
+                (expressionIfThenElse.condition
+                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                )
+                (collectedLocalReferenceUsesMerge
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                     )
-                |> collectedLocalReferenceUsesMerge
                     (expressionIfThenElse.onFalse
                         |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                     )
+                )
 
         ExpressionList elements ->
             elements
@@ -9798,70 +9850,75 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
                     FastDict.empty
 
         ExpressionCall expressionCall ->
-            expressionCall.called
-                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                |> collectedLocalReferenceUsesMerge
-                    (expressionCall.argument1Up
-                        |> List.foldl
-                            (\argument soFar ->
-                                collectedLocalReferenceUsesMerge
-                                    soFar
-                                    (argument
-                                        |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                                    )
-                            )
-                            (expressionCall.argument0
-                                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                            )
-                    )
+            collectedLocalReferenceUsesMerge
+                (expressionCall.called
+                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                )
+                (expressionCall.argument1Up
+                    |> List.foldl
+                        (\argument soFar ->
+                            collectedLocalReferenceUsesMerge
+                                soFar
+                                (argument
+                                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                                )
+                        )
+                        (expressionCall.argument0
+                            |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                        )
+                )
 
         ExpressionLambda expressionLambda ->
             expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                 expressionLambda.result
 
         ExpressionRecordUpdate expressionRecordUpdate ->
-            (if localReferencesToCollect |> FastDict.member expressionRecordUpdate.recordVariable.value.name then
-                FastDict.singleton expressionRecordUpdate.recordVariable.value.name
-                    (DictByRange.singleton
-                        expressionRecordUpdate.recordVariable.range
-                        expressionRecordUpdate.recordVariable.type_
-                    )
+            collectedLocalReferenceUsesMerge
+                (if
+                    localReferencesToCollect
+                        |> FastDict.member expressionRecordUpdate.recordVariable.value.name
+                 then
+                    FastDict.singleton expressionRecordUpdate.recordVariable.value.name
+                        (RopeLeaf
+                            expressionRecordUpdate.recordVariable.range
+                            expressionRecordUpdate.recordVariable.type_
+                        )
 
-             else
-                FastDict.empty
-            )
-                |> collectedLocalReferenceUsesMerge
-                    (expressionRecordUpdate.field1Up
-                        |> List.foldl
-                            (\field soFar ->
-                                collectedLocalReferenceUsesMerge
-                                    soFar
-                                    (field.value
-                                        |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                                    )
-                            )
-                            (expressionRecordUpdate.field0.value
-                                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                            )
-                    )
+                 else
+                    FastDict.empty
+                )
+                (expressionRecordUpdate.field1Up
+                    |> List.foldl
+                        (\field soFar ->
+                            collectedLocalReferenceUsesMerge
+                                soFar
+                                (field.value
+                                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                                )
+                        )
+                        (expressionRecordUpdate.field0.value
+                            |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                        )
+                )
 
         ExpressionCaseOf expressionCaseOf ->
-            expressionCaseOf.matchedExpression
-                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                |> collectedLocalReferenceUsesMerge
-                    (expressionCaseOf.case1Up
-                        |> List.foldl
-                            (\case_ soFar ->
-                                collectedLocalReferenceUsesMerge
-                                    soFar
-                                    (case_.result
-                                        |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                                    )
-                            )
-                            (expressionCaseOf.case0.result
-                                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-                            )
-                    )
+            collectedLocalReferenceUsesMerge
+                (expressionCaseOf.matchedExpression
+                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                )
+                (expressionCaseOf.case1Up
+                    |> List.foldl
+                        (\case_ soFar ->
+                            collectedLocalReferenceUsesMerge
+                                soFar
+                                (case_.result
+                                    |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                                )
+                        )
+                        (expressionCaseOf.case0.result
+                            |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+                        )
+                )
 
         ExpressionLetIn expressionLetIn ->
             expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn
@@ -9887,24 +9944,28 @@ expressionLetInUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (DictByRange (Type TypeVariableFromContext))
+            (Rope
+                Elm.Syntax.Range.Range
+                (Type TypeVariableFromContext)
+            )
 expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
-    expressionLetIn.declaration1Up
-        |> List.foldl
-            (\letDeclaration soFar ->
-                collectedLocalReferenceUsesMerge
-                    soFar
-                    (letDeclaration.declaration
-                        |> letDeclarationUsesOfLocalReferences localReferencesToCollect
-                    )
-            )
-            (expressionLetIn.declaration0.declaration
-                |> letDeclarationUsesOfLocalReferences localReferencesToCollect
-            )
-        |> collectedLocalReferenceUsesMerge
-            (expressionLetIn.result
-                |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
-            )
+    collectedLocalReferenceUsesMerge
+        (expressionLetIn.declaration1Up
+            |> List.foldl
+                (\letDeclaration soFar ->
+                    collectedLocalReferenceUsesMerge
+                        soFar
+                        (letDeclaration.declaration
+                            |> letDeclarationUsesOfLocalReferences localReferencesToCollect
+                        )
+                )
+                (expressionLetIn.declaration0.declaration
+                    |> letDeclarationUsesOfLocalReferences localReferencesToCollect
+                )
+        )
+        (expressionLetIn.result
+            |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
+        )
 
 
 letDeclarationUsesOfLocalReferences :
@@ -9913,7 +9974,10 @@ letDeclarationUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (DictByRange (Type TypeVariableFromContext))
+            (Rope
+                Elm.Syntax.Range.Range
+                (Type TypeVariableFromContext)
+            )
 letDeclarationUsesOfLocalReferences localReferencesToCollect letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
@@ -9928,18 +9992,27 @@ letDeclarationUsesOfLocalReferences localReferencesToCollect letDeclaration =
 collectedLocalReferenceUsesMerge :
     FastDict.Dict
         String
-        (DictByRange (Type TypeVariableFromContext))
+        (Rope
+            Elm.Syntax.Range.Range
+            (Type TypeVariableFromContext)
+        )
     ->
         FastDict.Dict
             String
-            (DictByRange (Type TypeVariableFromContext))
+            (Rope
+                Elm.Syntax.Range.Range
+                (Type TypeVariableFromContext)
+            )
     ->
         FastDict.Dict
             String
-            (DictByRange (Type TypeVariableFromContext))
+            (Rope
+                Elm.Syntax.Range.Range
+                (Type TypeVariableFromContext)
+            )
 collectedLocalReferenceUsesMerge a b =
     fastDictUnionWith
-        (\_ aUses bUses -> DictByRange.union aUses bUses)
+        (\_ aUses bUses -> RopeBranch aUses bUses)
         a
         b
 
@@ -11808,7 +11881,7 @@ expressionTypedNodeSubstituteVariableByNotVariable declarationTypes replacement 
 
                                                 Just inferredDeclarationType ->
                                                     uses
-                                                        |> DictByRange.foldlWhileOkFrom
+                                                        |> ropeFoldlWhileOkFrom
                                                             soFar
                                                             (\useRange useType soFarWithUses ->
                                                                 let
@@ -12782,7 +12855,7 @@ expressionCondenseTypeVariables context typeVariableChange expression =
 
                                             Just inferredDeclarationType ->
                                                 uses
-                                                    |> DictByRange.foldlWhileOkFrom
+                                                    |> ropeFoldlWhileOkFrom
                                                         soFar
                                                         (\useRange useType soFarWithUses ->
                                                             let
