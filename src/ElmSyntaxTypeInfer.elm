@@ -6963,20 +6963,25 @@ expressionReferenceTypeInfer context expressionReference =
                                     Nothing
 
                                 Just locallyIntroducedDeclarationType ->
-                                    let
-                                        locallyIntroducedDeclarationTypeWithContext : Type TypeVariableFromContext
-                                        locallyIntroducedDeclarationTypeWithContext =
+                                    Just
+                                        { range = expressionReference.fullRange
+                                        , value =
+                                            { qualification = []
+                                            , moduleOrigin = []
+                                            , name = expressionReference.name
+                                            }
+                                        , type_ =
                                             locallyIntroducedDeclarationType.type_
                                                 |> typeMapVariables
                                                     (\partiallyInferredTypeVariable ->
                                                         let
-                                                            ( partiallyInferredTypeVariableRange, partiallyInferredTypeVariableName ) =
+                                                            ( partiallyInferredTypeVariableUsesRange, partiallyInferredTypeVariableName ) =
                                                                 partiallyInferredTypeVariable
                                                         in
                                                         if
                                                             locallyIntroducedDeclarationType.range
                                                                 |> rangeIncludesRange
-                                                                    partiallyInferredTypeVariableRange
+                                                                    partiallyInferredTypeVariableUsesRange
                                                         then
                                                             ( expressionReference.fullRange
                                                             , partiallyInferredTypeVariableName
@@ -6985,15 +6990,6 @@ expressionReferenceTypeInfer context expressionReference =
                                                         else
                                                             partiallyInferredTypeVariable
                                                     )
-                                    in
-                                    Just
-                                        { range = expressionReference.fullRange
-                                        , value =
-                                            { qualification = []
-                                            , moduleOrigin = []
-                                            , name = expressionReference.name
-                                            }
-                                        , type_ = locallyIntroducedDeclarationTypeWithContext
                                         }
     in
     case useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration of
@@ -7040,17 +7036,6 @@ expressionReferenceTypeInfer context expressionReference =
                                     |> FastDict.get expressionReference.name
                             of
                                 Just signatureType ->
-                                    let
-                                        signatureTypeWithContext : Type TypeVariableFromContext
-                                        signatureTypeWithContext =
-                                            signatureType
-                                                |> typeMapVariables
-                                                    (\variableName ->
-                                                        ( expressionReference.fullRange
-                                                        , variableName
-                                                        )
-                                                    )
-                                    in
                                     Ok
                                         { range = expressionReference.fullRange
                                         , value =
@@ -7058,7 +7043,14 @@ expressionReferenceTypeInfer context expressionReference =
                                             , moduleOrigin = moduleOrigin
                                             , name = expressionReference.name
                                             }
-                                        , type_ = signatureTypeWithContext
+                                        , type_ =
+                                            signatureType
+                                                |> typeMapVariables
+                                                    (\variableName ->
+                                                        ( expressionReference.fullRange
+                                                        , variableName
+                                                        )
+                                                    )
                                         }
 
                                 Nothing ->
@@ -7078,27 +7070,14 @@ expressionReferenceTypeInfer context expressionReference =
                                                 )
                                     of
                                         Just variant ->
-                                            let
-                                                resultType : Type TypeVariableFromContext
-                                                resultType =
-                                                    TypeNotVariable
-                                                        (TypeConstruct
-                                                            { moduleOrigin = moduleOrigin
-                                                            , name = variant.choiceTypeName
-                                                            , arguments =
-                                                                variant.choiceTypeParameters
-                                                                    |> List.map
-                                                                        (\parameter ->
-                                                                            TypeVariable
-                                                                                ( expressionReference.fullRange
-                                                                                , parameter
-                                                                                )
-                                                                        )
-                                                            }
-                                                        )
-
-                                                fullType : Type TypeVariableFromContext
-                                                fullType =
+                                            Ok
+                                                { range = expressionReference.fullRange
+                                                , value =
+                                                    { qualification = expressionReference.qualification
+                                                    , moduleOrigin = moduleOrigin
+                                                    , name = expressionReference.name
+                                                    }
+                                                , type_ =
                                                     variant.variantValues
                                                         |> List.foldr
                                                             (\argument output ->
@@ -7116,16 +7095,22 @@ expressionReferenceTypeInfer context expressionReference =
                                                                         }
                                                                     )
                                                             )
-                                                            resultType
-                                            in
-                                            Ok
-                                                { range = expressionReference.fullRange
-                                                , value =
-                                                    { qualification = expressionReference.qualification
-                                                    , moduleOrigin = moduleOrigin
-                                                    , name = expressionReference.name
-                                                    }
-                                                , type_ = fullType
+                                                            (TypeNotVariable
+                                                                (TypeConstruct
+                                                                    { moduleOrigin = moduleOrigin
+                                                                    , name = variant.choiceTypeName
+                                                                    , arguments =
+                                                                        variant.choiceTypeParameters
+                                                                            |> List.map
+                                                                                (\parameter ->
+                                                                                    TypeVariable
+                                                                                        ( expressionReference.fullRange
+                                                                                        , parameter
+                                                                                        )
+                                                                                )
+                                                                    }
+                                                                )
+                                                            )
                                                 }
 
                                         Nothing ->
@@ -7143,9 +7128,14 @@ expressionReferenceTypeInfer context expressionReference =
                                                 Just originTypeAliasDeclaration ->
                                                     case ( originTypeAliasDeclaration.recordFieldOrder, originTypeAliasDeclaration.type_ ) of
                                                         ( Just fieldOrder, TypeNotVariable (TypeRecord fields) ) ->
-                                                            let
-                                                                type_ : Type TypeVariableFromContext
-                                                                type_ =
+                                                            Ok
+                                                                { range = expressionReference.fullRange
+                                                                , value =
+                                                                    { qualification = expressionReference.qualification
+                                                                    , moduleOrigin = moduleOrigin
+                                                                    , name = expressionReference.name
+                                                                    }
+                                                                , type_ =
                                                                     fieldOrder
                                                                         |> List.foldr
                                                                             (\fieldName outputTypeSoFar ->
@@ -7184,15 +7174,6 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                     }
                                                                                 )
                                                                             )
-                                                            in
-                                                            Ok
-                                                                { range = expressionReference.fullRange
-                                                                , value =
-                                                                    { qualification = expressionReference.qualification
-                                                                    , moduleOrigin = moduleOrigin
-                                                                    , name = expressionReference.name
-                                                                    }
-                                                                , type_ = type_
                                                                 }
 
                                                         _ ->
