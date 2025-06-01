@@ -7612,9 +7612,8 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 (\resultInferred ->
                                     Result.andThen
                                         (\typeUnifiedWithAnnotation ->
-                                            -- TODO when typeUnifiedWithAnnotation.substitutions
-                                            -- contains variable→type→not-variable substitutions
-                                            -- throw an error: annotation too strict. Only map type variables
+                                            -- TODO when the substituted type is more strict
+                                            -- throw an error: annotation too loose
                                             Result.andThen
                                                 (\fullSubstitutions ->
                                                     Result.map3
@@ -8917,9 +8916,8 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 in
                                                 resultAndThen2
                                                     (\inferredDeclarationTypeUnifiedWithAnnotation substitutionsFromUnifyingParameterVariablesWithUses ->
-                                                        -- TODO when inferredDeclarationTypeUnifiedWithAnnotation.substitutions
-                                                        -- contains variable→type→not-variable substitutions
-                                                        -- throw an error: annotation too strict. Only map type variables
+                                                        -- TODO when the substituted type is more strict
+                                                        -- throw an error: annotation too loose
                                                         Result.andThen
                                                             (\fullSubstitutions ->
                                                                 Result.map3
