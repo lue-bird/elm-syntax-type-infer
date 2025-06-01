@@ -28,24 +28,6 @@ locationEquals a b =
         && (a.column - b.column == 0)
 
 
-locationCompare : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Order
-locationCompare a b =
-    if a.row - b.row < 0 then
-        LT
-
-    else if a.row - b.row > 0 then
-        GT
-
-    else if a.column - b.column < 0 then
-        LT
-
-    else if a.column - b.column > 0 then
-        GT
-
-    else
-        EQ
-
-
 compare : TypeVariableFromContext -> TypeVariableFromContext -> Order
 compare ( aRange, aName ) ( bRange, bName ) =
     if aRange.start.row - bRange.start.row < 0 then
