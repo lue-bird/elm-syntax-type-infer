@@ -3208,45 +3208,6 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
                         tail
 
 
-listFilledMapAndTypesUnify :
-    { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-    }
-    -> (a -> Type TypeVariableFromContext)
-    -> ( a, List a )
-    ->
-        Result
-            String
-            { type_ : Type TypeVariableFromContext
-            , substitutions : VariableSubstitutions
-            }
-listFilledMapAndTypesUnify context elementToType ( head, tail ) =
-    tail
-        |> listFoldlWhileOkFrom
-            { type_ = head |> elementToType
-            , substitutions = variableSubstitutionsNone
-            }
-            (\element soFar ->
-                Result.andThen
-                    (\soFarTypeUnifiedWithElement ->
-                        Result.map
-                            (\substitutionsSoFarWithElement ->
-                                { type_ = soFarTypeUnifiedWithElement.type_
-                                , substitutions = substitutionsSoFarWithElement
-                                }
-                            )
-                            (variableSubstitutionsMerge context
-                                soFar.substitutions
-                                soFarTypeUnifiedWithElement.substitutions
-                            )
-                    )
-                    (typeUnify context
-                        soFar.type_
-                        (element |> elementToType)
-                    )
-            )
-
-
 typeUnify :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
@@ -5321,10 +5282,17 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         }
 
                 head :: tail ->
-                    resultAndThen2
-                        (\headInferred tailInferredNodes ->
+                    Result.andThen
+                        (\headInferred ->
+                            let
+                                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                                typeContext =
+                                    { declarationTypes = context.declarationTypes
+                                    , range = fullRange
+                                    }
+                            in
                             Result.andThen
-                                (\unifiedElementType ->
+                                (\tailInferredAndUnifiedElementType ->
                                     Result.map2
                                         (\headInferredAfterUnification tailInferredAfterUnification ->
                                             { range = fullRange
@@ -5332,14 +5300,14 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                 PatternListExact
                                                     (headInferredAfterUnification :: tailInferredAfterUnification)
                                             , type_ =
-                                                typeListList unifiedElementType.type_
+                                                typeListList tailInferredAndUnifiedElementType.unifiedElementType
                                             }
                                         )
                                         (headInferred
                                             |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                unifiedElementType.substitutions
+                                                tailInferredAndUnifiedElementType.substitutions
                                         )
-                                        (tailInferredNodes
+                                        (tailInferredAndUnifiedElementType.nodes
                                             |> listFoldrWhileOkFrom []
                                                 (\tailElementInferred tailAfterUnificationSoFar ->
                                                     Result.map
@@ -5349,31 +5317,44 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                                         )
                                                         (tailElementInferred
                                                             |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                                unifiedElementType.substitutions
+                                                                tailInferredAndUnifiedElementType.substitutions
                                                         )
                                                 )
                                         )
                                 )
-                                (( headInferred, tailInferredNodes )
-                                    |> listFilledMapAndTypesUnify
-                                        { declarationTypes = context.declarationTypes
-                                        , range = fullRange
+                                (tail
+                                    |> listFoldrWhileOkFrom
+                                        { nodes = []
+                                        , unifiedElementType = headInferred.type_
+                                        , substitutions = variableSubstitutionsNone
                                         }
-                                        .type_
+                                        (\tailElementNode soFar ->
+                                            Result.andThen
+                                                (\tailElementInferred ->
+                                                    Result.andThen
+                                                        (\unifiedElementTypeSoFarWithTailElement ->
+                                                            Result.map
+                                                                (\substitutionsSoFarWithUnifyingTailElement ->
+                                                                    { nodes = tailElementInferred :: soFar.nodes
+                                                                    , substitutions = substitutionsSoFarWithUnifyingTailElement
+                                                                    , unifiedElementType = unifiedElementTypeSoFarWithTailElement.type_
+                                                                    }
+                                                                )
+                                                                (variableSubstitutionsMerge typeContext
+                                                                    soFar.substitutions
+                                                                    unifiedElementTypeSoFarWithTailElement.substitutions
+                                                                )
+                                                        )
+                                                        (typeUnify typeContext
+                                                            soFar.unifiedElementType
+                                                            tailElementInferred.type_
+                                                        )
+                                                )
+                                                (tailElementNode |> patternTypeInfer context)
+                                        )
                                 )
                         )
                         (head |> patternTypeInfer context)
-                        (tail
-                            |> listFoldrWhileOkFrom
-                                []
-                                (\elementNode soFar ->
-                                    Result.map
-                                        (\elementInferred ->
-                                            elementInferred :: soFar
-                                        )
-                                        (elementNode |> patternTypeInfer context)
-                                )
-                        )
 
         Elm.Syntax.Pattern.NamedPattern qualified values ->
             let
@@ -5961,42 +5942,62 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         }
 
                 head :: tail ->
-                    resultAndThen2
-                        (\headInferred tailElementsInferred ->
+                    Result.andThen
+                        (\headInferred ->
+                            let
+                                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                                typeContext =
+                                    { declarationTypes = context.declarationTypes
+                                    , range = fullRange
+                                    }
+                            in
                             Result.andThen
-                                (\elementTypeUnified ->
+                                (\tailElementsInferredAndUnifiedElementType ->
                                     { range = fullRange
                                     , value =
                                         ExpressionList
                                             (headInferred
-                                                :: tailElementsInferred
+                                                :: tailElementsInferredAndUnifiedElementType.nodes
                                             )
-                                    , type_ = typeListList headInferred.type_
+                                    , type_ = typeListList tailElementsInferredAndUnifiedElementType.unifiedElementType
                                     }
                                         |> expressionTypedNodeApplyVariableSubstitutions
                                             context.declarationTypes
-                                            elementTypeUnified.substitutions
+                                            tailElementsInferredAndUnifiedElementType.substitutions
                                 )
-                                (listFilledMapAndTypesUnify
-                                    { declarationTypes = context.declarationTypes
-                                    , range = fullRange
-                                    }
-                                    .type_
-                                    ( headInferred, tailElementsInferred )
+                                (tail
+                                    |> listFoldrWhileOkFrom
+                                        { nodes = []
+                                        , unifiedElementType = headInferred.type_
+                                        , substitutions = variableSubstitutionsNone
+                                        }
+                                        (\elementNode soFar ->
+                                            Result.andThen
+                                                (\tailElementInferred ->
+                                                    Result.andThen
+                                                        (\unifiedSoFarElementTypeWithElement ->
+                                                            Result.map
+                                                                (\substitutionsSoFarWithElement ->
+                                                                    { nodes = tailElementInferred :: soFar.nodes
+                                                                    , substitutions = substitutionsSoFarWithElement
+                                                                    , unifiedElementType = unifiedSoFarElementTypeWithElement.type_
+                                                                    }
+                                                                )
+                                                                (variableSubstitutionsMerge typeContext
+                                                                    soFar.substitutions
+                                                                    unifiedSoFarElementTypeWithElement.substitutions
+                                                                )
+                                                        )
+                                                        (typeUnify typeContext
+                                                            soFar.unifiedElementType
+                                                            tailElementInferred.type_
+                                                        )
+                                                )
+                                                (elementNode |> expressionTypeInfer context)
+                                        )
                                 )
                         )
                         (head |> expressionTypeInfer context)
-                        (tail
-                            |> listFoldrWhileOkFrom
-                                []
-                                (\elementNode soFar ->
-                                    Result.map
-                                        (\elementInferred ->
-                                            elementInferred :: soFar
-                                        )
-                                        (elementNode |> expressionTypeInfer context)
-                                )
-                        )
 
         Elm.Syntax.Expression.Application application ->
             case application of
@@ -9334,8 +9335,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                                             unificationSubstitutionsWithUsesSoFar
                                                                             unified.substitutions
                                                                     )
-                                                                    (typeUnify
-                                                                        everywhereTypeContext
+                                                                    (typeUnify everywhereTypeContext
                                                                         partialTypeNewInstance
                                                                         useType
                                                                     )
