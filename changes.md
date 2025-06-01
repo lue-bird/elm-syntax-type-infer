@@ -5,7 +5,6 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
-- optimize typeUnifyWithTypeConstruct for the case that no arguments exist
 - optimize typeListUnify. unifying long lists of uses takes ages.
   Prefer either ane-after-another unification in existing traversal.
   Especially useful for things like substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression!

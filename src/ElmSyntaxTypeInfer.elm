@@ -3374,6 +3374,7 @@ typeUnifyWithTypeConstruct context a bTypeConstruct =
                 bTypeNotVariable =
                     TypeConstruct bTypeConstruct
             in
+            -- TODO inline to avoid Result.map
             Result.map
                 (\substitutions ->
                     { type_ = TypeNotVariable bTypeNotVariable
@@ -3512,45 +3513,53 @@ typeNotVariableUnifyWithTypeConstruct context aTypeNotVariable bTypeConstruct =
                 (bTypeConstruct.name == aTypeConstruct.name)
                     && (bTypeConstruct.moduleOrigin == aTypeConstruct.moduleOrigin)
             then
-                Result.map
-                    (\argumentsABUnified ->
-                        { type_ =
-                            TypeNotVariable
-                                (TypeConstruct
-                                    { moduleOrigin = bTypeConstruct.moduleOrigin
-                                    , name = bTypeConstruct.name
-                                    , arguments =
-                                        argumentsABUnified.argumentsReverse
-                                            |> List.reverse
-                                    }
-                                )
-                        , substitutions = argumentsABUnified.substitutions
-                        }
-                    )
-                    (listFoldl2WhileOkFrom
-                        argumentsReverseListEmptySubstitutionsNone
-                        bTypeConstruct.arguments
-                        aTypeConstruct.arguments
-                        (\aArgument bArgument soFar ->
-                            Result.andThen
-                                (\argumentTypeUnifiedAndSubstitutions ->
-                                    Result.map
-                                        (\substitutionsWithArgument ->
-                                            { argumentsReverse =
-                                                argumentTypeUnifiedAndSubstitutions.type_
-                                                    :: soFar.argumentsReverse
-                                            , substitutions =
-                                                substitutionsWithArgument
+                case aTypeConstruct.arguments of
+                    [] ->
+                        Ok
+                            { type_ = TypeNotVariable aTypeNotVariable
+                            , substitutions = variableSubstitutionsNone
+                            }
+
+                    _ :: _ ->
+                        Result.map
+                            (\argumentsABUnified ->
+                                { type_ =
+                                    TypeNotVariable
+                                        (TypeConstruct
+                                            { moduleOrigin = bTypeConstruct.moduleOrigin
+                                            , name = bTypeConstruct.name
+                                            , arguments =
+                                                argumentsABUnified.argumentsReverse
+                                                    |> List.reverse
                                             }
                                         )
-                                        (variableSubstitutionsMerge context
-                                            soFar.substitutions
-                                            argumentTypeUnifiedAndSubstitutions.substitutions
+                                , substitutions = argumentsABUnified.substitutions
+                                }
+                            )
+                            (listFoldl2WhileOkFrom
+                                argumentsReverseListEmptySubstitutionsNone
+                                bTypeConstruct.arguments
+                                aTypeConstruct.arguments
+                                (\aArgument bArgument soFar ->
+                                    Result.andThen
+                                        (\argumentTypeUnifiedAndSubstitutions ->
+                                            Result.map
+                                                (\substitutionsWithArgument ->
+                                                    { argumentsReverse =
+                                                        argumentTypeUnifiedAndSubstitutions.type_
+                                                            :: soFar.argumentsReverse
+                                                    , substitutions =
+                                                        substitutionsWithArgument
+                                                    }
+                                                )
+                                                (variableSubstitutionsMerge context
+                                                    soFar.substitutions
+                                                    argumentTypeUnifiedAndSubstitutions.substitutions
+                                                )
                                         )
+                                        (typeUnify context aArgument bArgument)
                                 )
-                                (typeUnify context aArgument bArgument)
-                        )
-                    )
+                            )
 
             else
                 case typeUnifyWithTryToExpandTypeConstruct context bTypeConstruct aTypeNotVariable of
