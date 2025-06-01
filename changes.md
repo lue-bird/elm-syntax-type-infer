@@ -5,6 +5,7 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
+- optimize typeUnifyWithTypeConstruct for the case that no arguments exist
 - optimize typeListUnify. unifying long lists of uses takes ages.
   Prefer either ane-after-another unification in existing traversal.
   Especially useful for things like substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression!
@@ -15,6 +16,7 @@ optimization ideas
   since introduced variables are usually few
 - make ropeFoldlWhileOkFrom TCO
 - (breaking) lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
+- convert Result to { ok, List error }
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration

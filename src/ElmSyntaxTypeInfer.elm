@@ -3387,6 +3387,108 @@ typeUnifyWithTypeConstruct context a bTypeConstruct =
                 )
 
 
+typeUnifyWithBasicsBool :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    }
+    -> Type TypeVariableFromContext
+    ->
+        Result
+            String
+            VariableSubstitutions
+typeUnifyWithBasicsBool context a =
+    case a of
+        TypeNotVariable aTypeNotVariable ->
+            case aTypeNotVariable of
+                TypeConstruct aTypeConstruct ->
+                    if
+                        case aTypeConstruct.name of
+                            "Bool" ->
+                                case aTypeConstruct.moduleOrigin of
+                                    [ "Basics" ] ->
+                                        True
+
+                                    _ ->
+                                        False
+
+                            _ ->
+                                False
+                    then
+                        Ok variableSubstitutionsNone
+
+                    else
+                        case typeUnifyWithTryToExpandTypeConstruct context aTypeConstruct typeNotVariableBasicsBool of
+                            Just result ->
+                                result |> Result.map .substitutions
+
+                            Nothing ->
+                                Err
+                                    ("("
+                                        ++ (context.range |> rangeToInfoString)
+                                        ++ ") "
+                                        ++ "choice type "
+                                        ++ qualifiedToString
+                                            { qualification = aTypeConstruct.moduleOrigin
+                                            , name = aTypeConstruct.name
+                                            }
+                                        ++ " cannot be unified be with a choice type with a different name: Basics.Bool"
+                                    )
+
+                TypeUnit ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+                TypeTuple _ ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+                TypeTriple _ ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+                TypeRecord _ ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+                TypeRecordExtension _ ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+                TypeFunction _ ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "choice type Basics.Bool cannot be unified be with a choice type with a different name: Basics.Bool"
+                        )
+
+        TypeVariable aVariable ->
+            variableSubstitutionsFromVariableToTypeNotVariableOrError
+                context.declarationTypes
+                aVariable
+                typeNotVariableBasicsBool
+
+
 typeNotVariableUnifyWithTypeConstruct :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
@@ -3407,8 +3509,8 @@ typeNotVariableUnifyWithTypeConstruct context aTypeNotVariable bTypeConstruct =
     case aTypeNotVariable of
         TypeConstruct aTypeConstruct ->
             if
-                (bTypeConstruct.moduleOrigin == aTypeConstruct.moduleOrigin)
-                    && (bTypeConstruct.name == aTypeConstruct.name)
+                (bTypeConstruct.name == aTypeConstruct.name)
+                    && (bTypeConstruct.moduleOrigin == aTypeConstruct.moduleOrigin)
             then
                 Result.map
                     (\argumentsABUnified ->
@@ -4758,13 +4860,12 @@ typeBasicsFloat =
 
 typeBasicsBool : Type variable_
 typeBasicsBool =
-    TypeNotVariable
-        (TypeConstruct
-            { moduleOrigin = [ "Basics" ]
-            , name = "Bool"
-            , arguments = []
-            }
-        )
+    TypeNotVariable typeNotVariableBasicsBool
+
+
+typeNotVariableBasicsBool : TypeNotVariable variable_
+typeNotVariableBasicsBool =
+    TypeConstruct typeConstructBasicsBool
 
 
 typeConstructBasicsBool :
@@ -5717,7 +5818,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             }
                     in
                     resultAndThen2
-                        (\conditionTypeInferredUnifiedWithBool onTrueOnFalseTypesUnified ->
+                        (\conditionTypeInferredUnifiedWithBoolSubstitutions onTrueOnFalseTypesUnified ->
                             Result.andThen
                                 (\fullUnificationSubstitutions ->
                                     { range = fullRange
@@ -5734,13 +5835,12 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             fullUnificationSubstitutions
                                 )
                                 (variableSubstitutionsMerge typeContext
-                                    conditionTypeInferredUnifiedWithBool.substitutions
+                                    conditionTypeInferredUnifiedWithBoolSubstitutions
                                     onTrueOnFalseTypesUnified.substitutions
                                 )
                         )
-                        (typeUnifyWithTypeConstruct typeContext
+                        (typeUnifyWithBasicsBool typeContext
                             conditionInferred.type_
-                            typeConstructBasicsBool
                         )
                         (typeUnify typeContext
                             onTrueInferred.type_
