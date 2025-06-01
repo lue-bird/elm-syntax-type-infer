@@ -4503,7 +4503,7 @@ typeRecordExtensionUnifyWithRecordExtension :
             }
 typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExtension =
     Result.andThen
-        (\fieldsUnified ->
+        (\forFields ->
             let
                 ( aRecordExtensionRecordVariableUsesRangeAsComparable, aRecordExtensionRecordVariableName ) =
                     aRecordExtension.recordVariable
@@ -4518,18 +4518,6 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                         bRecordExtensionRecordVariableUsesRangeAsComparable
                     , aRecordExtensionRecordVariableName
                     )
-
-                bVariableReplacementFields : FastDict.Dict String (Type TypeVariableFromContext)
-                bVariableReplacementFields =
-                    FastDict.diff
-                        aRecordExtension.fields
-                        bRecordExtension.fields
-
-                aVariableReplacementFields : FastDict.Dict String (Type TypeVariableFromContext)
-                aVariableReplacementFields =
-                    FastDict.diff
-                        bRecordExtension.fields
-                        aRecordExtension.fields
             in
             Result.map
                 (\fullSubstitutions ->
@@ -4538,7 +4526,7 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                         TypeNotVariable
                             (TypeRecordExtension
                                 { recordVariable = newBaseVariable
-                                , fields = fieldsUnified.fieldsUnified
+                                , fields = forFields.fieldsUnified
                                 }
                             )
                     }
@@ -4546,11 +4534,11 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                 (resultAndThen2
                     (\aRecordVariableSubstitutions bRecordVariableSubstitutions ->
                         variableSubstitutionsMerge3 context
-                            fieldsUnified.substitutions
+                            forFields.substitutions
                             aRecordVariableSubstitutions
                             bRecordVariableSubstitutions
                     )
-                    (if aVariableReplacementFields |> FastDict.isEmpty then
+                    (if forFields.bOnly |> FastDict.isEmpty then
                         variableSubstitutionsFrom2EquivalentVariables
                             aRecordExtension.recordVariable
                             newBaseVariable
@@ -4560,11 +4548,11 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             aRecordExtension.recordVariable
                             (TypeRecordExtension
                                 { recordVariable = newBaseVariable
-                                , fields = aVariableReplacementFields
+                                , fields = forFields.bOnly
                                 }
                             )
                     )
-                    (if bVariableReplacementFields |> FastDict.isEmpty then
+                    (if forFields.aOnly |> FastDict.isEmpty then
                         variableSubstitutionsFrom2EquivalentVariables
                             bRecordExtension.recordVariable
                             newBaseVariable
@@ -4574,7 +4562,7 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             bRecordExtension.recordVariable
                             (TypeRecordExtension
                                 { recordVariable = newBaseVariable
-                                , fields = bVariableReplacementFields
+                                , fields = forFields.aOnly
                                 }
                             )
                     )
@@ -4588,6 +4576,9 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                         , fieldsUnified =
                             soFar.fieldsUnified
                                 |> FastDict.insert name value
+                        , aOnly =
+                            soFar.aOnly |> FastDict.insert name value
+                        , bOnly = soFar.bOnly
                         }
                     )
                     soFarOrError
@@ -4601,6 +4592,8 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                                 , fieldsUnified =
                                     soFar.fieldsUnified
                                         |> FastDict.insert name abValueUnified.type_
+                                , aOnly = soFar.aOnly
+                                , bOnly = soFar.bOnly
                                 }
                             )
                             (variableSubstitutionsMerge context
@@ -4618,14 +4611,34 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                         , fieldsUnified =
                             soFar.fieldsUnified
                                 |> FastDict.insert name value
+                        , aOnly = soFar.aOnly
+                        , bOnly =
+                            soFar.bOnly |> FastDict.insert name value
                         }
                     )
                     soFarOrError
             )
             aRecordExtension.fields
             bRecordExtension.fields
-            okFieldsUnifiedEmptySubstitutionsNone
+            okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty
         )
+
+
+okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty :
+    Result
+        error_
+        { fieldsUnified : FastDict.Dict String (Type TypeVariableFromContext)
+        , substitutions : VariableSubstitutions
+        , aOnly : FastDict.Dict String (Type TypeVariableFromContext)
+        , bOnly : FastDict.Dict String (Type TypeVariableFromContext)
+        }
+okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty =
+    Ok
+        { fieldsUnified = FastDict.empty
+        , substitutions = variableSubstitutionsNone
+        , aOnly = FastDict.empty
+        , bOnly = FastDict.empty
+        }
 
 
 okFieldsUnifiedEmptySubstitutionsNone :
