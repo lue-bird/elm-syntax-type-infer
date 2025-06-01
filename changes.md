@@ -8,7 +8,6 @@ optimization ideas
 - optimize typeListUnify. unifying long lists of uses takes ages.
   Prefer either ane-after-another unification in existing traversal.
   Especially useful for things like substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression!
-- always use the unified type when available because it can potentially avoid duplicate  work and allocation
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
