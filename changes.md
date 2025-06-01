@@ -5,9 +5,6 @@ considering
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
 optimization ideas
-- optimize listFilledMapAndTypesUnify. unifying long lists of uses takes ages.
-  Prefer either ane-after-another unification in existing traversal.
-  Especially useful for things like substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression!
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
