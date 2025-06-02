@@ -16,6 +16,7 @@ optimization ideas
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration
+- correct very rare edge cases where type variables that should be the same were independent
 - faster (TODO in real world situation it was actually only equal, investigate!)
 
 #### 1.0.9
