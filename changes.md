@@ -2,9 +2,7 @@
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let.
 - do not parameterize type variables and types, just use regular Type for everything
-
-TODO
-- rename `matchedExpression` to `matched`
+- in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
 
 considering
 - embed origin module if from local module top level as the actual name, not []

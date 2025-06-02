@@ -4743,7 +4743,7 @@ type Expression
         , result : TypedNode Expression
         }
     | ExpressionCaseOf
-        { matchedExpression : TypedNode Expression
+        { matched : TypedNode Expression
         , case0 :
             { pattern : TypedNode Pattern
             , result : TypedNode Expression
@@ -6348,7 +6348,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     { range = fullRange
                                     , value =
                                         ExpressionCaseOf
-                                            { matchedExpression = matchedInferred
+                                            { matched = matchedInferred
                                             , case0 = case0Inferred
                                             , case1Up = case1UpInferred
                                             }
@@ -9832,7 +9832,7 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
 
         ExpressionCaseOf expressionCaseOf ->
             collectedLocalReferenceUsesMerge
-                (expressionCaseOf.matchedExpression
+                (expressionCaseOf.matched
                     |> expressionTypedNodeUsesOfLocalReferences localReferencesToCollect
                 )
                 (expressionCaseOf.case1Up
@@ -10155,7 +10155,7 @@ expressionContainedTypeVariables expression =
                     )
 
         ExpressionCaseOf expressionCaseOf ->
-            expressionCaseOf.matchedExpression
+            expressionCaseOf.matched
                 |> expressionTypedNodeContainedTypeVariables
                 |> DictByTypeVariableFromContext.union
                     (expressionCaseOf.case1Up
@@ -11634,7 +11634,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                         ExpressionCaseOf
                                             { case0 = case0Substituted.node
                                             , case1Up = case1UpSubstituted.nodes
-                                            , matchedExpression = matchedSubstituted.node
+                                            , matched = matchedSubstituted.node
                                             }
                                     , type_ = case0Substituted.node.result.type_
                                     }
@@ -11646,7 +11646,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                 case1UpSubstituted.substitutions
                             )
                 )
-                (expressionCaseOf.matchedExpression
+                (expressionCaseOf.matched
                     |> expressionTypedNodeSubstituteVariableByType declarationTypes
                         replacement
                 )
@@ -12398,8 +12398,8 @@ expressionMapTypes typeChange expression =
 
         ExpressionCaseOf expressionCaseOf ->
             ExpressionCaseOf
-                { matchedExpression =
-                    expressionCaseOf.matchedExpression
+                { matched =
+                    expressionCaseOf.matched
                         |> expressionTypedNodeMapTypes typeChange
                 , case0 =
                     { pattern =
