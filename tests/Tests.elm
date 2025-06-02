@@ -622,7 +622,7 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                         )
             )
         , let
-            recordExtensionTypeInExample : ElmSyntaxTypeInfer.Type TypeVariableFromContext
+            recordExtensionTypeInExample : ElmSyntaxTypeInfer.Type
             recordExtensionTypeInExample =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeRecordExtension
@@ -5519,7 +5519,7 @@ waste a =
         ]
 
 
-typeList : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
+typeList : ElmSyntaxTypeInfer.Type -> ElmSyntaxTypeInfer.Type
 typeList element =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5530,7 +5530,7 @@ typeList element =
         )
 
 
-typeMaybe : ElmSyntaxTypeInfer.Type variable -> ElmSyntaxTypeInfer.Type variable
+typeMaybe : ElmSyntaxTypeInfer.Type -> ElmSyntaxTypeInfer.Type
 typeMaybe value =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5541,7 +5541,7 @@ typeMaybe value =
         )
 
 
-typeFloat : ElmSyntaxTypeInfer.Type variable_
+typeFloat : ElmSyntaxTypeInfer.Type
 typeFloat =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5552,7 +5552,7 @@ typeFloat =
         )
 
 
-typeInt : ElmSyntaxTypeInfer.Type variable_
+typeInt : ElmSyntaxTypeInfer.Type
 typeInt =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5563,7 +5563,7 @@ typeInt =
         )
 
 
-typeString : ElmSyntaxTypeInfer.Type variable_
+typeString : ElmSyntaxTypeInfer.Type
 typeString =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5574,7 +5574,7 @@ typeString =
         )
 
 
-typeBool : ElmSyntaxTypeInfer.Type variable_
+typeBool : ElmSyntaxTypeInfer.Type
 typeBool =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
@@ -5586,7 +5586,7 @@ typeBool =
 
 
 expressionExpectInferredType :
-    ElmSyntaxTypeInfer.Type TypeVariableFromContext
+    ElmSyntaxTypeInfer.Type
     -> Elm.Syntax.Expression.Expression
     -> Expect.Expectation
 expressionExpectInferredType expectedInferredType expression =
@@ -5614,7 +5614,7 @@ expressionWrapInExampleDeclaration expression =
 
 expressionToInferredType :
     Elm.Syntax.Expression.Expression
-    -> Result String (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
+    -> Result String ElmSyntaxTypeInfer.Type
 expressionToInferredType expression =
     [ expressionWrapInExampleDeclaration expression ]
         |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
@@ -5681,14 +5681,14 @@ typeInferModuleFromSource :
                 { parameters :
                     List
                         (ElmSyntaxTypeInfer.TypedNode
-                            (ElmSyntaxTypeInfer.Pattern (ElmSyntaxTypeInfer.Type TypeVariableFromContext))
-                            (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
+                            (ElmSyntaxTypeInfer.Pattern ElmSyntaxTypeInfer.Type)
+                            ElmSyntaxTypeInfer.Type
                         )
                 , result :
                     ElmSyntaxTypeInfer.TypedNode
-                        (ElmSyntaxTypeInfer.Expression (ElmSyntaxTypeInfer.Type TypeVariableFromContext))
-                        (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
-                , type_ : ElmSyntaxTypeInfer.Type TypeVariableFromContext
+                        (ElmSyntaxTypeInfer.Expression ElmSyntaxTypeInfer.Type)
+                        ElmSyntaxTypeInfer.Type
+                , type_ : ElmSyntaxTypeInfer.Type
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation : Maybe { content : String, range : Elm.Syntax.Range.Range }
                 , signature :

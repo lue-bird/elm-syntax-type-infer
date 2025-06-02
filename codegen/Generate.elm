@@ -13,6 +13,7 @@ import Gen.List
 import Gen.Maybe
 import Json.Decode
 import Json.Encode
+import Elm.Syntax.Range
 
 
 main : Program Json.Encode.Value () ()
@@ -147,18 +148,29 @@ moduleInterfaceAsTypesToExpression moduleInterface =
         )
 
 
-typeToExpression : ElmSyntaxTypeInfer.Type String -> Elm.Expression
+typeToExpression : ElmSyntaxTypeInfer.Type -> Elm.Expression
 typeToExpression type_ =
     case type_ of
-        ElmSyntaxTypeInfer.TypeVariable variableName ->
-            Gen.ElmSyntaxTypeInfer.make_.typeVariable (Elm.string variableName)
+        ElmSyntaxTypeInfer.TypeVariable variable ->
+            Gen.ElmSyntaxTypeInfer.make_.typeVariable
+                (Elm.record
+                    [ ( "name", Elm.string variable.name )
+                    , ( "useRange"
+                      , Elm.value
+                          { importFrom = [ "Elm", "Syntax", "Range" ]
+                          , name = "empty"
+                          , annotation = Nothing
+                          }
+                      )
+                    ]
+                )
 
         ElmSyntaxTypeInfer.TypeNotVariable typeNotVariable ->
             Gen.ElmSyntaxTypeInfer.make_.typeNotVariable
                 (typeNotVariable |> typeNotVariableToExpression)
 
 
-typeNotVariableToExpression : ElmSyntaxTypeInfer.TypeNotVariable String -> Elm.Expression
+typeNotVariableToExpression : ElmSyntaxTypeInfer.TypeNotVariable -> Elm.Expression
 typeNotVariableToExpression type_ =
     case type_ of
         ElmSyntaxTypeInfer.TypeUnit ->
@@ -207,7 +219,18 @@ typeNotVariableToExpression type_ =
         ElmSyntaxTypeInfer.TypeRecordExtension typeRecordExtension ->
             Gen.ElmSyntaxTypeInfer.make_.typeRecordExtension
                 (Elm.record
-                    [ ( "recordVariable", Elm.string typeRecordExtension.recordVariable )
+                    [ ( "recordVariable"
+                      , Elm.record
+                          [ ( "name", Elm.string typeRecordExtension.recordVariable.name )
+                          , ( "useRange"
+                            , Elm.value
+                              { importFrom = [ "Elm", "Syntax", "Range" ]
+                              , name = "empty"
+                              , annotation = Nothing
+                              }
+                            )
+                          ]
+                      )
                     , ( "fields"
                       , Gen.FastDict.fromList
                             (typeRecordExtension.fields
@@ -237,11 +260,11 @@ moduleNameToExpression moduleName =
     Elm.list (moduleName |> List.map Elm.string)
 
 
-interfaceToType : Elm.Type.Type -> Result String (ElmSyntaxTypeInfer.Type String)
+interfaceToType : Elm.Type.Type -> Result String ElmSyntaxTypeInfer.Type
 interfaceToType typeInterface =
     case typeInterface of
         Elm.Type.Var name ->
-            Ok (ElmSyntaxTypeInfer.TypeVariable name)
+            Ok (ElmSyntaxTypeInfer.TypeVariable { useRange = Elm.Syntax.Range.empty, name = name })
 
         Elm.Type.Lambda functionInput functionOutput ->
             Result.map2
@@ -322,7 +345,7 @@ interfaceToType typeInterface =
             Result.map
                 (\fields ->
                     ElmSyntaxTypeInfer.TypeNotVariable
-                        (ElmSyntaxTypeInfer.TypeRecordExtension { fields = fields, recordVariable = extendedRecordVariable })
+                        (ElmSyntaxTypeInfer.TypeRecordExtension { fields = fields, recordVariable = { useRange = Elm.Syntax.Range.empty, name = extendedRecordVariable } })
                 )
                 (fieldInterfaces
                     |> listMapAndCombineOk

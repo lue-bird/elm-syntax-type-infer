@@ -51,12 +51,12 @@ and [`moduleInterfaceToTypes`](#moduleInterfaceToTypes)
 type alias ModuleTypes =
     { signatures :
         -- value, function, port
-        FastDict.Dict String (Type String)
+        FastDict.Dict String Type
     , typeAliases :
         FastDict.Dict
             String
             { parameters : List String
-            , type_ : Type String
+            , type_ : Type
             , recordFieldOrder : Maybe (List String)
             }
     , choiceTypes :
@@ -64,7 +64,7 @@ type alias ModuleTypes =
             String
             { parameters : List String
             , variants :
-                FastDict.Dict String (List (Type String))
+                FastDict.Dict String (List Type)
             }
     }
 
@@ -280,45 +280,57 @@ This is different from [`Elm.Syntax.TypeAnnotation.TypeAnnotation`](https://dark
 in that it doesn't contain
 information unrelated to type inference like ranges, qualification levels or parens.
 
+Importantly, it also contains the overarching ranges
+of all places where the specific type variables are used.
+This is useful to for example find out whether a variable in a let declaration type
+is "forall" or inherited from the surrounding context
+(if the use range is fully included in the let declaration range it's forall, otherwise inherited).
+
 -}
-type Type variable
-    = TypeVariable variable
-    | TypeNotVariable (TypeNotVariable variable)
+type Type
+    = TypeVariable
+        { useRange : Elm.Syntax.Range.Range
+        , name : String
+        }
+    | TypeNotVariable TypeNotVariable
 
 
 {-| [`Type`](#Type) except the variable case
 -}
-type TypeNotVariable variable
+type TypeNotVariable
     = TypeUnit
     | TypeConstruct
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , arguments : List (Type variable)
+        , arguments : List Type
         }
     | TypeTuple
-        { part0 : Type variable
-        , part1 : Type variable
+        { part0 : Type
+        , part1 : Type
         }
     | TypeTriple
-        { part0 : Type variable
-        , part1 : Type variable
-        , part2 : Type variable
+        { part0 : Type
+        , part1 : Type
+        , part2 : Type
         }
-    | TypeRecord (FastDict.Dict String (Type variable))
+    | TypeRecord (FastDict.Dict String Type)
     | TypeRecordExtension
-        { recordVariable : variable
-        , fields : FastDict.Dict String (Type variable)
+        { recordVariable :
+            { useRange : Elm.Syntax.Range.Range
+            , name : String
+            }
+        , fields : FastDict.Dict String Type
         }
     | TypeFunction
-        { input : Type variable
-        , output : Type variable
+        { input : Type
+        , output : Type
         }
 
 
 typeMapVariables :
-    (variable -> changedVariable)
-    -> Type variable
-    -> Type changedVariable
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> Type
+    -> Type
 typeMapVariables variableMap type_ =
     case type_ of
         TypeVariable variable ->
@@ -332,9 +344,9 @@ typeMapVariables variableMap type_ =
 
 
 typeNotVariableMapVariables :
-    (variable -> variableMapped)
-    -> TypeNotVariable variable
-    -> TypeNotVariable variableMapped
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypeNotVariable
+    -> TypeNotVariable
 typeNotVariableMapVariables variableMap typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
@@ -400,9 +412,9 @@ type alias TypeVariableFromContextSet =
 
 typeMapVariablesAndCollectResultingVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
-    -> Type TypeVariableFromContext
+    -> Type
     ->
-        { type_ : Type TypeVariableFromContext
+        { type_ : Type
         , containedVariables : TypeVariableFromContextSet
         }
 typeMapVariablesAndCollectResultingVariables variableMap type_ =
@@ -420,7 +432,7 @@ typeMapVariablesAndCollectResultingVariables variableMap type_ =
         TypeNotVariable typeNotVariable ->
             let
                 typeNotVariableMapped :
-                    { type_ : TypeNotVariable TypeVariableFromContext
+                    { type_ : TypeNotVariable
                     , containedVariables : TypeVariableFromContextSet
                     }
                 typeNotVariableMapped =
@@ -433,7 +445,7 @@ typeMapVariablesAndCollectResultingVariables variableMap type_ =
 
 
 typeUnitContainedVariablesEmpty :
-    { type_ : TypeNotVariable TypeVariableFromContext
+    { type_ : TypeNotVariable
     , containedVariables : TypeVariableFromContextSet
     }
 typeUnitContainedVariablesEmpty =
@@ -444,9 +456,9 @@ typeUnitContainedVariablesEmpty =
 
 typeNotVariableMapVariablesAndCollectResultingVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     ->
-        { type_ : TypeNotVariable TypeVariableFromContext
+        { type_ : TypeNotVariable
         , containedVariables : TypeVariableFromContextSet
         }
 typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVariable =
@@ -456,11 +468,11 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeFunction typeFunction ->
             let
-                inputMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                inputMapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 inputMapped =
                     typeFunction.input |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                outputMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                outputMapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 outputMapped =
                     typeFunction.output |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -477,11 +489,11 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeTuple typeTuple ->
             let
-                part0Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                part0Mapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 part0Mapped =
                     typeTuple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part1Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                part1Mapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 part1Mapped =
                     typeTuple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -498,15 +510,15 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeTriple typeTriple ->
             let
-                part0Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                part0Mapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 part0Mapped =
                     typeTriple.part0 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part1Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                part1Mapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 part1Mapped =
                     typeTriple.part1 |> typeMapVariablesAndCollectResultingVariables variableMap
 
-                part2Mapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                part2Mapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                 part2Mapped =
                     typeTriple.part2 |> typeMapVariablesAndCollectResultingVariables variableMap
             in
@@ -524,13 +536,13 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeConstruct typeConstruct ->
             let
-                argumentsMapped : { types : List (Type TypeVariableFromContext), containedVariables : TypeVariableFromContextSet }
+                argumentsMapped : { types : List Type, containedVariables : TypeVariableFromContextSet }
                 argumentsMapped =
                     typeConstruct.arguments
                         |> List.foldr
                             (\argument soFar ->
                                 let
-                                    argumentMapped : { type_ : Type TypeVariableFromContext, containedVariables : TypeVariableFromContextSet }
+                                    argumentMapped : { type_ : Type, containedVariables : TypeVariableFromContextSet }
                                     argumentMapped =
                                         argument |> typeMapVariablesAndCollectResultingVariables variableMap
                                 in
@@ -554,7 +566,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
         TypeRecord typeRecordFields ->
             let
-                fieldsMapped : FastDict.Dict String (Type TypeVariableFromContext)
+                fieldsMapped : FastDict.Dict String Type
                 fieldsMapped =
                     typeRecordFields
                         |> FastDict.map
@@ -580,7 +592,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     typeRecordExtension.recordVariable
                         |> variableMap
 
-                fieldsMapped : FastDict.Dict String (Type TypeVariableFromContext)
+                fieldsMapped : FastDict.Dict String Type
                 fieldsMapped =
                     typeRecordExtension.fields
                         |> FastDict.map
@@ -605,7 +617,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
 
 
 typedListEmptyContainedVariablesEmpty :
-    { types : List (Type TypeVariableFromContext)
+    { types : List Type
     , containedVariables : TypeVariableFromContextSet
     }
 typedListEmptyContainedVariablesEmpty =
@@ -615,7 +627,7 @@ typedListEmptyContainedVariablesEmpty =
 
 
 typeContainedVariables :
-    Type TypeVariableFromContext
+    Type
     -> TypeVariableFromContextSet
 typeContainedVariables type_ =
     case type_ of
@@ -627,7 +639,7 @@ typeContainedVariables type_ =
 
 
 typeNotVariableContainedVariables :
-    TypeNotVariable TypeVariableFromContext
+    TypeNotVariable
     -> TypeVariableFromContextSet
 typeNotVariableContainedVariables typeNotVariable =
     case typeNotVariable of
@@ -676,7 +688,7 @@ typeNotVariableContainedVariables typeNotVariable =
 
 typeContainsVariable :
     TypeVariableFromContext
-    -> Type TypeVariableFromContext
+    -> Type
     -> Bool
 typeContainsVariable variableToCheckFor type_ =
     case type_ of
@@ -689,7 +701,7 @@ typeContainsVariable variableToCheckFor type_ =
 
 typeNotVariableContainsVariable :
     TypeVariableFromContext
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Bool
 typeNotVariableContainsVariable variableToCheckFor typeNotVariable =
     case typeNotVariable of
@@ -1299,16 +1311,21 @@ exposesCombineFrom soFar syntaxExposes =
 
 syntaxToType :
     ModuleOriginLookup
-    -> Elm.Syntax.TypeAnnotation.TypeAnnotation
-    -> Result String (Type String)
-syntaxToType moduleOriginLookup syntaxType =
+    -> Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
+    -> Result String Type
+syntaxToType moduleOriginLookup syntaxTypeNode =
     -- IGNORE TCO
-    case syntaxType of
+    case syntaxTypeNode |> Elm.Syntax.Node.value of
         Elm.Syntax.TypeAnnotation.Unit ->
             okTypeUnit
 
         Elm.Syntax.TypeAnnotation.GenericType variableName ->
-            Ok (TypeVariable variableName)
+            Ok
+                (TypeVariable
+                    { useRange = syntaxTypeNode |> Elm.Syntax.Node.range
+                    , name = variableName
+                    }
+                )
 
         Elm.Syntax.TypeAnnotation.Typed (Elm.Syntax.Node.Node _ ( qualification, unqualifiedName )) argumentNodes ->
             case moduleOriginLookup.typeConstructs |> FastDict.get ( qualification, unqualifiedName ) of
@@ -1340,7 +1357,7 @@ syntaxToType moduleOriginLookup syntaxType =
                         )
                         (argumentNodes
                             |> listMapAndCombineOk
-                                (\(Elm.Syntax.Node.Node _ argument) ->
+                                (\argument ->
                                     argument |> syntaxToType moduleOriginLookup
                                 )
                         )
@@ -1350,10 +1367,10 @@ syntaxToType moduleOriginLookup syntaxType =
                 [] ->
                     okTypeUnit
 
-                [ Elm.Syntax.Node.Node _ inParens ] ->
+                [ inParens ] ->
                     inParens |> syntaxToType moduleOriginLookup
 
-                [ Elm.Syntax.Node.Node _ syntaxPart0, Elm.Syntax.Node.Node _ syntaxPart1 ] ->
+                [ syntaxPart0, syntaxPart1 ] ->
                     Result.map2
                         (\part0 part1 ->
                             TypeNotVariable
@@ -1362,7 +1379,7 @@ syntaxToType moduleOriginLookup syntaxType =
                         (syntaxPart0 |> syntaxToType moduleOriginLookup)
                         (syntaxPart1 |> syntaxToType moduleOriginLookup)
 
-                [ Elm.Syntax.Node.Node _ syntaxPart0, Elm.Syntax.Node.Node _ syntaxPart1, Elm.Syntax.Node.Node _ syntaxPart2 ] ->
+                [ syntaxPart0, syntaxPart1, syntaxPart2 ] ->
                     Result.map3
                         (\part0 part1 part2 ->
                             TypeNotVariable
@@ -1380,7 +1397,7 @@ syntaxToType moduleOriginLookup syntaxType =
                 (\fields -> TypeNotVariable (TypeRecord fields))
                 (recordFields
                     |> listFoldlWhileOkFrom FastDict.empty
-                        (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, Elm.Syntax.Node.Node _ fieldValue )) soFar ->
+                        (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, fieldValue )) soFar ->
                             Result.map
                                 (\fieldValueType ->
                                     soFar |> FastDict.insert fieldName fieldValueType
@@ -1389,7 +1406,7 @@ syntaxToType moduleOriginLookup syntaxType =
                         )
                 )
 
-        Elm.Syntax.TypeAnnotation.GenericRecord (Elm.Syntax.Node.Node _ recordVariableName) (Elm.Syntax.Node.Node _ recordExtensionFields) ->
+        Elm.Syntax.TypeAnnotation.GenericRecord (Elm.Syntax.Node.Node recordVariableRange recordVariableName) (Elm.Syntax.Node.Node _ recordExtensionFields) ->
             case recordExtensionFields of
                 [] ->
                     Err "record extension by 0 fields is invalid syntax"
@@ -1399,7 +1416,10 @@ syntaxToType moduleOriginLookup syntaxType =
                         (\fields ->
                             TypeNotVariable
                                 (TypeRecordExtension
-                                    { recordVariable = recordVariableName
+                                    { recordVariable =
+                                        { useRange = recordVariableRange
+                                        , name = recordVariableName
+                                        }
                                     , fields = fields
                                     }
                                 )
@@ -1407,7 +1427,7 @@ syntaxToType moduleOriginLookup syntaxType =
                         ((field0 :: field1Up)
                             |> listFoldlWhileOkFrom
                                 FastDict.empty
-                                (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, Elm.Syntax.Node.Node _ fieldValue )) soFar ->
+                                (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ fieldName, fieldValue )) soFar ->
                                     Result.map
                                         (\fieldValueType ->
                                             soFar |> FastDict.insert fieldName fieldValueType
@@ -1416,7 +1436,7 @@ syntaxToType moduleOriginLookup syntaxType =
                                 )
                         )
 
-        Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation (Elm.Syntax.Node.Node _ syntaxInput) (Elm.Syntax.Node.Node _ syntaxOutput) ->
+        Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation syntaxInput syntaxOutput ->
             Result.map2
                 (\input output ->
                     TypeNotVariable
@@ -1448,13 +1468,13 @@ typeSubstituteVariable :
     }
     ->
         { variable : TypeVariableFromContext
-        , type_ : Type TypeVariableFromContext
+        , type_ : Type
         }
-    -> Type TypeVariableFromContext
+    -> Type
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeSubstituteVariable context replacement type_ =
@@ -1497,8 +1517,8 @@ typeApplyVariableSubstitutions :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     -> VariableSubstitutions
-    -> Type TypeVariableFromContext
-    -> Result String (Type TypeVariableFromContext)
+    -> Type
+    -> Result String Type
 typeApplyVariableSubstitutions context substitutions originalType =
     if
         (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
@@ -1554,14 +1574,14 @@ typeSubstituteVariableByType :
     }
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
-    -> Type TypeVariableFromContext
+    -> Type
     ->
         Result
             String
             { unchanged : Bool
-            , type_ : Type TypeVariableFromContext
+            , type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeSubstituteVariableByType context replacement type_ =
@@ -1690,7 +1710,7 @@ typeSubstituteVariableByType context replacement type_ =
                         }
 
 
-typeToInfoString : Type TypeVariableFromContext -> String
+typeToInfoString : Type -> String
 typeToInfoString type_ =
     case type_ of
         TypeVariable typeVariable ->
@@ -1708,7 +1728,7 @@ typeVariableFromContextToInfoString typeVariableFromContext =
         ++ ")"
 
 
-typeNotVariableToInfoString : TypeNotVariable TypeVariableFromContext -> String
+typeNotVariableToInfoString : TypeNotVariable -> String
 typeNotVariableToInfoString typeNotVariable =
     case typeNotVariable of
         TypeUnit ->
@@ -1793,14 +1813,14 @@ typeNotVariableSubstituteVariableByType :
     }
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     ->
         Result
             String
             { unchanged : Bool
-            , type_ : TypeNotVariable TypeVariableFromContext
+            , type_ : TypeNotVariable
             , substitutions : VariableSubstitutions
             }
 typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
@@ -2290,7 +2310,7 @@ typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
 substitutionsNoneTypesDictEmptyAllUnchangedTrue :
     { allUnchanged : Bool
     , substitutions : VariableSubstitutions
-    , types : FastDict.Dict String (Type TypeVariableFromContext)
+    , types : FastDict.Dict String Type
     }
 substitutionsNoneTypesDictEmptyAllUnchangedTrue =
     { allUnchanged = True
@@ -2301,7 +2321,7 @@ substitutionsNoneTypesDictEmptyAllUnchangedTrue =
 
 typeIsNumber :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> Type TypeVariableFromContext
+    -> Type
     -> Bool
 typeIsNumber declarationTypes type_ =
     case type_ of
@@ -2329,7 +2349,7 @@ typeIsNumber declarationTypes type_ =
 
 typeNotVariableIsNumber :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Bool
 typeNotVariableIsNumber declarationTypes type_ =
     case type_ of
@@ -2384,7 +2404,7 @@ typeNotVariableIsNumber declarationTypes type_ =
 
 typeIsAppendable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> Type TypeVariableFromContext
+    -> Type
     -> Bool
 typeIsAppendable declarationTypes type_ =
     case type_ of
@@ -2412,7 +2432,7 @@ typeIsAppendable declarationTypes type_ =
 
 typeNotVariableIsAppendable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Bool
 typeNotVariableIsAppendable declarationTypes type_ =
     case type_ of
@@ -2472,7 +2492,7 @@ typeNotVariableIsAppendable declarationTypes type_ =
 
 typeIsComparable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> Type TypeVariableFromContext
+    -> Type
     -> Bool
 typeIsComparable declarationTypes type_ =
     case type_ of
@@ -2500,7 +2520,7 @@ typeIsComparable declarationTypes type_ =
 
 typeNotVariableIsComparable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Bool
 typeNotVariableIsComparable declarationTypes typeNotVariable =
     -- IGNORE TCO
@@ -2588,7 +2608,7 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
 
 typeIsCompappend :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> Type TypeVariableFromContext
+    -> Type
     -> Bool
 typeIsCompappend declarationTypes type_ =
     case type_ of
@@ -2616,7 +2636,7 @@ typeIsCompappend declarationTypes type_ =
 
 typeNotVariableIsCompappend :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Bool
 typeNotVariableIsCompappend declarationTypes type_ =
     -- IGNORE TCO
@@ -2686,10 +2706,10 @@ typeConstructFullyExpandIfAlias :
     }
     ->
         { name : String
-        , arguments : List (Type TypeVariableFromContext)
+        , arguments : List Type
         , moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         }
-    -> Maybe (Type TypeVariableFromContext)
+    -> Maybe Type
 typeConstructFullyExpandIfAlias context typeConstructToExpand =
     case context.declarationTypes |> FastDict.get typeConstructToExpand.moduleOrigin of
         Nothing ->
@@ -2704,7 +2724,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                     let
                         substitutionsToApplyToOriginAliasType :
                             { parameterToVariable : FastDict.Dict String TypeVariableFromContext
-                            , parameterToTypeNotVariable : DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+                            , parameterToTypeNotVariable : DictByTypeVariableFromContext TypeNotVariable
                             }
                         substitutionsToApplyToOriginAliasType =
                             listFoldl2From
@@ -2732,21 +2752,21 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                             }
                                 )
 
-                        aliasTypeWithVariableArgumentsFilledIn : Type TypeVariableFromContext
+                        aliasTypeWithVariableArgumentsFilledIn : Type
                         aliasTypeWithVariableArgumentsFilledIn =
                             originAliasDeclaration.type_
                                 |> typeMapVariables
-                                    (\parameterName ->
+                                    (\parameterVariable ->
                                         case
                                             substitutionsToApplyToOriginAliasType.parameterToVariable
-                                                |> FastDict.get parameterName
+                                                |> FastDict.get parameterVariable.name
                                         of
                                             Just variable ->
                                                 variable
 
                                             Nothing ->
                                                 { useRange = Elm.Syntax.Range.empty
-                                                , name = parameterName
+                                                , name = parameterVariable.name
                                                 }
                                     )
                     in
@@ -2775,7 +2795,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
 
 parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty :
     { parameterToVariable : FastDict.Dict String TypeVariableFromContext
-    , parameterToTypeNotVariable : DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    , parameterToTypeNotVariable : DictByTypeVariableFromContext TypeNotVariable
     }
 parameterToVariableDictEmptyParameterToTypeNotVariableDictEmpty =
     { parameterToVariable = FastDict.empty
@@ -2794,8 +2814,7 @@ type alias VariableSubstitutions =
     { equivalentVariables :
         List EquivalentVariableSet
     , variableToType :
-        DictByTypeVariableFromContext
-            (TypeNotVariable TypeVariableFromContext)
+        DictByTypeVariableFromContext TypeNotVariable
     }
 
 
@@ -3214,12 +3233,12 @@ typeUnify :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> Type TypeVariableFromContext
-    -> Type TypeVariableFromContext
+    -> Type
+    -> Type
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeUnify context a b =
@@ -3278,12 +3297,12 @@ typeNotVariableUnifyWithType :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> TypeNotVariable TypeVariableFromContext
-    -> Type TypeVariableFromContext
+    -> TypeNotVariable
+    -> Type
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeNotVariableUnifyWithType context aTypeNotVariable b =
@@ -3311,16 +3330,16 @@ typeUnifyWithTypeConstruct :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> Type TypeVariableFromContext
+    -> Type
     ->
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , arguments : List (Type TypeVariableFromContext)
+        , arguments : List Type
         }
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeUnifyWithTypeConstruct context a bTypeConstruct =
@@ -3333,7 +3352,7 @@ typeUnifyWithTypeConstruct context a bTypeConstruct =
 
         TypeVariable aVariable ->
             let
-                bTypeNotVariable : TypeNotVariable TypeVariableFromContext
+                bTypeNotVariable : TypeNotVariable
                 bTypeNotVariable =
                     TypeConstruct bTypeConstruct
             in
@@ -3355,7 +3374,7 @@ typeUnifyWithBasicsBool :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> Type TypeVariableFromContext
+    -> Type
     ->
         Result
             String
@@ -3457,16 +3476,16 @@ typeNotVariableUnifyWithTypeConstruct :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     ->
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , arguments : List (Type TypeVariableFromContext)
+        , arguments : List Type
         }
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeNotVariableUnifyWithTypeConstruct context aTypeNotVariable bTypeConstruct =
@@ -3660,7 +3679,7 @@ typeNotVariableUnifyWithTypeConstruct context aTypeNotVariable bTypeConstruct =
 variableSubstitutionsFromVariableToTypeNotVariableOrError :
     ModuleLevelDeclarationTypesAvailableInModule
     -> TypeVariableFromContext
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     -> Result String VariableSubstitutions
 variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes replacementVariable replacementTypeNotVariable =
     if replacementTypeNotVariable |> typeNotVariableContainsVariable replacementVariable then
@@ -3695,12 +3714,12 @@ typeNotVariableUnify :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> TypeNotVariable TypeVariableFromContext
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
+    -> TypeNotVariable
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeNotVariableUnify context a bNotVariable =
@@ -4176,7 +4195,7 @@ argumentsReverseListEmptySubstitutionsNone =
     }
 
 
-okTypeUnitSubstitutionsNone : Result error_ { type_ : Type TypeVariableFromContext, substitutions : VariableSubstitutions }
+okTypeUnitSubstitutionsNone : Result error_ { type_ : Type, substitutions : VariableSubstitutions }
 okTypeUnitSubstitutionsNone =
     Ok
         { type_ = typeUnit
@@ -4191,15 +4210,15 @@ typeUnifyWithTryToExpandTypeConstruct :
     ->
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , arguments : List (Type TypeVariableFromContext)
+        , arguments : List Type
         }
-    -> TypeNotVariable TypeVariableFromContext
+    -> TypeNotVariable
     ->
         Maybe
             (Result
                 String
                 { substitutions : VariableSubstitutions
-                , type_ : Type TypeVariableFromContext
+                , type_ : Type
                 }
             )
 typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
@@ -4257,7 +4276,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                     |> typeMapVariables
                                         (\aliasVariable ->
                                             { useRange = context.range
-                                            , name = prefix ++ (aliasVariable |> stringFirstCharToUpper)
+                                            , name = prefix ++ (aliasVariable.name |> stringFirstCharToUpper)
                                             }
                                         )
                             , substitutions = variableSubstitutionsNone
@@ -4296,12 +4315,12 @@ typeRecordUnify :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> FastDict.Dict String (Type TypeVariableFromContext)
-    -> FastDict.Dict String (Type TypeVariableFromContext)
+    -> FastDict.Dict String Type
+    -> FastDict.Dict String Type
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeRecordUnify context aFields bFields =
@@ -4365,13 +4384,13 @@ typeRecordExtensionUnifyWithRecord :
     }
     ->
         { recordVariable : TypeVariableFromContext
-        , fields : FastDict.Dict String (Type TypeVariableFromContext)
+        , fields : FastDict.Dict String Type
         }
-    -> FastDict.Dict String (Type TypeVariableFromContext)
+    -> FastDict.Dict String Type
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
@@ -4452,16 +4471,16 @@ typeRecordExtensionUnifyWithRecordExtension :
     }
     ->
         { recordVariable : TypeVariableFromContext
-        , fields : FastDict.Dict String (Type TypeVariableFromContext)
+        , fields : FastDict.Dict String Type
         }
     ->
         { recordVariable : TypeVariableFromContext
-        , fields : FastDict.Dict String (Type TypeVariableFromContext)
+        , fields : FastDict.Dict String Type
         }
     ->
         Result
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , substitutions : VariableSubstitutions
             }
 typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExtension =
@@ -4585,10 +4604,10 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
 okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty :
     Result
         error_
-        { fieldsUnified : FastDict.Dict String (Type TypeVariableFromContext)
+        { fieldsUnified : FastDict.Dict String Type
         , substitutions : VariableSubstitutions
-        , aOnly : FastDict.Dict String (Type TypeVariableFromContext)
-        , bOnly : FastDict.Dict String (Type TypeVariableFromContext)
+        , aOnly : FastDict.Dict String Type
+        , bOnly : FastDict.Dict String Type
         }
 okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty =
     Ok
@@ -4602,7 +4621,7 @@ okFieldsUnifiedEmptySubstitutionsNoneAOnlyDictEmptyBOnlyDictEmpty =
 okFieldsUnifiedEmptySubstitutionsNone :
     Result
         error_
-        { fieldsUnified : FastDict.Dict String (Type TypeVariableFromContext)
+        { fieldsUnified : FastDict.Dict String Type
         , substitutions : VariableSubstitutions
         }
 okFieldsUnifiedEmptySubstitutionsNone =
@@ -4827,7 +4846,7 @@ type Base10Or16
     | Base16
 
 
-typeBasicsFloat : Type variable_
+typeBasicsFloat : Type
 typeBasicsFloat =
     TypeNotVariable
         (TypeConstruct
@@ -4838,12 +4857,12 @@ typeBasicsFloat =
         )
 
 
-typeBasicsBool : Type variable_
+typeBasicsBool : Type
 typeBasicsBool =
     TypeNotVariable typeNotVariableBasicsBool
 
 
-typeNotVariableBasicsBool : TypeNotVariable variable_
+typeNotVariableBasicsBool : TypeNotVariable
 typeNotVariableBasicsBool =
     TypeConstruct typeConstructBasicsBool
 
@@ -4851,7 +4870,7 @@ typeNotVariableBasicsBool =
 typeConstructBasicsBool :
     { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
     , name : String
-    , arguments : List (Type variable_)
+    , arguments : List Type
     }
 typeConstructBasicsBool =
     { moduleOrigin = [ "Basics" ]
@@ -4860,7 +4879,7 @@ typeConstructBasicsBool =
     }
 
 
-typeBasicsInt : Type variable_
+typeBasicsInt : Type
 typeBasicsInt =
     TypeNotVariable
         (TypeConstruct
@@ -4871,7 +4890,7 @@ typeBasicsInt =
         )
 
 
-typeStringString : Type variable_
+typeStringString : Type
 typeStringString =
     TypeNotVariable
         (TypeConstruct
@@ -4882,7 +4901,7 @@ typeStringString =
         )
 
 
-typeCharChar : Type variable_
+typeCharChar : Type
 typeCharChar =
     TypeNotVariable
         (TypeConstruct
@@ -4893,7 +4912,7 @@ typeCharChar =
         )
 
 
-typeListList : Type variable -> Type variable
+typeListList : Type -> Type
 typeListList a =
     TypeNotVariable
         (TypeConstruct
@@ -4904,7 +4923,7 @@ typeListList a =
         )
 
 
-typeParserParser : Type variable -> Type variable
+typeParserParser : Type -> Type
 typeParserParser a =
     TypeNotVariable
         (TypeConstruct
@@ -4915,7 +4934,7 @@ typeParserParser a =
         )
 
 
-typeParserAdvancedParser : Type variable -> Type variable -> Type variable -> Type variable
+typeParserAdvancedParser : Type -> Type -> Type -> Type
 typeParserAdvancedParser context problem value =
     TypeNotVariable
         (TypeConstruct
@@ -4926,7 +4945,7 @@ typeParserAdvancedParser context problem value =
         )
 
 
-typeUrlParserParser : Type variable -> Type variable -> Type variable
+typeUrlParserParser : Type -> Type -> Type
 typeUrlParserParser a b =
     TypeNotVariable
         (TypeConstruct
@@ -4937,7 +4956,7 @@ typeUrlParserParser a b =
         )
 
 
-typeUrlParserQueryParser : Type variable -> Type variable
+typeUrlParserQueryParser : Type -> Type
 typeUrlParserQueryParser a =
     TypeNotVariable
         (TypeConstruct
@@ -5020,8 +5039,8 @@ patternTypeInfer :
         Result
             String
             (TypedNode
-                (Pattern (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Pattern Type)
+                Type
             )
 patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
     -- IGNORE TCO
@@ -5195,7 +5214,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
         Elm.Syntax.Pattern.RecordPattern recordFields ->
             let
-                fieldTypedNodes : List (TypedNode String (Type TypeVariableFromContext))
+                fieldTypedNodes : List (TypedNode String Type)
                 fieldTypedNodes =
                     recordFields
                         |> List.map
@@ -5460,15 +5479,15 @@ patternVariantTypeInfer :
         , name : String
         , choiceTypeName : String
         , choiceTypeParameters : List String
-        , variantValueTypes : List (Type String)
+        , variantValueTypes : List Type
         , values : List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
         }
     ->
         Result
             String
             (TypedNode
-                (Pattern (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Pattern Type)
+                Type
             )
 patternVariantTypeInfer context patternVariant =
     Result.map
@@ -5542,9 +5561,9 @@ patternVariantTypeInfer context patternVariant =
                                 valueInferred.type_
                                 (typeInVariant
                                     |> typeMapVariables
-                                        (\variableName ->
+                                        (\variable ->
                                             { useRange = patternVariant.fullRange
-                                            , name = variableName
+                                            , name = variable.name
                                             }
                                         )
                                 )
@@ -5572,11 +5591,11 @@ locationToInfoString location =
 expressionTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -5586,8 +5605,8 @@ expressionTypeInfer :
         Result
             String
             (TypedNode
-                (Expression (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Expression Type)
+                Type
             )
 expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
     -- IGNORE TCO
@@ -5690,7 +5709,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 fieldName =
                     dotFieldName |> String.dropLeft 1
 
-                fieldValueType : Type TypeVariableFromContext
+                fieldValueType : Type
                 fieldValueType =
                     TypeVariable
                         { useRange =
@@ -5766,7 +5785,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         (Elm.Syntax.Node.Node fieldRange fieldName) =
                             fieldNameNode
 
-                        introducedFieldValueTypeVariable : Type TypeVariableFromContext
+                        introducedFieldValueTypeVariable : Type
                         introducedFieldValueTypeVariable =
                             TypeVariable
                                 { useRange = fieldRange
@@ -6025,7 +6044,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     resultAndThen3
                         (\calledInferred argument0Inferred argument1UpInferred ->
                             let
-                                introducedResultTypeVariable : Type TypeVariableFromContext
+                                introducedResultTypeVariable : Type
                                 introducedResultTypeVariable =
                                     TypeVariable
                                         { useRange = fullRange
@@ -6457,11 +6476,11 @@ expressionLetInTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , moduleOriginLookup : ModuleOriginLookup
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     }
@@ -6475,8 +6494,8 @@ expressionLetInTypeInfer :
         Result
             String
             (TypedNode
-                (Expression (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Expression Type)
+                Type
             )
 expressionLetInTypeInfer context syntaxExpressionLetIn =
     Result.andThen
@@ -6484,11 +6503,11 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
             let
                 inferContextAcrossLetIn :
                     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
-                    , locallyIntroducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+                    , locallyIntroducedExpressionVariables : FastDict.Dict String Type
                     , locallyIntroducedDeclarationTypes :
                         FastDict.Dict
                             String
-                            { type_ : Type TypeVariableFromContext
+                            { type_ : Type
                             , range : Elm.Syntax.Range.Range
                             }
                     , moduleOriginLookup : ModuleOriginLookup
@@ -6507,8 +6526,8 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                     let
                         letInTypedNodeInferred :
                             TypedNode
-                                (Expression (Type TypeVariableFromContext))
-                                (Type TypeVariableFromContext)
+                                (Expression Type)
+                                Type
                         letInTypedNodeInferred =
                             { range = syntaxExpressionLetIn.fullRange
                             , type_ = resultInferred.type_
@@ -6527,7 +6546,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                             , range = syntaxExpressionLetIn.fullRange
                             }
 
-                        inferredUnannotatedDeclarationTypes : FastDict.Dict String { range : Elm.Syntax.Range.Range, type_ : Type TypeVariableFromContext }
+                        inferredUnannotatedDeclarationTypes : FastDict.Dict String { range : Elm.Syntax.Range.Range, type_ : Type }
                         inferredUnannotatedDeclarationTypes =
                             if acrossLetInIncludingContextSoFar.unannotatedDeclarationsExist then
                                 (declaration0Inferred :: declaration1UpInferred)
@@ -6686,19 +6705,11 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                 soFar.introducedDeclarationTypes
                                                     |> FastDict.insert name
                                                         { range = letDeclarationRange
-                                                        , type_ =
-                                                            type_
-                                                                |> typeMapVariables
-                                                                    (\variable ->
-                                                                        { useRange = letDeclarationRange
-                                                                        , name = variable
-                                                                        }
-                                                                    )
+                                                        , type_ = type_
                                                         }
                                             }
                                         )
                                         (signature.typeAnnotation
-                                            |> Elm.Syntax.Node.value
                                             |> syntaxToType context.moduleOriginLookup
                                         )
                 )
@@ -6709,11 +6720,11 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
-    -> FastDict.Dict String (Type TypeVariableFromContext)
+    -> FastDict.Dict String Type
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     -> Result String VariableSubstitutions
 substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context introducedVariables expressionTypedNode =
     expressionTypedNode
@@ -6767,12 +6778,12 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression :
         FastDict.Dict
             String
             { range : Elm.Syntax.Range.Range
-            , type_ : Type TypeVariableFromContext
+            , type_ : Type
             }
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     -> Result String VariableSubstitutions
 substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     expressionTypedNode
@@ -6795,7 +6806,7 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                 soFar
                                 (\useRange useType soFarWithUses ->
                                     let
-                                        newDeclarationTypeInstanceForUse : Type TypeVariableFromContext
+                                        newDeclarationTypeInstanceForUse : Type
                                         newDeclarationTypeInstanceForUse =
                                             inferredDeclarationType.type_
                                                 |> typeMapVariables
@@ -6860,12 +6871,12 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression :
         FastDict.Dict
             String
             { range : Elm.Syntax.Range.Range
-            , type_ : Type TypeVariableFromContext
+            , type_ : Type
             }
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     -> Result String VariableSubstitutions
 substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     expressionTypedNode
@@ -6888,7 +6899,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                 soFar
                                 (\useRange useType soFarWithUses ->
                                     let
-                                        newDeclarationTypeInstanceForUse : Type TypeVariableFromContext
+                                        newDeclarationTypeInstanceForUse : Type
                                         newDeclarationTypeInstanceForUse =
                                             inferredDeclarationType.type_
                                                 |> typeMapVariables
@@ -6936,7 +6947,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
             )
 
 
-typeUnit : Type type_
+typeUnit : Type
 typeUnit =
     TypeNotVariable TypeUnit
 
@@ -6949,11 +6960,11 @@ expressionListEmpty =
 expressionCaseTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -6967,12 +6978,12 @@ expressionCaseTypeInfer :
             String
             { pattern :
                 TypedNode
-                    (Pattern (Type TypeVariableFromContext))
-                    (Type TypeVariableFromContext)
+                    (Pattern Type)
+                    Type
             , result :
                 TypedNode
-                    (Expression (Type TypeVariableFromContext))
-                    (Type TypeVariableFromContext)
+                    (Expression Type)
+                    Type
             }
 expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
     Result.andThen
@@ -6980,7 +6991,7 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
             Result.andThen
                 (\resultInferred ->
                     let
-                        patternIntroducedVariables : FastDict.Dict String (Type TypeVariableFromContext)
+                        patternIntroducedVariables : FastDict.Dict String Type
                         patternIntroducedVariables =
                             patternInferred |> patternTypedNodeIntroducedVariables
                     in
@@ -7042,11 +7053,11 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
 expressionReferenceTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -7064,7 +7075,7 @@ expressionReferenceTypeInfer :
                 , qualification : Elm.Syntax.ModuleName.ModuleName
                 , name : String
                 }
-                (Type TypeVariableFromContext)
+                Type
             )
 expressionReferenceTypeInfer context expressionReference =
     let
@@ -7075,7 +7086,7 @@ expressionReferenceTypeInfer context expressionReference =
                     , qualification : Elm.Syntax.ModuleName.ModuleName
                     , name : String
                     }
-                    (Type TypeVariableFromContext)
+                    Type
                 )
         useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration =
             case expressionReference.qualification of
@@ -7186,9 +7197,9 @@ expressionReferenceTypeInfer context expressionReference =
                                         , type_ =
                                             signatureType
                                                 |> typeMapVariables
-                                                    (\variableName ->
+                                                    (\variable ->
                                                         { useRange = expressionReference.fullRange
-                                                        , name = variableName
+                                                        , name = variable.name
                                                         }
                                                     )
                                         }
@@ -7226,9 +7237,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                         { input =
                                                                             argument
                                                                                 |> typeMapVariables
-                                                                                    (\variableName ->
+                                                                                    (\variable ->
                                                                                         { useRange = expressionReference.fullRange
-                                                                                        , name = variableName
+                                                                                        , name = variable.name
                                                                                         }
                                                                                     )
                                                                         , output = output
@@ -7289,9 +7300,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                                 { input =
                                                                                                     fieldValueType
                                                                                                         |> typeMapVariables
-                                                                                                            (\name ->
+                                                                                                            (\variable ->
                                                                                                                 { useRange = expressionReference.fullRange
-                                                                                                                , name = name
+                                                                                                                , name = variable.name
                                                                                                                 }
                                                                                                             )
                                                                                                 , output = outputTypeSoFar
@@ -7392,11 +7403,11 @@ locationMax aLocation bLocation =
 letDeclarationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -7406,7 +7417,7 @@ letDeclarationTypeInfer :
         Result
             String
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration (Type TypeVariableFromContext)
+            , declaration : LetDeclaration Type
             }
 letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
     case letDeclaration of
@@ -7462,11 +7473,11 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
 letFunctionOrValueDeclarationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -7476,7 +7487,7 @@ letFunctionOrValueDeclarationTypeInfer :
         Result
             String
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration (Type TypeVariableFromContext)
+            , declaration : LetDeclaration Type
             }
 letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letValueOrFunction) =
     let
@@ -7597,19 +7608,6 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                 Just (Elm.Syntax.Node.Node signatureRange letValueOrFunctionSignature) ->
                     Result.andThen
                         (\annotationAsType ->
-                            let
-                                annotationAsTypeWithContext : Type TypeVariableFromContext
-                                annotationAsTypeWithContext =
-                                    annotationAsType
-                                        |> typeMapVariables
-                                            (\variable ->
-                                                { useRange =
-                                                    letValueOrFunction
-                                                        |> syntaxValueOrFunctionDeclarationRange
-                                                , name = variable
-                                                }
-                                            )
-                            in
                             Result.andThen
                                 (\resultInferred ->
                                     Result.andThen
@@ -7685,7 +7683,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                 )
                                         )
                                         (typeUnify typeContext
-                                            annotationAsTypeWithContext
+                                            annotationAsType
                                             (parametersInferred.nodes
                                                 |> List.foldr
                                                     (\parameterTypedNode outputSoFar ->
@@ -7716,12 +7714,11 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                 context.locallyIntroducedExpressionVariables
                                                 parametersInferred.introducedExpressionVariables
                                                 |> FastDict.insert name
-                                                    annotationAsTypeWithContext
+                                                    annotationAsType
                                         }
                                 )
                         )
                         (letValueOrFunctionSignature.typeAnnotation
-                            |> Elm.Syntax.Node.value
                             |> syntaxToType context.moduleOriginLookup
                         )
         )
@@ -7751,11 +7748,11 @@ stringFirstCharToUpper string =
 expressionInfixOperationTypeInfer :
     { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     , locallyIntroducedExpressionVariables :
-        FastDict.Dict String (Type TypeVariableFromContext)
+        FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
     , moduleOriginLookup : ModuleOriginLookup
@@ -7770,8 +7767,8 @@ expressionInfixOperationTypeInfer :
         Result
             String
             (TypedNode
-                (Expression (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Expression Type)
+                Type
             )
 expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
@@ -7919,19 +7916,19 @@ operatorFunctionType :
         Result
             String
             { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-            , leftType : Type TypeVariableFromContext
-            , rightType : Type TypeVariableFromContext
-            , resultType : Type TypeVariableFromContext
+            , leftType : Type
+            , rightType : Type
+            , resultType : Type
             }
 operatorFunctionType context operator =
     case operator of
         "|>" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
             in
@@ -7950,11 +7947,11 @@ operatorFunctionType context operator =
 
         "<|" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
             in
@@ -7973,15 +7970,15 @@ operatorFunctionType context operator =
 
         ">>" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
 
-                c : Type TypeVariableFromContext
+                c : Type
                 c =
                     TypeVariable { useRange = context.range, name = "c" }
             in
@@ -8012,15 +8009,15 @@ operatorFunctionType context operator =
 
         "<<" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
 
-                c : Type TypeVariableFromContext
+                c : Type
                 c =
                     TypeVariable { useRange = context.range, name = "c" }
             in
@@ -8051,7 +8048,7 @@ operatorFunctionType context operator =
 
         "++" ->
             let
-                appendable : Type TypeVariableFromContext
+                appendable : Type
                 appendable =
                     TypeVariable { useRange = context.range, name = "appendable" }
             in
@@ -8064,7 +8061,7 @@ operatorFunctionType context operator =
 
         "==" ->
             let
-                equatable : Type TypeVariableFromContext
+                equatable : Type
                 equatable =
                     TypeVariable { useRange = context.range, name = "equatable" }
             in
@@ -8077,7 +8074,7 @@ operatorFunctionType context operator =
 
         "/=" ->
             let
-                equatable : Type TypeVariableFromContext
+                equatable : Type
                 equatable =
                     TypeVariable { useRange = context.range, name = "equatable" }
             in
@@ -8090,7 +8087,7 @@ operatorFunctionType context operator =
 
         "::" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "element" }
             in
@@ -8103,7 +8100,7 @@ operatorFunctionType context operator =
 
         "*" ->
             let
-                number : Type TypeVariableFromContext
+                number : Type
                 number =
                     TypeVariable { useRange = context.range, name = "number" }
             in
@@ -8116,7 +8113,7 @@ operatorFunctionType context operator =
 
         "+" ->
             let
-                number : Type TypeVariableFromContext
+                number : Type
                 number =
                     TypeVariable { useRange = context.range, name = "number" }
             in
@@ -8129,7 +8126,7 @@ operatorFunctionType context operator =
 
         "-" ->
             let
-                number : Type TypeVariableFromContext
+                number : Type
                 number =
                     TypeVariable { useRange = context.range, name = "number" }
             in
@@ -8145,7 +8142,7 @@ operatorFunctionType context operator =
 
         "^" ->
             let
-                number : Type TypeVariableFromContext
+                number : Type
                 number =
                     TypeVariable { useRange = context.range, name = "number" }
             in
@@ -8158,7 +8155,7 @@ operatorFunctionType context operator =
 
         "<=" ->
             let
-                comparable : Type TypeVariableFromContext
+                comparable : Type
                 comparable =
                     TypeVariable { useRange = context.range, name = "comparable" }
             in
@@ -8171,7 +8168,7 @@ operatorFunctionType context operator =
 
         ">=" ->
             let
-                comparable : Type TypeVariableFromContext
+                comparable : Type
                 comparable =
                     TypeVariable { useRange = context.range, name = "comparable" }
             in
@@ -8184,7 +8181,7 @@ operatorFunctionType context operator =
 
         ">" ->
             let
-                comparable : Type TypeVariableFromContext
+                comparable : Type
                 comparable =
                     TypeVariable { useRange = context.range, name = "comparable" }
             in
@@ -8197,7 +8194,7 @@ operatorFunctionType context operator =
 
         "<" ->
             let
-                comparable : Type TypeVariableFromContext
+                comparable : Type
                 comparable =
                     TypeVariable { useRange = context.range, name = "comparable" }
             in
@@ -8221,19 +8218,19 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced then
                     let
-                        varContext : Type TypeVariableFromContext
+                        varContext : Type
                         varContext =
                             TypeVariable { useRange = context.range, name = "context" }
 
-                        problem : Type TypeVariableFromContext
+                        problem : Type
                         problem =
                             TypeVariable { useRange = context.range, name = "problem" }
 
-                        keep : Type TypeVariableFromContext
+                        keep : Type
                         keep =
                             TypeVariable { useRange = context.range, name = "keep" }
 
-                        ignore : Type TypeVariableFromContext
+                        ignore : Type
                         ignore =
                             TypeVariable { useRange = context.range, name = "ignore" }
                     in
@@ -8245,11 +8242,11 @@ operatorFunctionType context operator =
 
                  else
                     let
-                        keep : Type TypeVariableFromContext
+                        keep : Type
                         keep =
                             TypeVariable { useRange = context.range, name = "keep" }
 
-                        ignore : Type TypeVariableFromContext
+                        ignore : Type
                         ignore =
                             TypeVariable { useRange = context.range, name = "ignore" }
                     in
@@ -8264,19 +8261,19 @@ operatorFunctionType context operator =
             Ok
                 (if context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced then
                     let
-                        varContext : Type TypeVariableFromContext
+                        varContext : Type
                         varContext =
                             TypeVariable { useRange = context.range, name = "context" }
 
-                        problem : Type TypeVariableFromContext
+                        problem : Type
                         problem =
                             TypeVariable { useRange = context.range, name = "problem" }
 
-                        a : Type TypeVariableFromContext
+                        a : Type
                         a =
                             TypeVariable { useRange = context.range, name = "a" }
 
-                        b : Type TypeVariableFromContext
+                        b : Type
                         b =
                             TypeVariable { useRange = context.range, name = "b" }
                     in
@@ -8298,11 +8295,11 @@ operatorFunctionType context operator =
 
                  else
                     let
-                        a : Type TypeVariableFromContext
+                        a : Type
                         a =
                             TypeVariable { useRange = context.range, name = "a" }
 
-                        b : Type TypeVariableFromContext
+                        b : Type
                         b =
                             TypeVariable { useRange = context.range, name = "b" }
                     in
@@ -8323,15 +8320,15 @@ operatorFunctionType context operator =
 
         "</>" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
 
-                c : Type TypeVariableFromContext
+                c : Type
                 c =
                     TypeVariable { useRange = context.range, name = "c" }
             in
@@ -8344,15 +8341,15 @@ operatorFunctionType context operator =
 
         "<?>" ->
             let
-                a : Type TypeVariableFromContext
+                a : Type
                 a =
                     TypeVariable { useRange = context.range, name = "a" }
 
-                b : Type TypeVariableFromContext
+                b : Type
                 b =
                     TypeVariable { useRange = context.range, name = "b" }
 
-                query : Type TypeVariableFromContext
+                query : Type
                 query =
                     TypeVariable { useRange = context.range, name = "query" }
             in
@@ -8387,9 +8384,9 @@ okIdivOperatorInfo :
     Result
         error_
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , leftType : Type variable
-        , rightType : Type variable
-        , resultType : Type variable
+        , leftType : Type
+        , rightType : Type
+        , resultType : Type
         }
 okIdivOperatorInfo =
     Ok
@@ -8404,9 +8401,9 @@ okFdivOperatorInfo :
     Result
         error_
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , leftType : Type variable
-        , rightType : Type variable
-        , resultType : Type variable
+        , leftType : Type
+        , rightType : Type
+        , resultType : Type
         }
 okFdivOperatorInfo =
     Ok
@@ -8421,9 +8418,9 @@ okOrOperatorInfo :
     Result
         error_
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , leftType : Type variable
-        , rightType : Type variable
-        , resultType : Type variable
+        , leftType : Type
+        , rightType : Type
+        , resultType : Type
         }
 okOrOperatorInfo =
     Ok
@@ -8438,9 +8435,9 @@ okAndOperatorInfo :
     Result
         error_
         { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
-        , leftType : Type variable
-        , rightType : Type variable
-        , resultType : Type variable
+        , leftType : Type
+        , rightType : Type
+        , resultType : Type
         }
 okAndOperatorInfo =
     Ok
@@ -8551,9 +8548,9 @@ valueAndFunctionDeclarations :
             (FastDict.Dict
                 String
                 { parameters :
-                    List (TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext))
-                , result : TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
-                , type_ : Type TypeVariableFromContext
+                    List (TypedNode (Pattern Type) Type)
+                , result : TypedNode (Expression Type) Type
+                , type_ : Type
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation :
                     Maybe
@@ -8649,10 +8646,10 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
             { unannotatedInferredDeclarationTypes :
                 FastDict.Dict
                     String
-                    { type_ : Type TypeVariableFromContext
+                    { type_ : Type
                     , range : Elm.Syntax.Range.Range
                     }
-            , annotated : FastDict.Dict String (Type String)
+            , annotated : FastDict.Dict String Type
             }
         acrossValueAndFunctionDeclarationsToInfer =
             syntaxValueAndFunctionDeclarations
@@ -8690,7 +8687,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                             Just (Elm.Syntax.Node.Node _ signature) ->
                                 case
                                     signature.typeAnnotation
-                                        |> Elm.Syntax.Node.value
                                         |> syntaxToType moduleOriginLookup
                                 of
                                     Err _ ->
@@ -8892,7 +8888,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         Result.andThen
                                             (\resultInferred ->
                                                 let
-                                                    inferredFullType : Type TypeVariableFromContext
+                                                    inferredFullType : Type
                                                     inferredFullType =
                                                         parametersInferred.nodes
                                                             |> List.foldr
@@ -8905,16 +8901,6 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                         )
                                                                 )
                                                                 resultInferred.type_
-
-                                                    fullType : Type TypeVariableFromContext
-                                                    fullType =
-                                                        annotationType
-                                                            |> typeMapVariables
-                                                                (\variable ->
-                                                                    { useRange = valueOrFunctionDeclarationToInferRange
-                                                                    , name = variable
-                                                                    }
-                                                                )
                                                 in
                                                 resultAndThen2
                                                     (\inferredDeclarationTypeUnifiedWithAnnotation substitutionsFromUnifyingParameterVariablesWithUses ->
@@ -8940,7 +8926,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                                                 , parameters = parametersSubstituted
                                                                                 }
                                                                     )
-                                                                    (fullType
+                                                                    (annotationType
                                                                         |> typeApplyVariableSubstitutions
                                                                             typeContext
                                                                             fullSubstitutions
@@ -8970,7 +8956,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                             )
                                                     )
                                                     (typeUnify typeContext
-                                                        fullType
+                                                        annotationType
                                                         inferredFullType
                                                     )
                                                     (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
@@ -9017,7 +9003,7 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                             FastDict.Dict
                                 String
                                 { range : Elm.Syntax.Range.Range
-                                , type_ : Type TypeVariableFromContext
+                                , type_ : Type
                                 }
                         unannotatedDeclarationTypes =
                             declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
@@ -9108,13 +9094,13 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions :
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+            (ValueOrFunctionDeclarationInfo Type)
     ->
         Result
             String
             (FastDict.Dict
                 String
-                (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+                (ValueOrFunctionDeclarationInfo Type)
             )
 valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
     if
@@ -9155,7 +9141,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                 FastDict.Dict
                                     String
                                     { range : Elm.Syntax.Range.Range
-                                    , type_ : Type TypeVariableFromContext
+                                    , type_ : Type
                                     }
                             moduleLevelPartiallyInferredDeclarations =
                                 valueAndFunctionDeclarationsSoFar
@@ -9166,7 +9152,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     String
                                     (Rope
                                         Elm.Syntax.Range.Range
-                                        (Type TypeVariableFromContext)
+                                        Type
                                     )
                             allPartiallyInferredDeclarationsAndUsesAfterSubstitution =
                                 valueAndFunctionDeclarationsSubstituted.declarations
@@ -9178,8 +9164,8 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     { uses :
                                         Rope
                                             Elm.Syntax.Range.Range
-                                            (Type TypeVariableFromContext)
-                                    , partiallyInferredDeclarationType : Type TypeVariableFromContext
+                                            Type
+                                    , partiallyInferredDeclarationType : Type
                                     }
                             substitutionsOfPartiallyInferredDeclarationUses =
                                 allPartiallyInferredDeclarationsAndUsesAfterSubstitution
@@ -9216,7 +9202,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                     substitutionsSoFar
                                                     (\useRange useType unificationSubstitutionsWithUsesSoFar ->
                                                         let
-                                                            partialTypeNewInstance : Type TypeVariableFromContext
+                                                            partialTypeNewInstance : Type
                                                             partialTypeNewInstance =
                                                                 substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
                                                                     |> typeMapVariables
@@ -9268,10 +9254,10 @@ unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty :
     { unannotatedInferredDeclarationTypes :
         FastDict.Dict
             String
-            { type_ : Type TypeVariableFromContext
+            { type_ : Type
             , range : Elm.Syntax.Range.Range
             }
-    , annotated : FastDict.Dict String (Type String)
+    , annotated : FastDict.Dict String Type
     }
 unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty =
     { unannotatedInferredDeclarationTypes = FastDict.empty
@@ -9318,7 +9304,7 @@ moduleTypesSetLocalTypesToOrigin moduleOrigin moduleTypes =
     }
 
 
-typeSetLocalToOrigin : Elm.Syntax.ModuleName.ModuleName -> Type variable -> Type variable
+typeSetLocalToOrigin : Elm.Syntax.ModuleName.ModuleName -> Type -> Type
 typeSetLocalToOrigin moduleOrigin type_ =
     case type_ of
         TypeVariable variable ->
@@ -9331,8 +9317,8 @@ typeSetLocalToOrigin moduleOrigin type_ =
 
 typeNotVariableSetLocalToOrigin :
     Elm.Syntax.ModuleName.ModuleName
-    -> TypeNotVariable variable
-    -> TypeNotVariable variable
+    -> TypeNotVariable
+    -> TypeNotVariable
 typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
     case typeNotVariable of
         TypeConstruct typeConstruct ->
@@ -9416,7 +9402,7 @@ typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
 variableSubstitutionsFromVariableToType :
     ModuleLevelDeclarationTypesAvailableInModule
     -> TypeVariableFromContext
-    -> Type TypeVariableFromContext
+    -> Type
     -> Result String VariableSubstitutions
 variableSubstitutionsFromVariableToType declarationsTypes variableToReplace replacementType =
     case replacementType of
@@ -9492,8 +9478,8 @@ type alias ModuleLevelDeclarationTypesAvailableInModule =
 
 
 declarationValueOrFunctionInfoDisambiguateTypeVariables :
-    ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
-    -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+    ValueOrFunctionDeclarationInfo Type
+    -> ValueOrFunctionDeclarationInfo Type
 declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
@@ -9517,7 +9503,7 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
 
 
 valueOrFunctionDeclarationInfoContainedTypeVariables :
-    ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+    ValueOrFunctionDeclarationInfo Type
     -> TypeVariableFromContextSet
 valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
     declarationValueOrFunction.parameters
@@ -9534,7 +9520,7 @@ valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction 
 
 
 patternTypedNodeContainedTypeVariables :
-    TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    TypedNode (Pattern Type) Type
     -> TypeVariableFromContextSet
 patternTypedNodeContainedTypeVariables patternTypedNode =
     DictByTypeVariableFromContext.union
@@ -9547,7 +9533,7 @@ patternTypedNodeContainedTypeVariables patternTypedNode =
 
 
 patternContainedTypeVariables :
-    Pattern (Type TypeVariableFromContext)
+    Pattern Type
     -> TypeVariableFromContextSet
 patternContainedTypeVariables pattern =
     case pattern of
@@ -9692,13 +9678,13 @@ valueAndFunctionDeclarationsUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+            (ValueOrFunctionDeclarationInfo Type)
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
 valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect inferredValueAndFunctionDeclarations =
     inferredValueAndFunctionDeclarations
@@ -9720,14 +9706,14 @@ expressionTypedNodeUsesOfLocalReferences :
     FastDict.Dict String whatever_
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
 expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionTypedNode =
     -- IGNORE TCO
@@ -9930,23 +9916,23 @@ expressionLetInUsesOfLocalReferences :
         { declaration1Up :
             List
                 { range : Elm.Syntax.Range.Range
-                , declaration : LetDeclaration (Type TypeVariableFromContext)
+                , declaration : LetDeclaration Type
                 }
         , declaration0 :
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration (Type TypeVariableFromContext)
+            , declaration : LetDeclaration Type
             }
         , result :
             TypedNode
-                (Expression (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Expression Type)
+                Type
         }
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
 expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
     collectedLocalReferenceUsesMerge
@@ -9970,13 +9956,13 @@ expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
 
 letDeclarationUsesOfLocalReferences :
     FastDict.Dict String whatever_
-    -> LetDeclaration (Type TypeVariableFromContext)
+    -> LetDeclaration Type
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
 letDeclarationUsesOfLocalReferences localReferencesToCollect letDeclaration =
     case letDeclaration of
@@ -9994,21 +9980,21 @@ collectedLocalReferenceUsesMerge :
         String
         (Rope
             Elm.Syntax.Range.Range
-            (Type TypeVariableFromContext)
+            Type
         )
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
     ->
         FastDict.Dict
             String
             (Rope
                 Elm.Syntax.Range.Range
-                (Type TypeVariableFromContext)
+                Type
             )
 collectedLocalReferenceUsesMerge a b =
     fastDictUnionWith
@@ -10071,7 +10057,7 @@ fastDictUnionWith combineValuesFromBothAndKey aDict bDict =
 
 
 expressionTypedNodeContainedTypeVariables :
-    TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    TypedNode (Expression Type) Type
     -> TypeVariableFromContextSet
 expressionTypedNodeContainedTypeVariables expressionTypedNode =
     DictByTypeVariableFromContext.union
@@ -10084,7 +10070,7 @@ expressionTypedNodeContainedTypeVariables expressionTypedNode =
 
 
 expressionContainedTypeVariables :
-    Expression (Type TypeVariableFromContext)
+    Expression Type
     -> TypeVariableFromContextSet
 expressionContainedTypeVariables expression =
     case expression of
@@ -10264,7 +10250,7 @@ expressionContainedTypeVariables expression =
 
 
 letDeclarationContainedTypeVariables :
-    LetDeclaration (Type TypeVariableFromContext)
+    LetDeclaration Type
     -> TypeVariableFromContextSet
 letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
@@ -10292,8 +10278,8 @@ letDeclarationContainedTypeVariables letDeclaration =
 
 
 expressionCaseOfCaseContainedTypeVariables :
-    { pattern : TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
-    , result : TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+    { pattern : TypedNode (Pattern Type) Type
+    , result : TypedNode (Expression Type) Type
     }
     -> TypeVariableFromContextSet
 expressionCaseOfCaseContainedTypeVariables syntaxCase =
@@ -10331,12 +10317,12 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
 valueAndFunctionDeclarationsGetPartiallyInferred :
     FastDict.Dict
         String
-        (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+        (ValueOrFunctionDeclarationInfo Type)
     ->
         FastDict.Dict
             String
             { range : Elm.Syntax.Range.Range
-            , type_ : Type TypeVariableFromContext
+            , type_ : Type
             }
 valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoFar =
     valueAndFunctionDeclarationsSoFar
@@ -10394,19 +10380,19 @@ valueAndFunctionDeclarationsSubstituteVariableByType :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+            (ValueOrFunctionDeclarationInfo Type)
     ->
         Result
             String
             { declarations :
                 FastDict.Dict
                     String
-                    (ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext))
+                    (ValueOrFunctionDeclarationInfo Type)
             , unchangedDeclarations : Set.Set String
             , substitutions : VariableSubstitutions
             }
@@ -10491,7 +10477,7 @@ variableToTypeSubstitutionsCondenseVariables :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     -> DictByTypeVariableFromContext TypeVariableFromContext
-    -> DictByTypeVariableFromContext (TypeNotVariable TypeVariableFromContext)
+    -> DictByTypeVariableFromContext TypeNotVariable
     -> Result String VariableSubstitutions
 variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup variableToType =
     variableToType
@@ -10499,7 +10485,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
             variableSubstitutionsNone
             (\uncondensedVariable replacementType soFar ->
                 let
-                    replacementTypeUsingCondensedVariables : TypeNotVariable TypeVariableFromContext
+                    replacementTypeUsingCondensedVariables : TypeNotVariable
                     replacementTypeUsingCondensedVariables =
                         replacementType
                             |> typeNotVariableMapVariables
@@ -10575,14 +10561,14 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
-    -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+    -> ValueOrFunctionDeclarationInfo Type
     ->
         Result
             String
             { unchanged : Bool
-            , declaration : ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
+            , declaration : ValueOrFunctionDeclarationInfo Type
             , substitutions : VariableSubstitutions
             }
 valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacement declarationValueOrFunctionSoFar =
@@ -10670,7 +10656,7 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacem
 
 typeNotVariableIsEquivalentToTypeVariable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> TypeNotVariable variable_
+    -> TypeNotVariable
     -> Bool
 typeNotVariableIsEquivalentToTypeVariable declarationTypes typeNotVariable =
     case typeNotVariable of
@@ -10708,7 +10694,7 @@ typeNotVariableIsEquivalentToTypeVariable declarationTypes typeNotVariable =
 
 typeIsEquivalentToTypeVariable :
     ModuleLevelDeclarationTypesAvailableInModule
-    -> Type variable_
+    -> Type
     -> Bool
 typeIsEquivalentToTypeVariable declarationTypes type_ =
     case type_ of
@@ -10721,9 +10707,9 @@ typeIsEquivalentToTypeVariable declarationTypes type_ =
 
 
 declarationValueOrFunctionInfoMapTypeVariables :
-    (typeVariable -> changedTypeVariable)
-    -> ValueOrFunctionDeclarationInfo (Type typeVariable)
-    -> ValueOrFunctionDeclarationInfo (Type changedTypeVariable)
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> ValueOrFunctionDeclarationInfo Type
+    -> ValueOrFunctionDeclarationInfo Type
 declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOrFunctionSoFar =
     { nameRange = declarationValueOrFunctionSoFar.nameRange
     , documentation = declarationValueOrFunctionSoFar.documentation
@@ -10747,12 +10733,12 @@ expressionTypedNodeSubstituteVariableByType :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     ->
         Result
             String
@@ -10760,8 +10746,8 @@ expressionTypedNodeSubstituteVariableByType :
             , substitutions : VariableSubstitutions
             , node :
                 TypedNode
-                    (Expression (Type TypeVariableFromContext))
-                    (Type TypeVariableFromContext)
+                    (Expression Type)
+                    Type
             }
 expressionTypedNodeSubstituteVariableByType declarationTypes replacement expressionTypedNode =
     -- IGNORE TCO
@@ -11833,8 +11819,8 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         let
                             resultLetInNode :
                                 TypedNode
-                                    (Expression (Type TypeVariableFromContext))
-                                    (Type TypeVariableFromContext)
+                                    (Expression Type)
+                                    Type
                             resultLetInNode =
                                 { range = expressionTypedNode.range
                                 , value =
@@ -11851,7 +11837,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                 FastDict.Dict
                                     String
                                     { range : Elm.Syntax.Range.Range
-                                    , type_ : Type TypeVariableFromContext
+                                    , type_ : Type
                                     }
                             updatedValueOrFunctionTypes =
                                 case declaration0Substituted.updatedValueOrFunctionType of
@@ -11888,7 +11874,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                             soFar
                                                             (\useRange useType soFarWithUses ->
                                                                 let
-                                                                    letDeclarationTypeNewInstanceForUse : Type TypeVariableFromContext
+                                                                    letDeclarationTypeNewInstanceForUse : Type
                                                                     letDeclarationTypeNewInstanceForUse =
                                                                         inferredDeclarationType.type_
                                                                             |> typeMapVariables
@@ -12026,11 +12012,11 @@ letDeclarationSubstituteVariableByType :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
     ->
         { range : Elm.Syntax.Range.Range
-        , declaration : LetDeclaration (Type TypeVariableFromContext)
+        , declaration : LetDeclaration Type
         }
     ->
         Result
@@ -12038,13 +12024,13 @@ letDeclarationSubstituteVariableByType :
             { unchanged : Bool
             , node :
                 { range : Elm.Syntax.Range.Range
-                , declaration : LetDeclaration (Type TypeVariableFromContext)
+                , declaration : LetDeclaration Type
                 }
             , updatedValueOrFunctionType :
                 Maybe
                     { name : String
                     , range : Elm.Syntax.Range.Range
-                    , type_ : Type TypeVariableFromContext
+                    , type_ : Type
                     }
             , substitutions : VariableSubstitutions
             }
@@ -12256,9 +12242,9 @@ typesAreEquallyStrict aType bType =
 {-| Use for renaming but not for possibly adding constraints
 -}
 expressionTypedNodeMapTypeVariables :
-    (typeVariable -> changedTypeVariable)
-    -> TypedNode (Expression (Type typeVariable)) (Type typeVariable)
-    -> TypedNode (Expression (Type changedTypeVariable)) (Type changedTypeVariable)
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypedNode (Expression Type) Type
+    -> TypedNode (Expression Type) Type
 expressionTypedNodeMapTypeVariables typeVariableChange expressionTypedNode =
     expressionTypedNode
         |> expressionTypedNodeMapTypes
@@ -12571,14 +12557,14 @@ expressionTypedNodeApplyVariableSubstitutions :
     -> VariableSubstitutions
     ->
         TypedNode
-            (Expression (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Expression Type)
+            Type
     ->
         Result
             String
             (TypedNode
-                (Expression (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Expression Type)
+                Type
             )
 expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions expressionTypedNode =
     if
@@ -12644,7 +12630,7 @@ createBatchOfSubstitutionsToApply :
             { newEquivalentVariables : List EquivalentVariableSet
             , substituteVariableByType :
                 TypeVariableFromContext
-                -> Maybe (Type TypeVariableFromContext)
+                -> Maybe Type
             }
 createBatchOfSubstitutionsToApply context substitutions =
     case
@@ -12711,14 +12697,14 @@ patternTypedNodeApplyVariableSubstitutions :
     -> VariableSubstitutions
     ->
         TypedNode
-            (Pattern (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Pattern Type)
+            Type
     ->
         Result
             String
             (TypedNode
-                (Pattern (Type TypeVariableFromContext))
-                (Type TypeVariableFromContext)
+                (Pattern Type)
+                Type
             )
 patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patternTypedNode =
     if
@@ -12777,12 +12763,12 @@ substitutionsVariableToTypeApplyOverItself :
     }
     ->
         DictByTypeVariableFromContext
-            (TypeNotVariable TypeVariableFromContext)
+            TypeNotVariable
     ->
         Result
             String
             (DictByTypeVariableFromContext
-                (TypeNotVariable TypeVariableFromContext)
+                TypeNotVariable
             )
 substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
     if (variableToTypeInitial |> DictByTypeVariableFromContext.size) <= 1 then
@@ -12821,10 +12807,10 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions :
     }
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
-    -> TypeNotVariable TypeVariableFromContext
-    -> Result String (TypeNotVariable TypeVariableFromContext)
+    -> TypeNotVariable
+    -> Result String TypeNotVariable
 typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToApply typeNotVariable =
     case
         -- TODO optimize by not tracking new substitutions
@@ -12849,12 +12835,12 @@ patternTypedNodeSubstituteVariableByType :
     ModuleLevelDeclarationTypesAvailableInModule
     ->
         (TypeVariableFromContext
-         -> Maybe (Type TypeVariableFromContext)
+         -> Maybe Type
         )
     ->
         TypedNode
-            (Pattern (Type TypeVariableFromContext))
-            (Type TypeVariableFromContext)
+            (Pattern Type)
+            Type
     ->
         Result
             String
@@ -12862,8 +12848,8 @@ patternTypedNodeSubstituteVariableByType :
             , substitutions : VariableSubstitutions
             , node :
                 TypedNode
-                    (Pattern (Type TypeVariableFromContext))
-                    (Type TypeVariableFromContext)
+                    (Pattern Type)
+                    Type
             }
 patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTypedNode =
     -- IGNORE TCO
@@ -13413,7 +13399,7 @@ substitutionsNoneNodesEmptyUpdatedValueOrFunctionTypesDictEmptyAllUnchangedTrue 
         FastDict.Dict
             String
             { range : Elm.Syntax.Range.Range
-            , type_ : Type TypeVariableFromContext
+            , type_ : Type
             }
     , nodes : List node_
     }
@@ -13438,9 +13424,9 @@ substitutionsNoneNodesEmptyAllUnchangedTrue =
 
 
 patternTypedNodeMapTypeVariables :
-    (typeVariable -> changedTypeVariable)
-    -> TypedNode (Pattern (Type typeVariable)) (Type typeVariable)
-    -> TypedNode (Pattern (Type changedTypeVariable)) (Type changedTypeVariable)
+    (TypeVariableFromContext -> TypeVariableFromContext)
+    -> TypedNode (Pattern Type) Type
+    -> TypedNode (Pattern Type) Type
 patternTypedNodeMapTypeVariables typeVariableChange patternTypedNode =
     patternTypedNode
         |> patternTypedNodeMapTypes
@@ -13673,12 +13659,12 @@ parameterPatternsTypeInfer :
         Result
             String
             { introducedExpressionVariables :
-                FastDict.Dict String (Type TypeVariableFromContext)
+                FastDict.Dict String Type
             , nodes :
                 List
                     (TypedNode
-                        (Pattern (Type TypeVariableFromContext))
-                        (Type TypeVariableFromContext)
+                        (Pattern Type)
+                        Type
                     )
             }
 parameterPatternsTypeInfer context parameterPatterns =
@@ -13707,7 +13693,7 @@ parameterPatternsTypeInfer context parameterPatterns =
 
 
 introducedExpressionVariablesEmptyNodesEmpty :
-    { introducedExpressionVariables : FastDict.Dict String (Type TypeVariableFromContext)
+    { introducedExpressionVariables : FastDict.Dict String Type
     , nodes : List node_
     }
 introducedExpressionVariablesEmptyNodesEmpty =
@@ -13733,7 +13719,7 @@ moduleInterfaceToTypes moduleInterface =
             , types :
                 FastDict.Dict
                     String
-                    { type_ : Type String
+                    { type_ : Type
                     , parameters : List String
                     , recordFieldOrder : Maybe (List String)
                     }
@@ -13789,7 +13775,7 @@ moduleInterfaceToTypes moduleInterface =
                 FastDict.Dict
                     String
                     { parameters : List String
-                    , variants : FastDict.Dict String (List (Type String))
+                    , variants : FastDict.Dict String (List Type)
                     }
             }
         choiceTypes =
@@ -13834,7 +13820,7 @@ moduleInterfaceToTypes moduleInterface =
                     )
                     typesDictEmptyErrorsEmpty
 
-        signatures : { errors : List String, types : FastDict.Dict String (Type String) }
+        signatures : { errors : List String, types : FastDict.Dict String Type }
         signatures =
             moduleInterface.values
                 |> List.foldl
@@ -13878,12 +13864,17 @@ typesDictEmptyErrorsEmpty =
     }
 
 
-interfaceToType : Elm.Type.Type -> Result String (Type String)
+interfaceToType : Elm.Type.Type -> Result String Type
 interfaceToType typeInterface =
     -- IGNORE TCO
     case typeInterface of
         Elm.Type.Var name ->
-            Ok (TypeVariable name)
+            Ok
+                (TypeVariable
+                    { useRange = Elm.Syntax.Range.empty
+                    , name = name
+                    }
+                )
 
         Elm.Type.Lambda functionInput functionOutput ->
             Result.map2
@@ -13967,7 +13958,10 @@ interfaceToType typeInterface =
                     TypeNotVariable
                         (TypeRecordExtension
                             { fields = fields
-                            , recordVariable = extendedRecordVariable
+                            , recordVariable =
+                                { useRange = Elm.Syntax.Range.empty
+                                , name = extendedRecordVariable
+                                }
                             }
                         )
                 )
@@ -13983,7 +13977,7 @@ interfaceToType typeInterface =
                 )
 
 
-okTypeUnit : Result error_ (Type variable_)
+okTypeUnit : Result error_ Type
 okTypeUnit =
     Ok (TypeNotVariable TypeUnit)
 
@@ -14095,7 +14089,6 @@ moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declar
                             Just (Elm.Syntax.Node.Node _ declarationValueOrFunctionSignature) ->
                                 case
                                     declarationValueOrFunctionSignature.typeAnnotation
-                                        |> Elm.Syntax.Node.value
                                         |> syntaxToType moduleOriginLookup
                                 of
                                     Err error ->
@@ -14119,7 +14112,6 @@ moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declar
                     Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
                         case
                             declarationTypeAlias.typeAnnotation
-                                |> Elm.Syntax.Node.value
                                 |> syntaxToType moduleOriginLookup
                         of
                             Err error ->
@@ -14187,7 +14179,7 @@ moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declar
                                             )
                                             (variant.arguments
                                                 |> listMapAndCombineOk
-                                                    (\(Elm.Syntax.Node.Node _ variantValue) ->
+                                                    (\variantValue ->
                                                         variantValue |> syntaxToType moduleOriginLookup
                                                     )
                                             )
@@ -14218,7 +14210,6 @@ moduleDeclarationsToTypes moduleOriginLookupNotIncludingLocalDeclarations declar
                     Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
                         case
                             declarationPortSignature.typeAnnotation
-                                |> Elm.Syntax.Node.value
                                 |> syntaxToType moduleOriginLookup
                         of
                             Err error ->
@@ -14560,7 +14551,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -14575,7 +14569,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14587,7 +14584,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14602,7 +14602,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                 { moduleOrigin = [ "Array" ]
                                 , name = "Array"
                                 , arguments =
-                                    [ TypeVariable "a" ]
+                                    [ TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                 }
                             )
                       )
@@ -14614,7 +14618,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -14637,7 +14644,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14649,7 +14659,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14666,16 +14679,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -14685,7 +14707,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -14699,13 +14724,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -14721,16 +14753,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -14740,7 +14781,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -14754,13 +14798,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -14778,7 +14829,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -14789,7 +14843,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -14818,7 +14875,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14830,7 +14890,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14859,10 +14922,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -14878,7 +14947,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14890,7 +14962,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14930,7 +15005,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             , output =
@@ -14941,7 +15019,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -14960,7 +15041,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -14985,7 +15069,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -15008,10 +15095,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -15025,7 +15118,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -15037,7 +15133,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -15049,7 +15148,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "push"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -15061,7 +15164,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -15073,7 +15179,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -15098,7 +15207,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -15107,7 +15219,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Array"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -15132,7 +15247,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -15146,7 +15264,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -15160,7 +15282,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -15207,7 +15333,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -15221,7 +15351,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Array"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -15242,7 +15376,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -15268,7 +15405,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 )
                                                         , part1 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                                 ]
@@ -15287,7 +15427,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Array"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -15298,7 +15441,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -15324,9 +15470,15 @@ elmCoreTypesGeneratedFromDocsJson =
                       , TypeNotVariable
                             (TypeFunction
                                 { input =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -15355,16 +15507,26 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "always"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -15477,22 +15639,36 @@ elmCoreTypesGeneratedFromDocsJson =
                       , TypeNotVariable
                             (TypeFunction
                                 { input =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "number"
+                                                    { name = "number"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "number"
+                                                                { name =
+                                                                    "number"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "number"
+                                                                { name =
+                                                                    "number"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -15505,13 +15681,18 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -15656,8 +15837,16 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "identity"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
-                                , output = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                , output =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -15747,16 +15936,24 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -15767,16 +15964,24 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -15823,9 +16028,15 @@ elmCoreTypesGeneratedFromDocsJson =
                       , TypeNotVariable
                             (TypeFunction
                                 { input =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -15840,7 +16051,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , arguments = []
                                             }
                                         )
-                                , output = TypeVariable "a"
+                                , output =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -16777,10 +16992,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -16789,7 +17010,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "toString"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeConstruct
@@ -16812,7 +17037,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , arguments = []
                                             }
                                         )
-                                , output = TypeVariable "a"
+                                , output =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -16834,9 +17063,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -16851,9 +17086,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -16865,9 +17107,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -16882,8 +17131,14 @@ elmCoreTypesGeneratedFromDocsJson =
                                 { moduleOrigin = [ "Dict" ]
                                 , name = "Dict"
                                 , arguments =
-                                    [ TypeVariable "k"
-                                    , TypeVariable "v"
+                                    [ TypeVariable
+                                        { name = "k"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    , TypeVariable
+                                        { name = "v"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                     ]
                                 }
                             )
@@ -16896,13 +17151,19 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeConstruct
@@ -16930,9 +17191,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -16944,9 +17212,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -16963,22 +17238,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -16990,7 +17279,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -17004,15 +17296,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "k"
+                                                                            { name =
+                                                                                "k"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -17028,22 +17331,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -17055,7 +17372,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -17069,15 +17389,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "k"
+                                                                            { name =
+                                                                                "k"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -17098,10 +17429,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                                 ]
@@ -17114,9 +17452,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17128,7 +17472,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -17140,9 +17486,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17154,7 +17507,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17168,13 +17524,18 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -17188,9 +17549,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17204,9 +17573,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17227,9 +17604,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17244,9 +17627,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17258,9 +17648,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17279,9 +17676,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17306,9 +17709,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17319,7 +17728,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17334,16 +17746,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -17359,9 +17780,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "k"
+                                                                { name = "k"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17373,9 +17800,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "k"
+                                                                { name = "k"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17389,7 +17822,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -17401,9 +17836,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17429,22 +17871,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -17459,28 +17915,48 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "b"
+                                                                                        { name =
+                                                                                            "b"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -17497,22 +17973,38 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "b"
+                                                                                        { name =
+                                                                                            "b"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -17532,9 +18024,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Dict"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "comparable"
+                                                                                        { name =
+                                                                                            "comparable"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "a"
+                                                                                        { name =
+                                                                                            "a"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -17551,9 +18051,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Dict"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "comparable"
+                                                                                                    { name =
+                                                                                                        "comparable"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "b"
+                                                                                                    { name =
+                                                                                                        "b"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -17562,10 +18070,18 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -17587,13 +18103,19 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeConstruct
@@ -17621,9 +18143,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17640,9 +18169,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17656,9 +18193,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17674,7 +18219,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -17686,9 +18233,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17700,9 +18254,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17716,13 +18277,18 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -17731,9 +18297,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17752,9 +18325,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17779,9 +18358,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17795,10 +18380,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "k"
+                                                                { name = "k"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                                 ]
@@ -17817,9 +18408,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17834,9 +18431,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17848,9 +18452,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Dict"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "v"
+                                                                { name = "v"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -17864,7 +18475,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -17881,7 +18494,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17895,7 +18512,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17914,9 +18535,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17930,9 +18559,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Dict"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "v"
+                                                                            { name =
+                                                                                "v"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -17953,9 +18590,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Dict"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "k"
+                                                    { name = "k"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17966,7 +18609,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "v"
+                                                    { name = "v"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -17996,7 +18642,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -18019,7 +18668,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18045,7 +18697,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -18068,7 +18723,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18096,7 +18754,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18111,7 +18772,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18123,7 +18787,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18148,7 +18815,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18162,7 +18832,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18177,7 +18850,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -18186,7 +18862,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18203,7 +18882,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18215,7 +18897,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18246,7 +18931,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18258,7 +18946,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18275,7 +18966,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -18298,7 +18992,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18310,7 +19007,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18327,7 +19027,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -18336,7 +19039,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18353,7 +19059,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18365,7 +19074,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18382,16 +19094,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18401,7 +19122,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -18415,13 +19139,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18437,16 +19168,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18456,7 +19196,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -18470,13 +19213,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18494,7 +19244,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18505,7 +19258,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Maybe"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18532,10 +19288,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18551,7 +19313,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18563,7 +19328,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18575,7 +19343,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "intersperse"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -18587,7 +19359,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18599,7 +19374,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18618,7 +19396,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18643,7 +19424,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -18666,10 +19450,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -18683,7 +19473,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18695,7 +19488,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18712,16 +19508,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "result"
+                                                                { name =
+                                                                    "result"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -18737,7 +19543,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18754,7 +19563,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -18768,7 +19581,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -18787,22 +19604,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -18820,7 +19651,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18837,7 +19671,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -18854,7 +19692,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "List"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -18868,7 +19710,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "List"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "result"
+                                                                                        { name =
+                                                                                            "result"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -18889,28 +19735,46 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeVariable
-                                                                                        "result"
+                                                                                        { name =
+                                                                                            "result"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 }
                                                                             )
                                                                     }
@@ -18930,7 +19794,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -18947,7 +19814,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -18964,7 +19835,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "List"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -18981,7 +19856,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "List"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -18995,7 +19874,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "List"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -19018,34 +19901,56 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "e"
+                                                                                                    { name =
+                                                                                                        "e"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -19067,7 +19972,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19084,7 +19992,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -19101,7 +20013,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "List"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -19118,7 +20034,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "List"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -19135,7 +20055,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "List"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "e"
+                                                                                                                { name =
+                                                                                                                    "e"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -19149,7 +20073,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "List"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "result"
+                                                                                                                { name =
+                                                                                                                    "result"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -19176,7 +20104,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19187,7 +20118,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Maybe"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19197,7 +20131,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "member"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -19209,7 +20147,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19237,7 +20178,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19248,7 +20192,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Maybe"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19263,7 +20210,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -19286,7 +20236,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19303,7 +20256,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -19317,7 +20274,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "List"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -19338,12 +20299,18 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "number"
+                                                    { name = "number"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
                                 , output =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -19412,7 +20379,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -19421,7 +20391,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19440,7 +20413,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19451,7 +20427,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19461,7 +20440,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "singleton"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeConstruct
@@ -19469,7 +20452,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19486,7 +20472,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19497,7 +20486,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19512,10 +20504,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -19529,7 +20527,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19541,7 +20542,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19558,13 +20562,19 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeConstruct
@@ -19592,7 +20602,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19604,7 +20617,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19623,12 +20639,18 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "number"
+                                                    { name = "number"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
                                 , output =
-                                    TypeVariable "number"
+                                    TypeVariable
+                                        { name = "number"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -19642,7 +20664,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -19659,7 +20684,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19691,7 +20719,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19703,7 +20734,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19725,10 +20759,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                                 ]
@@ -19745,7 +20785,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19757,7 +20800,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19785,7 +20831,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -19794,7 +20843,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19811,7 +20863,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19823,7 +20878,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19840,10 +20898,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -19857,7 +20921,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19869,7 +20936,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19886,16 +20956,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "value"
+                                                                { name =
+                                                                    "value"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -19911,7 +20991,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -19928,7 +21011,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -19942,7 +21029,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "value"
+                                                                            { name =
+                                                                                "value"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -19961,22 +21052,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "value"
+                                                                            { name =
+                                                                                "value"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -19994,7 +21099,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20011,7 +21119,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -20028,7 +21140,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Maybe"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -20042,7 +21158,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Maybe"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "value"
+                                                                                        { name =
+                                                                                            "value"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -20063,28 +21183,46 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeVariable
-                                                                                        "value"
+                                                                                        { name =
+                                                                                            "value"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 }
                                                                             )
                                                                     }
@@ -20104,7 +21242,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20121,7 +21262,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -20138,7 +21283,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Maybe"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -20155,7 +21304,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Maybe"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -20169,7 +21322,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Maybe"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "value"
+                                                                                                    { name =
+                                                                                                        "value"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -20192,34 +21349,56 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "e"
+                                                                                                    { name =
+                                                                                                        "e"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "value"
+                                                                                                    { name =
+                                                                                                        "value"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -20241,7 +21420,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20258,7 +21440,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Maybe"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -20275,7 +21461,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Maybe"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -20292,7 +21482,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Maybe"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -20309,7 +21503,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Maybe"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "e"
+                                                                                                                { name =
+                                                                                                                    "e"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -20323,7 +21521,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Maybe"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "value"
+                                                                                                                { name =
+                                                                                                                    "value"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -20343,7 +21545,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "withDefault"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -20355,13 +21561,19 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
                                             , output =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -20376,7 +21588,11 @@ elmCoreTypesGeneratedFromDocsJson =
                         , variants =
                             FastDict.fromList
                                 [ ( "Just"
-                                  , [ TypeVariable "a" ]
+                                  , [ TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                   )
                                 , ( "Nothing", [] )
                                 ]
@@ -20398,9 +21614,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Router"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20409,7 +21631,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -20418,7 +21643,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeNotVariable
                                                                 TypeUnit
                                                             ]
@@ -20439,9 +21667,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Router"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20450,7 +21684,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -20459,7 +21696,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeNotVariable
                                                                 TypeUnit
                                                             ]
@@ -20482,13 +21722,21 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         (TypeFunction
                                                             { input =
                                                                 TypeVariable
-                                                                    "flags"
+                                                                    { name =
+                                                                        "flags"
+                                                                    , useRange =
+                                                                        Elm.Syntax.Range.empty
+                                                                    }
                                                             , output =
                                                                 TypeNotVariable
                                                                     (TypeTuple
                                                                         { part0 =
                                                                             TypeVariable
-                                                                                "model"
+                                                                                { name =
+                                                                                    "model"
+                                                                                , useRange =
+                                                                                    Elm.Syntax.Range.empty
+                                                                                }
                                                                         , part1 =
                                                                             TypeNotVariable
                                                                                 (TypeConstruct
@@ -20500,7 +21748,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                         "Cmd"
                                                                                     , arguments =
                                                                                         [ TypeVariable
-                                                                                            "msg"
+                                                                                            { name =
+                                                                                                "msg"
+                                                                                            , useRange =
+                                                                                                Elm.Syntax.Range.empty
+                                                                                            }
                                                                                         ]
                                                                                     }
                                                                                 )
@@ -20514,7 +21766,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         (TypeFunction
                                                             { input =
                                                                 TypeVariable
-                                                                    "model"
+                                                                    { name =
+                                                                        "model"
+                                                                    , useRange =
+                                                                        Elm.Syntax.Range.empty
+                                                                    }
                                                             , output =
                                                                 TypeNotVariable
                                                                     (TypeConstruct
@@ -20526,7 +21782,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                             "Sub"
                                                                         , arguments =
                                                                             [ TypeVariable
-                                                                                "msg"
+                                                                                { name =
+                                                                                    "msg"
+                                                                                , useRange =
+                                                                                    Elm.Syntax.Range.empty
+                                                                                }
                                                                             ]
                                                                         }
                                                                     )
@@ -20538,19 +21798,31 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         (TypeFunction
                                                             { input =
                                                                 TypeVariable
-                                                                    "msg"
+                                                                    { name =
+                                                                        "msg"
+                                                                    , useRange =
+                                                                        Elm.Syntax.Range.empty
+                                                                    }
                                                             , output =
                                                                 TypeNotVariable
                                                                     (TypeFunction
                                                                         { input =
                                                                             TypeVariable
-                                                                                "model"
+                                                                                { name =
+                                                                                    "model"
+                                                                                , useRange =
+                                                                                    Elm.Syntax.Range.empty
+                                                                                }
                                                                         , output =
                                                                             TypeNotVariable
                                                                                 (TypeTuple
                                                                                     { part0 =
                                                                                         TypeVariable
-                                                                                            "model"
+                                                                                            { name =
+                                                                                                "model"
+                                                                                            , useRange =
+                                                                                                Elm.Syntax.Range.empty
+                                                                                            }
                                                                                     , part1 =
                                                                                         TypeNotVariable
                                                                                             (TypeConstruct
@@ -20562,7 +21834,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                     "Cmd"
                                                                                                 , arguments =
                                                                                                     [ TypeVariable
-                                                                                                        "msg"
+                                                                                                        { name =
+                                                                                                            "msg"
+                                                                                                        , useRange =
+                                                                                                            Elm.Syntax.Range.empty
+                                                                                                        }
                                                                                                     ]
                                                                                                 }
                                                                                             )
@@ -20583,11 +21859,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Program"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "flags"
+                                                    { name = "flags"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "model"
+                                                    { name = "model"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20640,7 +21925,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Cmd"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name = "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20655,7 +21943,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Cmd"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20670,10 +21961,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -20689,7 +21986,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Cmd"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20703,7 +22003,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Cmd"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name =
+                                                                    "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20718,7 +22022,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                 { moduleOrigin = [ "Platform", "Cmd" ]
                                 , name = "Cmd"
                                 , arguments =
-                                    [ TypeVariable "msg" ]
+                                    [ TypeVariable
+                                        { name = "msg"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                 }
                             )
                       )
@@ -20755,7 +22063,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Sub"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name = "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20770,7 +22081,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Sub"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20785,10 +22099,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -20804,7 +22124,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Sub"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20818,7 +22141,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Sub"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name =
+                                                                    "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -20833,7 +22160,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                 { moduleOrigin = [ "Platform", "Sub" ]
                                 , name = "Sub"
                                 , arguments =
-                                    [ TypeVariable "msg" ]
+                                    [ TypeVariable
+                                        { name = "msg"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                 }
                             )
                       )
@@ -20870,7 +22201,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeNotVariable
                                                     TypeUnit
                                                 ]
@@ -20897,7 +22231,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeNotVariable
                                                     TypeUnit
                                                 ]
@@ -20916,9 +22253,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -20929,7 +22272,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "y"
+                                                    { name = "y"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeNotVariable
                                                     (TypeConstruct
                                                         { moduleOrigin =
@@ -20975,7 +22321,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -20984,9 +22333,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21003,9 +22358,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21017,9 +22378,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21031,7 +22398,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "fromMaybe"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "x"
+                                { input =
+                                    TypeVariable
+                                        { name = "x"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -21043,7 +22414,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Maybe"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21055,9 +22429,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21074,10 +22454,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "value"
+                                                    { name = "value"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -21091,9 +22477,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21105,9 +22497,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "value"
+                                                                { name =
+                                                                    "value"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21124,16 +22523,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "value"
+                                                                { name =
+                                                                    "value"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -21149,9 +22558,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21168,9 +22583,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Result"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -21184,9 +22607,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Result"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "value"
+                                                                            { name =
+                                                                                "value"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -21205,22 +22636,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "value"
+                                                                            { name =
+                                                                                "value"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -21238,9 +22683,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21257,9 +22708,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Result"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -21276,9 +22735,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Result"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -21292,9 +22759,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Result"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "value"
+                                                                                        { name =
+                                                                                            "value"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -21315,28 +22790,46 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeVariable
-                                                                                        "value"
+                                                                                        { name =
+                                                                                            "value"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 }
                                                                             )
                                                                     }
@@ -21356,9 +22849,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21375,9 +22874,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Result"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -21394,9 +22901,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Result"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -21413,9 +22928,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Result"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -21429,9 +22952,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Result"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "value"
+                                                                                                    { name =
+                                                                                                        "value"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -21454,34 +22985,56 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "e"
+                                                                                                    { name =
+                                                                                                        "e"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "value"
+                                                                                                    { name =
+                                                                                                        "value"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -21503,9 +23056,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21522,9 +23081,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Result"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -21541,9 +23108,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Result"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -21560,9 +23135,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Result"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -21579,9 +23162,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Result"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "x"
+                                                                                                                { name =
+                                                                                                                    "x"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             , TypeVariable
-                                                                                                                "e"
+                                                                                                                { name =
+                                                                                                                    "e"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -21595,9 +23186,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Result"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "x"
+                                                                                                                { name =
+                                                                                                                    "x"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             , TypeVariable
-                                                                                                                "value"
+                                                                                                                { name =
+                                                                                                                    "value"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -21622,10 +23221,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "y"
+                                                    { name = "y"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -21639,9 +23244,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21653,9 +23264,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21674,9 +23291,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Result"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -21687,7 +23310,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Maybe"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -21697,7 +23323,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "withDefault"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -21709,15 +23339,24 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
                                             , output =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 }
@@ -21732,10 +23371,18 @@ elmCoreTypesGeneratedFromDocsJson =
                         , variants =
                             FastDict.fromList
                                 [ ( "Ok"
-                                  , [ TypeVariable "value" ]
+                                  , [ TypeVariable
+                                        { name = "value"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                   )
                                 , ( "Err"
-                                  , [ TypeVariable "error" ]
+                                  , [ TypeVariable
+                                        { name = "error"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                   )
                                 ]
                         }
@@ -21756,7 +23403,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -21771,7 +23421,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21783,7 +23437,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21798,7 +23456,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                 { moduleOrigin = [ "Set" ]
                                 , name = "Set"
                                 , arguments =
-                                    [ TypeVariable "a" ]
+                                    [ TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
+                                    ]
                                 }
                             )
                       )
@@ -21810,7 +23472,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -21833,7 +23498,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21845,7 +23514,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -21862,16 +23535,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -21881,7 +23563,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -21895,13 +23580,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Set"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -21917,16 +23609,25 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -21936,7 +23637,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -21950,13 +23654,20 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Set"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -21974,7 +23685,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -21985,7 +23699,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -21997,7 +23714,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -22009,7 +23728,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22021,7 +23744,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22040,7 +23767,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22055,7 +23785,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22067,7 +23801,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22086,7 +23824,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22109,10 +23850,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "comparable2"
+                                                    { name = "comparable2"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -22126,7 +23873,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22138,7 +23889,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable2"
+                                                                { name =
+                                                                    "comparable2"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22152,7 +23907,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -22164,7 +23921,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22190,7 +23951,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -22213,7 +23977,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22230,7 +23998,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Set"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -22244,7 +24016,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Set"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "comparable"
+                                                                            { name =
+                                                                                "comparable"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -22260,7 +24036,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
@@ -22272,7 +24050,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22284,7 +24066,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22298,7 +24084,9 @@ elmCoreTypesGeneratedFromDocsJson =
                             (TypeFunction
                                 { input =
                                     TypeVariable
-                                        "comparable"
+                                        { name = "comparable"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeConstruct
@@ -22306,7 +24094,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22323,7 +24114,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22348,7 +24142,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22359,7 +24156,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "List"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22376,7 +24176,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Set"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "comparable"
+                                                    { name = "comparable"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -22391,7 +24194,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22403,7 +24210,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Set"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "comparable"
+                                                                { name =
+                                                                    "comparable"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -22856,10 +24667,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -22869,7 +24686,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -22887,7 +24707,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -22915,10 +24738,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -22928,7 +24757,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
@@ -22946,7 +24778,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 )
                                                         , output =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -24135,7 +25970,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -24144,9 +25982,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24163,9 +26007,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24177,9 +26027,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24202,15 +26058,24 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Result"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
                                             , output =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -24224,9 +26089,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24240,7 +26111,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Cmd"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name =
+                                                                    "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24252,7 +26127,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "fail"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "x"
+                                { input =
+                                    TypeVariable
+                                        { name = "x"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeConstruct
@@ -24260,9 +26139,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -24277,10 +26162,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -24294,9 +26185,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24308,9 +26205,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24327,16 +26230,26 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "result"
+                                                                { name =
+                                                                    "result"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -24352,9 +26265,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24371,9 +26290,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Task"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -24387,9 +26314,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Task"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -24408,22 +26343,36 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeVariable
-                                                                            "result"
+                                                                            { name =
+                                                                                "result"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -24441,9 +26390,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24460,9 +26415,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Task"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -24479,9 +26442,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Task"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -24495,9 +26466,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Task"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "result"
+                                                                                        { name =
+                                                                                            "result"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -24518,28 +26497,46 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeVariable
-                                                                                        "result"
+                                                                                        { name =
+                                                                                            "result"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 }
                                                                             )
                                                                     }
@@ -24559,9 +26556,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24578,9 +26581,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Task"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -24597,9 +26608,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Task"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -24616,9 +26635,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Task"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -24632,9 +26659,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Task"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -24657,34 +26692,56 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeNotVariable
                                                                 (TypeFunction
                                                                     { input =
                                                                         TypeVariable
-                                                                            "c"
+                                                                            { name =
+                                                                                "c"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , output =
                                                                         TypeNotVariable
                                                                             (TypeFunction
                                                                                 { input =
                                                                                     TypeVariable
-                                                                                        "d"
+                                                                                        { name =
+                                                                                            "d"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                 , output =
                                                                                     TypeNotVariable
                                                                                         (TypeFunction
                                                                                             { input =
                                                                                                 TypeVariable
-                                                                                                    "e"
+                                                                                                    { name =
+                                                                                                        "e"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             , output =
                                                                                                 TypeVariable
-                                                                                                    "result"
+                                                                                                    { name =
+                                                                                                        "result"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                             }
                                                                                         )
                                                                                 }
@@ -24706,9 +26763,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24725,9 +26788,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                         "Task"
                                                                     , arguments =
                                                                         [ TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         , TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                         ]
                                                                     }
                                                                 )
@@ -24744,9 +26815,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                     "Task"
                                                                                 , arguments =
                                                                                     [ TypeVariable
-                                                                                        "x"
+                                                                                        { name =
+                                                                                            "x"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     , TypeVariable
-                                                                                        "c"
+                                                                                        { name =
+                                                                                            "c"
+                                                                                        , useRange =
+                                                                                            Elm.Syntax.Range.empty
+                                                                                        }
                                                                                     ]
                                                                                 }
                                                                             )
@@ -24763,9 +26842,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                 "Task"
                                                                                             , arguments =
                                                                                                 [ TypeVariable
-                                                                                                    "x"
+                                                                                                    { name =
+                                                                                                        "x"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 , TypeVariable
-                                                                                                    "d"
+                                                                                                    { name =
+                                                                                                        "d"
+                                                                                                    , useRange =
+                                                                                                        Elm.Syntax.Range.empty
+                                                                                                    }
                                                                                                 ]
                                                                                             }
                                                                                         )
@@ -24782,9 +26869,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Task"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "x"
+                                                                                                                { name =
+                                                                                                                    "x"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             , TypeVariable
-                                                                                                                "e"
+                                                                                                                { name =
+                                                                                                                    "e"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -24798,9 +26893,17 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                                                             "Task"
                                                                                                         , arguments =
                                                                                                             [ TypeVariable
-                                                                                                                "x"
+                                                                                                                { name =
+                                                                                                                    "x"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             , TypeVariable
-                                                                                                                "result"
+                                                                                                                { name =
+                                                                                                                    "result"
+                                                                                                                , useRange =
+                                                                                                                    Elm.Syntax.Range.empty
+                                                                                                                }
                                                                                                             ]
                                                                                                         }
                                                                                                     )
@@ -24825,10 +26928,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "y"
+                                                    { name = "y"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -24842,9 +26951,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24856,9 +26971,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24875,7 +26996,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeConstruct
@@ -24884,9 +27008,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24903,9 +27033,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24917,9 +27053,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24936,10 +27078,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "msg"
+                                                    { name = "msg"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -24964,7 +27112,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                     }
                                                                 )
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -24978,7 +27129,11 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Cmd"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "msg"
+                                                                { name =
+                                                                    "msg"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -25003,9 +27158,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "Task"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             , TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -25019,7 +27180,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeNotVariable
                                                     (TypeConstruct
                                                         { moduleOrigin =
@@ -25027,7 +27191,10 @@ elmCoreTypesGeneratedFromDocsJson =
                                                         , name = "List"
                                                         , arguments =
                                                             [ TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                             ]
                                                         }
                                                     )
@@ -25040,7 +27207,11 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "succeed"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeConstruct
@@ -25048,9 +27219,15 @@ elmCoreTypesGeneratedFromDocsJson =
                                             , name = "Task"
                                             , arguments =
                                                 [ TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 , TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                                 ]
                                             }
                                         )
@@ -25068,8 +27245,14 @@ elmCoreTypesGeneratedFromDocsJson =
                                     { moduleOrigin = [ "Platform" ]
                                     , name = "Task"
                                     , arguments =
-                                        [ TypeVariable "x"
-                                        , TypeVariable "a"
+                                        [ TypeVariable
+                                            { name = "x"
+                                            , useRange = Elm.Syntax.Range.empty
+                                            }
+                                        , TypeVariable
+                                            { name = "a"
+                                            , useRange = Elm.Syntax.Range.empty
+                                            }
                                         ]
                                     }
                                 )
@@ -25091,13 +27274,23 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeTuple
                                             { part0 =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , part1 =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
-                                , output = TypeVariable "a"
+                                , output =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
@@ -25109,10 +27302,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -25123,10 +27322,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeFunction
                                                         { input =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , output =
                                                             TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             , output =
@@ -25137,10 +27342,18 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 (TypeTuple
                                                                     { part0 =
                                                                         TypeVariable
-                                                                            "a"
+                                                                            { name =
+                                                                                "a"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , part1 =
                                                                         TypeVariable
-                                                                            "b"
+                                                                            { name =
+                                                                                "b"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         , output =
@@ -25148,10 +27361,18 @@ elmCoreTypesGeneratedFromDocsJson =
                                                                 (TypeTuple
                                                                     { part0 =
                                                                         TypeVariable
-                                                                            "x"
+                                                                            { name =
+                                                                                "x"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     , part1 =
                                                                         TypeVariable
-                                                                            "y"
+                                                                            { name =
+                                                                                "y"
+                                                                            , useRange =
+                                                                                Elm.Syntax.Range.empty
+                                                                            }
                                                                     }
                                                                 )
                                                         }
@@ -25169,10 +27390,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "x"
+                                                    { name = "x"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -25183,10 +27410,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             , output =
@@ -25194,10 +27427,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "x"
+                                                                { name = "x"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -25213,10 +27452,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeVariable
-                                                    "y"
+                                                    { name = "y"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
                                 , output =
@@ -25227,10 +27472,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             , output =
@@ -25238,10 +27489,16 @@ elmCoreTypesGeneratedFromDocsJson =
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "y"
+                                                                { name = "y"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -25252,22 +27509,35 @@ elmCoreTypesGeneratedFromDocsJson =
                     , ( "pair"
                       , TypeNotVariable
                             (TypeFunction
-                                { input = TypeVariable "a"
+                                { input =
+                                    TypeVariable
+                                        { name = "a"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 , output =
                                     TypeNotVariable
                                         (TypeFunction
                                             { input =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , output =
                                                 TypeNotVariable
                                                     (TypeTuple
                                                         { part0 =
                                                             TypeVariable
-                                                                "a"
+                                                                { name = "a"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         , part1 =
                                                             TypeVariable
-                                                                "b"
+                                                                { name = "b"
+                                                                , useRange =
+                                                                    Elm.Syntax.Range.empty
+                                                                }
                                                         }
                                                     )
                                             }
@@ -25283,13 +27553,23 @@ elmCoreTypesGeneratedFromDocsJson =
                                         (TypeTuple
                                             { part0 =
                                                 TypeVariable
-                                                    "a"
+                                                    { name = "a"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             , part1 =
                                                 TypeVariable
-                                                    "b"
+                                                    { name = "b"
+                                                    , useRange =
+                                                        Elm.Syntax.Range.empty
+                                                    }
                                             }
                                         )
-                                , output = TypeVariable "b"
+                                , output =
+                                    TypeVariable
+                                        { name = "b"
+                                        , useRange = Elm.Syntax.Range.empty
+                                        }
                                 }
                             )
                       )
