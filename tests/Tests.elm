@@ -3027,64 +3027,11 @@ allTheSame =
             )
         , Test.test "mutually influencing un-annotated top level declarations: a = 2 + b; b = a"
             (\() ->
-                [ { declaration =
-                        Elm.Syntax.Node.empty
-                            { name =
-                                Elm.Syntax.Node.Node
-                                    { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
-                                    "a"
-                            , arguments = []
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.OperatorApplication
-                                        "+"
-                                        Elm.Syntax.Infix.Left
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.Integer 2)
-                                        )
-                                        (Elm.Syntax.Node.empty
-                                            (Elm.Syntax.Expression.FunctionOrValue [] "b")
-                                        )
-                                    )
-                            }
-                  , signature = Nothing
-                  , documentation = Nothing
-                  }
-                , { declaration =
-                        Elm.Syntax.Node.empty
-                            { name =
-                                Elm.Syntax.Node.Node
-                                    { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
-                                    "b"
-                            , arguments = []
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                            }
-                  , signature = Nothing
-                  , documentation = Nothing
-                  }
-                ]
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            [ Elm.Syntax.Declaration.AliasDeclaration
-                                { documentation = Nothing
-                                , name = Elm.Syntax.Node.empty "StringToo"
-                                , generics = []
-                                , typeAnnotation =
-                                    Elm.Syntax.Node.empty
-                                        (Elm.Syntax.TypeAnnotation.Typed
-                                            (Elm.Syntax.Node.empty ( [], "String" ))
-                                            []
-                                        )
-                                }
-                            ]
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+a = 2 + b
+b = a
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map
                         (\declarationsTyped ->
                             declarationsTyped
