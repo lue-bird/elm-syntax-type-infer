@@ -8551,9 +8551,9 @@ valueAndFunctionDeclarations :
             (FastDict.Dict
                 String
                 { parameters :
-                    List (TypedNode (Pattern (Type String)) (Type String))
-                , result : TypedNode (Expression (Type String)) (Type String)
-                , type_ : Type String
+                    List (TypedNode (Pattern (Type TypeVariableFromContext)) (Type TypeVariableFromContext))
+                , result : TypedNode (Expression (Type TypeVariableFromContext)) (Type TypeVariableFromContext)
+                , type_ : Type TypeVariableFromContext
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation :
                     Maybe
@@ -9493,7 +9493,7 @@ type alias ModuleLevelDeclarationTypesAvailableInModule =
 
 declarationValueOrFunctionInfoDisambiguateTypeVariables :
     ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
-    -> ValueOrFunctionDeclarationInfo (Type String)
+    -> ValueOrFunctionDeclarationInfo (Type TypeVariableFromContext)
 declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
@@ -9506,10 +9506,13 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
     declarationValueOrFunctionInfo
         |> declarationValueOrFunctionInfoMapTypeVariables
             (\variable ->
-                globalTypeVariableDisambiguationLookup
-                    |> DictByTypeVariableFromContext.get variable
-                    |> Maybe.withDefault
-                        "thisIsABugInDisambiguationPleaseReportToElmSyntaxTypeInfer"
+                { useRange = variable.useRange
+                , name =
+                    globalTypeVariableDisambiguationLookup
+                        |> DictByTypeVariableFromContext.get variable
+                        |> Maybe.withDefault
+                            "thisIsABugInDisambiguationPleaseReportToElmSyntaxTypeInfer"
+                }
             )
 
 

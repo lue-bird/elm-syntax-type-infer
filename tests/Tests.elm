@@ -14,6 +14,7 @@ import ElmSyntaxTypeInfer
 import Expect
 import FastDict
 import Test exposing (Test)
+import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
 suite : Test
@@ -59,7 +60,9 @@ suite =
                         (Ok
                             (typeList
                                 (ElmSyntaxTypeInfer.TypeVariable
-                                    "number"
+                                    { useRange = Elm.Syntax.Range.empty
+                                    , name = "number"
+                                    }
                                 )
                             )
                         )
@@ -131,17 +134,29 @@ accessors = [ .a, .b ]
                                                     { fields =
                                                         FastDict.fromList
                                                             [ ( "b"
-                                                              , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                              , ElmSyntaxTypeInfer.TypeVariable
+                                                                    { useRange = { end = { column = 21, row = 2 }, start = { column = 16, row = 2 } }
+                                                                    , name = "a"
+                                                                    }
                                                               )
                                                             , ( "a"
-                                                              , ElmSyntaxTypeInfer.TypeVariable "a"
+                                                              , ElmSyntaxTypeInfer.TypeVariable
+                                                                    { useRange = { end = { column = 21, row = 2 }, start = { column = 16, row = 2 } }
+                                                                    , name = "a"
+                                                                    }
                                                               )
                                                             ]
-                                                    , recordVariable = "record"
+                                                    , recordVariable =
+                                                        { useRange = { end = { column = 21, row = 2 }, start = { column = 15, row = 2 } }
+                                                        , name = "record"
+                                                        }
                                                     }
                                                 )
                                         , output =
-                                            ElmSyntaxTypeInfer.TypeVariable "a"
+                                            ElmSyntaxTypeInfer.TypeVariable
+                                                { useRange = { end = { column = 21, row = 2 }, start = { column = 16, row = 2 } }
+                                                , name = "a"
+                                                }
                                         }
                                     )
                                 )
@@ -172,10 +187,16 @@ numbers = ( 1, 2.2, 3 )
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeTriple
                                     { part0 =
-                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 14, row = 2 }, start = { column = 13, row = 2 } }
+                                            , name = "number"
+                                            }
                                     , part1 = typeFloat
                                     , part2 =
-                                        ElmSyntaxTypeInfer.TypeVariable "number1"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 22, row = 2 }, start = { column = 21, row = 2 } }
+                                            , name = "number1"
+                                            }
                                     }
                                 )
                             )
@@ -202,7 +223,11 @@ doubleTwo = identity 1
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
-                            (ElmSyntaxTypeInfer.TypeVariable "number")
+                            (ElmSyntaxTypeInfer.TypeVariable
+                                { useRange = { end = { column = 23, row = 2 }, start = { column = 13, row = 2 } }
+                                , name = "number"
+                                }
+                            )
                         )
             )
         , Test.test "Basics.identity called with float (qualified from implicit import)"
@@ -253,9 +278,19 @@ doubleTwo = List.map Basics.identity
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
                                     { input =
-                                        typeList (ElmSyntaxTypeInfer.TypeVariable "a")
+                                        typeList
+                                            (ElmSyntaxTypeInfer.TypeVariable
+                                                { useRange = { end = { column = 37, row = 2 }, start = { column = 13, row = 2 } }
+                                                , name = "a"
+                                                }
+                                            )
                                     , output =
-                                        typeList (ElmSyntaxTypeInfer.TypeVariable "a")
+                                        typeList
+                                            (ElmSyntaxTypeInfer.TypeVariable
+                                                { useRange = { end = { column = 37, row = 2 }, start = { column = 13, row = 2 } }
+                                                , name = "a"
+                                                }
+                                            )
                                     }
                                 )
                             )
@@ -297,7 +332,10 @@ alwaysSomeFloats = \\(a) -> [ 1, 2.2 ]
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
                                     { input =
-                                        ElmSyntaxTypeInfer.TypeVariable "a"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 23, row = 2 }, start = { column = 22, row = 2 } }
+                                            , name = "a"
+                                            }
                                     , output = typeList typeFloat
                                     }
                                 )
@@ -376,9 +414,15 @@ negateAlias = \\(a) -> -(a)
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
                                     { input =
-                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 27, row = 2 }, start = { column = 17, row = 2 } }
+                                            , name = "number"
+                                            }
                                     , output =
-                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 27, row = 2 }, start = { column = 17, row = 2 } }
+                                            , name = "number"
+                                            }
                                     }
                                 )
                             )
@@ -397,10 +441,14 @@ negateAlias = \\(a) -> Basics.negate (a)
                                 (ElmSyntaxTypeInfer.TypeFunction
                                     { input =
                                         ElmSyntaxTypeInfer.TypeVariable
-                                            "number"
+                                            { useRange = { end = { column = 40, row = 2 }, start = { column = 17, row = 2 } }
+                                            , name = "number"
+                                            }
                                     , output =
                                         ElmSyntaxTypeInfer.TypeVariable
-                                            "number"
+                                            { useRange = { end = { column = 40, row = 2 }, start = { column = 17, row = 2 } }
+                                            , name = "number"
+                                            }
                                     }
                                 )
                             )
@@ -420,16 +468,24 @@ recordAccessField = \\a -> a.field
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { recordVariable = "record"
+                                                { recordVariable =
+                                                    { useRange = { end = { column = 34, row = 2 }, start = { column = 27, row = 2 } }
+                                                    , name = "record"
+                                                    }
                                                 , fields =
                                                     FastDict.singleton "field"
                                                         (ElmSyntaxTypeInfer.TypeVariable
-                                                            "field"
+                                                            { useRange = { end = { column = 34, row = 2 }, start = { column = 29, row = 2 } }
+                                                            , name = "field"
+                                                            }
                                                         )
                                                 }
                                             )
                                     , output =
-                                        ElmSyntaxTypeInfer.TypeVariable "field"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 34, row = 2 }, start = { column = 29, row = 2 } }
+                                            , name = "field"
+                                            }
                                     }
                                 )
                             )
@@ -457,10 +513,17 @@ onePointOne = \\(a) -> [ a, 1 ]
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
                                     { input =
-                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 29, row = 2 }, start = { column = 17, row = 2 } }
+                                            , name = "number"
+                                            }
                                     , output =
                                         typeList
-                                            (ElmSyntaxTypeInfer.TypeVariable "number")
+                                            (ElmSyntaxTypeInfer.TypeVariable
+                                                { useRange = { end = { column = 29, row = 2 }, start = { column = 17, row = 2 } }
+                                                , name = "number"
+                                                }
+                                            )
                                     }
                                 )
                             )
@@ -512,7 +575,10 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                { recordVariable = "rec"
+                                                { recordVariable =
+                                                    { useRange = { end = { column = 73, row = 2 }, start = { column = 23, row = 2 } }
+                                                    , name = "rec"
+                                                    }
                                                 , fields =
                                                     FastDict.fromList
                                                         [ ( "a"
@@ -531,7 +597,10 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                                         typeList
                                             (ElmSyntaxTypeInfer.TypeNotVariable
                                                 (ElmSyntaxTypeInfer.TypeRecordExtension
-                                                    { recordVariable = "rec"
+                                                    { recordVariable =
+                                                        { useRange = { end = { column = 73, row = 2 }, start = { column = 23, row = 2 } }
+                                                        , name = "rec"
+                                                        }
                                                     , fields =
                                                         FastDict.fromList
                                                             [ ( "a"
@@ -553,11 +622,14 @@ records = \\(rec) -> [ { rec | a = (), b = 1 }, { rec | c = (), b = 2.2 } ]
                         )
             )
         , let
-            recordExtensionTypeInExample : ElmSyntaxTypeInfer.Type String
+            recordExtensionTypeInExample : ElmSyntaxTypeInfer.Type TypeVariableFromContext
             recordExtensionTypeInExample =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeRecordExtension
-                        { recordVariable = "x"
+                        { recordVariable =
+                            { useRange = { end = { column = 67, row = 2 }, start = { column = 21, row = 2 } }
+                            , name = "x"
+                            }
                         , fields =
                             FastDict.fromList
                                 [ ( "a"
@@ -707,7 +779,11 @@ listEmpty = case [] of n -> n
                     |> Expect.equal
                         (Ok
                             (typeList
-                                (ElmSyntaxTypeInfer.TypeVariable "element")
+                                (ElmSyntaxTypeInfer.TypeVariable
+                                    { useRange = { end = { column = 20, row = 2 }, start = { column = 18, row = 2 } }
+                                    , name = "element"
+                                    }
+                                )
                             )
                         )
             )
@@ -810,7 +886,10 @@ orderToInt =
                                                 }
                                             )
                                     , output =
-                                        ElmSyntaxTypeInfer.TypeVariable "number"
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 20, row = 7 }, start = { column = 26, row = 5 } }
+                                            , name = "number"
+                                            }
                                     }
                                 )
                             )
@@ -973,12 +1052,20 @@ tuple = Tuple.pair ""
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 19, row = 2 }, start = { column = 9, row = 2 } }
+                                            , name = "b"
+                                            }
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
                                                 { part0 = typeString
-                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                , part1 =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { useRange = { end = { column = 19, row = 2 }, start = { column = 9, row = 2 } }
+                                                        , name = "b"
+                                                        }
                                                 }
                                             )
                                     }
@@ -997,12 +1084,20 @@ tuple = Tuple.pair <| ""
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 19, row = 2 }, start = { column = 9, row = 2 } }
+                                            , name = "b"
+                                            }
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
                                                 { part0 = typeString
-                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                , part1 =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { useRange = { end = { column = 19, row = 2 }, start = { column = 9, row = 2 } }
+                                                        , name = "b"
+                                                        }
                                                 }
                                             )
                                     }
@@ -1021,12 +1116,20 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input = ElmSyntaxTypeInfer.TypeVariable "b"
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 25, row = 2 }, start = { column = 15, row = 2 } }
+                                            , name = "b"
+                                            }
                                     , output =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeTuple
                                                 { part0 = typeString
-                                                , part1 = ElmSyntaxTypeInfer.TypeVariable "b"
+                                                , part1 =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { useRange = { end = { column = 25, row = 2 }, start = { column = 15, row = 2 } }
+                                                        , name = "b"
+                                                        }
                                                 }
                                             )
                                     }
@@ -1473,7 +1576,10 @@ tuple = "" |> Tuple.pair
                                     { moduleOrigin = [ "Task" ]
                                     , name = "Task"
                                     , arguments =
-                                        [ ElmSyntaxTypeInfer.TypeVariable "x"
+                                        [ ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = Elm.Syntax.Range.empty
+                                            , name = "x"
+                                            }
                                         , ElmSyntaxTypeInfer.TypeNotVariable
                                             ElmSyntaxTypeInfer.TypeUnit
                                         ]
@@ -2835,8 +2941,18 @@ b = a
                         )
                     |> Expect.equal
                         (Ok
-                            [ ( "a", ElmSyntaxTypeInfer.TypeVariable "number" )
-                            , ( "b", ElmSyntaxTypeInfer.TypeVariable "number" )
+                            [ ( "a"
+                              , ElmSyntaxTypeInfer.TypeVariable
+                                    { useRange = { end = { column = 10, row = 2 }, start = { column = 5, row = 2 } }
+                                    , name = "number"
+                                    }
+                              )
+                            , ( "b"
+                              , ElmSyntaxTypeInfer.TypeVariable
+                                    { useRange = { end = { column = 6, row = 3 }, start = { column = 5, row = 3 } }
+                                    , name = "number"
+                                    }
+                              )
                             ]
                         )
             )
@@ -4950,14 +5066,22 @@ unindent lines = lines |> List.map (\\line -> line)
                                                     , parameters = []
                                                     , result =
                                                         { range = Elm.Syntax.Range.empty
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = Elm.Syntax.Range.empty
+                                                                , name = "number"
+                                                                }
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionInteger
                                                                 { base = ElmSyntaxTypeInfer.Base10
                                                                 , value = 2
                                                                 }
                                                         }
-                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    , type_ =
+                                                        ElmSyntaxTypeInfer.TypeVariable
+                                                            { useRange = Elm.Syntax.Range.empty
+                                                            , name = "number"
+                                                            }
                                                     }
                                             }
                                         , declaration1Up = []
@@ -5000,11 +5124,19 @@ waste =
                                                     , parameters = []
                                                     , result =
                                                         { range = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
+                                                                , name = "number"
+                                                                }
                                                         , value = ElmSyntaxTypeInfer.ExpressionInteger { base = ElmSyntaxTypeInfer.Base10, value = 2 }
                                                         }
                                                     , signature = Nothing
-                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    , type_ =
+                                                        ElmSyntaxTypeInfer.TypeVariable
+                                                            { useRange = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
+                                                            , name = "number"
+                                                            }
                                                     }
                                             , range = { end = { column = 14, row = 4 }, start = { column = 9, row = 4 } }
                                             }
@@ -5022,11 +5154,19 @@ waste =
                                                                 { end = { column = 14, row = 5 }
                                                                 , start = { column = 13, row = 5 }
                                                                 }
-                                                            , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
+                                                            , type_ =
+                                                                ElmSyntaxTypeInfer.TypeVariable
+                                                                    { useRange = { end = { column = 14, row = 5 }, start = { column = 13, row = 5 } }
+                                                                    , name = "number1"
+                                                                    }
                                                             , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
                                                             }
                                                         , signature = Nothing
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = { end = { column = 14, row = 5 }, start = { column = 13, row = 5 } }
+                                                                , name = "number1"
+                                                                }
                                                         }
                                               , range =
                                                     { end = { column = 14, row = 5 }
@@ -5074,11 +5214,19 @@ waste =
                                                     , parameters = []
                                                     , result =
                                                         { range = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
+                                                                , name = "number"
+                                                                }
                                                         , value = ElmSyntaxTypeInfer.ExpressionInteger { base = ElmSyntaxTypeInfer.Base10, value = 2 }
                                                         }
                                                     , signature = Nothing
-                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    , type_ =
+                                                        ElmSyntaxTypeInfer.TypeVariable
+                                                            { useRange = { end = { column = 14, row = 4 }, start = { column = 13, row = 4 } }
+                                                            , name = "number"
+                                                            }
                                                     }
                                             , range = { end = { column = 14, row = 4 }, start = { column = 9, row = 4 } }
                                             }
@@ -5090,16 +5238,28 @@ waste =
                                                         , parameters = []
                                                         , result =
                                                             { range = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
-                                                            , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
+                                                            , type_ =
+                                                                ElmSyntaxTypeInfer.TypeVariable
+                                                                    { useRange = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
+                                                                    , name = "number1"
+                                                                    }
                                                             , value =
                                                                 ElmSyntaxTypeInfer.ExpressionNegation
                                                                     { range = { end = { column = 15, row = 5 }, start = { column = 14, row = 5 } }
-                                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
+                                                                    , type_ =
+                                                                        ElmSyntaxTypeInfer.TypeVariable
+                                                                            { useRange = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
+                                                                            , name = "number1"
+                                                                            }
                                                                     , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
                                                                     }
                                                             }
                                                         , signature = Nothing
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number1"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
+                                                                , name = "number1"
+                                                                }
                                                         }
                                               , range = { end = { column = 15, row = 5 }, start = { column = 9, row = 5 } }
                                               }
@@ -5222,14 +5382,22 @@ waste =
                                                     , parameters = []
                                                     , result =
                                                         { range = Elm.Syntax.Range.empty
-                                                        , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                        , type_ =
+                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                { useRange = Elm.Syntax.Range.empty
+                                                                , name = "number"
+                                                                }
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionInteger
                                                                 { base = ElmSyntaxTypeInfer.Base10
                                                                 , value = 2
                                                                 }
                                                         }
-                                                    , type_ = ElmSyntaxTypeInfer.TypeVariable "number"
+                                                    , type_ =
+                                                        ElmSyntaxTypeInfer.TypeVariable
+                                                            { useRange = Elm.Syntax.Range.empty
+                                                            , name = "number"
+                                                            }
                                                     }
                                             }
                                         , declaration1Up =
@@ -5306,8 +5474,16 @@ waste =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input = ElmSyntaxTypeInfer.TypeVariable "number"
-                                    , output = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 26, row = 3 }, start = { column = 6, row = 3 } }
+                                            , name = "number"
+                                            }
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 26, row = 3 }, start = { column = 6, row = 3 } }
+                                            , name = "number"
+                                            }
                                     }
                                 )
                             )
@@ -5325,8 +5501,16 @@ waste a =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input = ElmSyntaxTypeInfer.TypeVariable "number"
-                                    , output = ElmSyntaxTypeInfer.TypeVariable "number"
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 20, row = 3 }, start = { column = 7, row = 2 } }
+                                            , name = "number"
+                                            }
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { useRange = { end = { column = 20, row = 3 }, start = { column = 7, row = 2 } }
+                                            , name = "number"
+                                            }
                                     }
                                 )
                             )
@@ -5402,7 +5586,7 @@ typeBool =
 
 
 expressionExpectInferredType :
-    ElmSyntaxTypeInfer.Type String
+    ElmSyntaxTypeInfer.Type TypeVariableFromContext
     -> Elm.Syntax.Expression.Expression
     -> Expect.Expectation
 expressionExpectInferredType expectedInferredType expression =
@@ -5430,7 +5614,7 @@ expressionWrapInExampleDeclaration expression =
 
 expressionToInferredType :
     Elm.Syntax.Expression.Expression
-    -> Result String (ElmSyntaxTypeInfer.Type String)
+    -> Result String (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
 expressionToInferredType expression =
     [ expressionWrapInExampleDeclaration expression ]
         |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
@@ -5497,14 +5681,14 @@ typeInferModuleFromSource :
                 { parameters :
                     List
                         (ElmSyntaxTypeInfer.TypedNode
-                            (ElmSyntaxTypeInfer.Pattern (ElmSyntaxTypeInfer.Type String))
-                            (ElmSyntaxTypeInfer.Type String)
+                            (ElmSyntaxTypeInfer.Pattern (ElmSyntaxTypeInfer.Type TypeVariableFromContext))
+                            (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
                         )
                 , result :
                     ElmSyntaxTypeInfer.TypedNode
-                        (ElmSyntaxTypeInfer.Expression (ElmSyntaxTypeInfer.Type String))
-                        (ElmSyntaxTypeInfer.Type String)
-                , type_ : ElmSyntaxTypeInfer.Type String
+                        (ElmSyntaxTypeInfer.Expression (ElmSyntaxTypeInfer.Type TypeVariableFromContext))
+                        (ElmSyntaxTypeInfer.Type TypeVariableFromContext)
+                , type_ : ElmSyntaxTypeInfer.Type TypeVariableFromContext
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation : Maybe { content : String, range : Elm.Syntax.Range.Range }
                 , signature :
