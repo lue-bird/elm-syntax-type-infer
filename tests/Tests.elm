@@ -2712,62 +2712,14 @@ allTheSame =
             )
         , Test.test "unifying different imported type aliases to the same type from annotated let: let noop : Platform.ProcessId -> Process.Id ; noop id = id in ()"
             (\() ->
-                Elm.Syntax.Expression.LetExpression
-                    { declarations =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetFunction
-                                { declaration =
-                                    Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "noop"
-                                        , arguments =
-                                            [ Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Pattern.VarPattern "id")
-                                            ]
-                                        , expression =
-                                            Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.FunctionOrValue [] "id")
-                                        }
-                                , signature =
-                                    Just
-                                        (Elm.Syntax.Node.empty
-                                            { name = Elm.Syntax.Node.empty "noop"
-                                            , typeAnnotation =
-                                                Elm.Syntax.Node.empty
-                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
-                                                        (Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                                (Elm.Syntax.Node.empty ( [ "Platform" ], "ProcessId" ))
-                                                                []
-                                                            )
-                                                        )
-                                                        (Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                                (Elm.Syntax.Node.empty ( [ "Process" ], "Id" ))
-                                                                []
-                                                            )
-                                                        )
-                                                    )
-                                            }
-                                        )
-                                , documentation = Nothing
-                                }
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.TupledExpression [])
-                    }
-                    |> expressionWrapInExampleDeclaration
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
-                        , otherModuleDeclaredTypes =
-                            []
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
-                                |> .types
-                        }
+                """module A exposing (..)
+import Process
+blub =
+    let noop : Platform.ProcessId -> Process.Id
+        noop id = id
+    in ()
+"""
+                    |> typeInferModuleFromSource
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
@@ -2778,73 +2730,14 @@ allTheSame =
             )
         , Test.test "unifying different local (and imported) type aliases to the same type from annotated let: let noop : String -> StringToo ; noop id = id in ()"
             (\() ->
-                Elm.Syntax.Expression.LetExpression
-                    { declarations =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetFunction
-                                { declaration =
-                                    Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "noop"
-                                        , arguments =
-                                            [ Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Pattern.VarPattern "id")
-                                            ]
-                                        , expression =
-                                            Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.FunctionOrValue [] "id")
-                                        }
-                                , signature =
-                                    Just
-                                        (Elm.Syntax.Node.empty
-                                            { name = Elm.Syntax.Node.empty "noop"
-                                            , typeAnnotation =
-                                                Elm.Syntax.Node.empty
-                                                    (Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
-                                                        (Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                                (Elm.Syntax.Node.empty ( [], "String" ))
-                                                                []
-                                                            )
-                                                        )
-                                                        (Elm.Syntax.Node.empty
-                                                            (Elm.Syntax.TypeAnnotation.Typed
-                                                                (Elm.Syntax.Node.empty ( [], "StringToo" ))
-                                                                []
-                                                            )
-                                                        )
-                                                    )
-                                            }
-                                        )
-                                , documentation = Nothing
-                                }
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.TupledExpression [])
-                    }
-                    |> expressionWrapInExampleDeclaration
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            [ Elm.Syntax.Declaration.AliasDeclaration
-                                { documentation = Nothing
-                                , name = Elm.Syntax.Node.empty "StringToo"
-                                , generics = []
-                                , typeAnnotation =
-                                    Elm.Syntax.Node.empty
-                                        (Elm.Syntax.TypeAnnotation.Typed
-                                            (Elm.Syntax.Node.empty ( [], "String" ))
-                                            []
-                                        )
-                                }
-                            ]
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+type alias StringToo = String
+blub =
+    let noop : String -> StringToo
+        noop id = id
+    in ()
+"""
+                    |> typeInferModuleFromSource
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok
@@ -2880,138 +2773,40 @@ allTheSame =
             )
         , Test.test "single incorrectly annotated let declaration let a : Int ; a = 2.2 in a"
             (\() ->
-                Elm.Syntax.Expression.LetExpression
-                    { declarations =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetFunction
-                                { declaration =
-                                    Elm.Syntax.Node.empty
-                                        { name = Elm.Syntax.Node.empty "a"
-                                        , arguments = []
-                                        , expression =
-                                            Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Floatable 2.2)
-                                        }
-                                , signature =
-                                    Just
-                                        (Elm.Syntax.Node.empty
-                                            { name = Elm.Syntax.Node.empty "a"
-                                            , typeAnnotation =
-                                                Elm.Syntax.Node.empty
-                                                    (Elm.Syntax.TypeAnnotation.Typed
-                                                        (Elm.Syntax.Node.empty ( [ "Basics" ], "Int" ))
-                                                        []
-                                                    )
-                                            }
-                                        )
-                                , documentation = Nothing
-                                }
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                    }
-                    |> expressionToInferredType
+                """module A exposing (..)
+zwo =
+    let a : Int
+        a = 2.2
+    in
+    a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
                     |> Expect.err
             )
         , Test.test "transitive un-annotated let declaration let a = 2.2; b = a in b"
             (\() ->
-                Elm.Syntax.Expression.LetExpression
-                    { declarations =
-                        [ Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetFunction
-                                { declaration =
-                                    Elm.Syntax.Node.empty
-                                        { name =
-                                            Elm.Syntax.Node.Node
-                                                { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
-                                                "a"
-                                        , arguments = []
-                                        , expression =
-                                            Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.Floatable 2.2)
-                                        }
-                                , signature = Nothing
-                                , documentation = Nothing
-                                }
-                            )
-                        , Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.LetFunction
-                                { declaration =
-                                    Elm.Syntax.Node.empty
-                                        { name =
-                                            Elm.Syntax.Node.Node
-                                                { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
-                                                "b"
-                                        , arguments = []
-                                        , expression =
-                                            Elm.Syntax.Node.empty
-                                                (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                                        }
-                                , signature = Nothing
-                                , documentation = Nothing
-                                }
-                            )
-                        ]
-                    , expression =
-                        Elm.Syntax.Node.empty
-                            (Elm.Syntax.Expression.FunctionOrValue [] "b")
-                    }
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+zwo =
+    let a = 2.2
+        b = a
+    in
+    b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "transitive un-annotated top level declarations: a = 2.2; b = a"
             (\() ->
-                [ { declaration =
-                        Elm.Syntax.Node.empty
-                            { name =
-                                Elm.Syntax.Node.Node
-                                    { start = { row = 1, column = 1 }, end = { row = 1, column = 1 } }
-                                    "a"
-                            , arguments = []
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.Floatable 2.2)
-                            }
-                  , signature = Nothing
-                  , documentation = Nothing
-                  }
-                , { declaration =
-                        Elm.Syntax.Node.empty
-                            { name =
-                                Elm.Syntax.Node.Node
-                                    { start = { row = 2, column = 2 }, end = { row = 2, column = 2 } }
-                                    "b"
-                            , arguments = []
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                            }
-                  , signature = Nothing
-                  , documentation = Nothing
-                  }
-                ]
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            [ Elm.Syntax.Declaration.AliasDeclaration
-                                { documentation = Nothing
-                                , name = Elm.Syntax.Node.empty "StringToo"
-                                , generics = []
-                                , typeAnnotation =
-                                    Elm.Syntax.Node.empty
-                                        (Elm.Syntax.TypeAnnotation.Typed
-                                            (Elm.Syntax.Node.empty ( [], "String" ))
-                                            []
-                                        )
-                                }
-                            ]
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+a = 2.2
+b = a
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map
                         (\declarationsTyped ->
                             declarationsTyped
@@ -3055,55 +2850,72 @@ impossible = \\a -> [ a, [ a ] ]
             )
         , Test.test "inner types are consistent in List.map (\\a -> a) [ 2.2 ]"
             (\() ->
-                Elm.Syntax.Expression.Application
-                    [ Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.FunctionOrValue [ "List" ] "map")
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.LambdaExpression
-                            { args =
-                                [ Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Pattern.VarPattern "a")
-                                ]
-                            , expression =
-                                Elm.Syntax.Node.empty
-                                    (Elm.Syntax.Expression.FunctionOrValue [] "a")
-                            }
-                        )
-                    , Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.ListExpr
-                            [ Elm.Syntax.Node.empty
-                                (Elm.Syntax.Expression.Floatable 2.2)
-                            ]
-                        )
-                    ]
-                    |> expressionWrapInExampleDeclaration
-                    |> List.singleton
-                    |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
-                        , moduleOriginLookup = exampleModuleOriginLookup
-                        , otherModuleDeclaredTypes =
-                            []
-                                |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
-                                |> .types
-                        }
+                """module A exposing (..)
+majorVersions = List.map (\\a -> a) [ 2.2 ]
+"""
+                    |> typeInferModuleFromSource
                     |> Result.map (FastDict.map (\_ -> .result))
                     |> Expect.equal
                         (Ok
                             (FastDict.singleton "majorVersions"
-                                { range = Elm.Syntax.Range.empty
+                                { range = { end = { column = 43, row = 2 }, start = { column = 17, row = 2 } }
                                 , type_ = typeList typeFloat
                                 , value =
                                     ElmSyntaxTypeInfer.ExpressionCall
-                                        { called =
-                                            { range = Elm.Syntax.Range.empty
+                                        { argument0 =
+                                            { range = { end = { column = 35, row = 2 }, start = { column = 26, row = 2 } }
+                                            , type_ =
+                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                        { input = typeFloat, output = typeFloat }
+                                                    )
+                                            , value =
+                                                ElmSyntaxTypeInfer.ExpressionParenthesized
+                                                    { range = { end = { column = 34, row = 2 }, start = { column = 27, row = 2 } }
+                                                    , type_ =
+                                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                                { input = typeFloat, output = typeFloat }
+                                                            )
+                                                    , value =
+                                                        ElmSyntaxTypeInfer.ExpressionLambda
+                                                            { parameter0 =
+                                                                { range = { end = { column = 29, row = 2 }, start = { column = 28, row = 2 } }
+                                                                , type_ = typeFloat
+                                                                , value = ElmSyntaxTypeInfer.PatternVariable "a"
+                                                                }
+                                                            , parameter1Up = []
+                                                            , result =
+                                                                { range = { end = { column = 34, row = 2 }, start = { column = 33, row = 2 } }
+                                                                , type_ = typeFloat
+                                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
+                                                                }
+                                                            }
+                                                    }
+                                            }
+                                        , argument1Up =
+                                            [ { range = { end = { column = 43, row = 2 }, start = { column = 36, row = 2 } }
+                                              , type_ = typeList typeFloat
+                                              , value =
+                                                    ElmSyntaxTypeInfer.ExpressionList
+                                                        [ { range = { end = { column = 41, row = 2 }, start = { column = 38, row = 2 } }
+                                                          , type_ = typeFloat
+                                                          , value = ElmSyntaxTypeInfer.ExpressionFloat 2.2
+                                                          }
+                                                        ]
+                                              }
+                                            ]
+                                        , called =
+                                            { range = { end = { column = 25, row = 2 }, start = { column = 17, row = 2 } }
                                             , type_ =
                                                 ElmSyntaxTypeInfer.TypeNotVariable
                                                     (ElmSyntaxTypeInfer.TypeFunction
                                                         { input =
                                                             ElmSyntaxTypeInfer.TypeNotVariable
                                                                 (ElmSyntaxTypeInfer.TypeFunction
-                                                                    { input = typeFloat, output = typeFloat }
+                                                                    { input = typeFloat
+                                                                    , output = typeFloat
+                                                                    }
                                                                 )
                                                         , output =
                                                             ElmSyntaxTypeInfer.TypeNotVariable
@@ -3116,52 +2928,8 @@ impossible = \\a -> [ a, [ a ] ]
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "List" ]
-                                                    , qualification = [ "List" ]
-                                                    , name = "map"
-                                                    }
+                                                    { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
                                             }
-                                        , argument0 =
-                                            { range = Elm.Syntax.Range.empty
-                                            , type_ =
-                                                ElmSyntaxTypeInfer.TypeNotVariable
-                                                    (ElmSyntaxTypeInfer.TypeFunction
-                                                        { input = typeFloat, output = typeFloat }
-                                                    )
-                                            , value =
-                                                ElmSyntaxTypeInfer.ExpressionLambda
-                                                    { parameter0 =
-                                                        { range = Elm.Syntax.Range.empty
-                                                        , type_ = typeFloat
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.PatternVariable "a"
-                                                        }
-                                                    , parameter1Up = []
-                                                    , result =
-                                                        { range = Elm.Syntax.Range.empty
-                                                        , type_ = typeFloat
-                                                        , value =
-                                                            ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = []
-                                                                , qualification = []
-                                                                , name = "a"
-                                                                }
-                                                        }
-                                                    }
-                                            }
-                                        , argument1Up =
-                                            [ { range = Elm.Syntax.Range.empty
-                                              , type_ = typeList typeFloat
-                                              , value =
-                                                    ElmSyntaxTypeInfer.ExpressionList
-                                                        [ { range = Elm.Syntax.Range.empty
-                                                          , type_ = typeFloat
-                                                          , value =
-                                                                ElmSyntaxTypeInfer.ExpressionFloat 2.2
-                                                          }
-                                                        ]
-                                              }
-                                            ]
                                         }
                                 }
                             )
