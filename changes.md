@@ -22,7 +22,7 @@ optimization ideas
 - convert Result to { ok, List error }
 - typeVariablesFromContextToDisambiguationLookup use DictByTypeVariableFromContext.mapAccum
 
-#### 1.0.10 (unreleased)
+#### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration
 - correct very rare edge cases where type variables that should be the same were independent
 
