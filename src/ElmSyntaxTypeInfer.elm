@@ -4638,17 +4638,17 @@ okFieldsUnifiedEmptySubstitutionsNone =
     influenced by other branches and value/function (let) declaration type annotations
 
 -}
-type alias TypedNode value type_ =
+type alias TypedNode value =
     { range : Elm.Syntax.Range.Range
     , value : value
-    , type_ : type_
+    , type_ : Type
     }
 
 
 {-| Like [`Elm.Syntax.Expression.Expression`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Expression)
 but its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
-type Expression type_
+type Expression
     = ExpressionUnit
     | ExpressionInteger
         { base : Base10Or16
@@ -4671,19 +4671,19 @@ type Expression type_
         , symbol : String
         }
     | ExpressionRecordAccessFunction String
-    | ExpressionNegation (TypedNode (Expression type_) type_)
-    | ExpressionParenthesized (TypedNode (Expression type_) type_)
+    | ExpressionNegation (TypedNode Expression)
+    | ExpressionParenthesized (TypedNode Expression)
     | ExpressionTuple
-        { part0 : TypedNode (Expression type_) type_
-        , part1 : TypedNode (Expression type_) type_
+        { part0 : TypedNode Expression
+        , part1 : TypedNode Expression
         }
     | ExpressionTriple
-        { part0 : TypedNode (Expression type_) type_
-        , part1 : TypedNode (Expression type_) type_
-        , part2 : TypedNode (Expression type_) type_
+        { part0 : TypedNode Expression
+        , part1 : TypedNode Expression
+        , part2 : TypedNode Expression
         }
     | ExpressionRecordAccess
-        { record : TypedNode (Expression type_) type_
+        { record : TypedNode Expression
         , fieldNameRange : Elm.Syntax.Range.Range
         , fieldName : String
         }
@@ -4691,28 +4691,28 @@ type Expression type_
         { operator :
             { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
             , symbol : String
-            , type_ : type_
+            , type_ : Type
             }
-        , left : TypedNode (Expression type_) type_
-        , right : TypedNode (Expression type_) type_
+        , left : TypedNode Expression
+        , right : TypedNode Expression
         }
     | ExpressionIfThenElse
-        { condition : TypedNode (Expression type_) type_
-        , onTrue : TypedNode (Expression type_) type_
-        , onFalse : TypedNode (Expression type_) type_
+        { condition : TypedNode Expression
+        , onTrue : TypedNode Expression
+        , onFalse : TypedNode Expression
         }
-    | ExpressionList (List (TypedNode (Expression type_) type_))
+    | ExpressionList (List (TypedNode Expression))
     | ExpressionCall
-        { called : TypedNode (Expression type_) type_
-        , argument0 : TypedNode (Expression type_) type_
-        , argument1Up : List (TypedNode (Expression type_) type_)
+        { called : TypedNode Expression
+        , argument0 : TypedNode Expression
+        , argument1Up : List (TypedNode Expression)
         }
     | ExpressionRecord
         (List
             { range : Elm.Syntax.Range.Range
             , name : String
             , nameRange : Elm.Syntax.Range.Range
-            , value : TypedNode (Expression type_) type_
+            , value : TypedNode Expression
             }
         )
     | ExpressionRecordUpdate
@@ -4723,59 +4723,58 @@ type Expression type_
                     Elm.Syntax.ModuleName.ModuleName
                 , name : String
                 }
-                type_
         , field0 :
             { range : Elm.Syntax.Range.Range
             , name : String
             , nameRange : Elm.Syntax.Range.Range
-            , value : TypedNode (Expression type_) type_
+            , value : TypedNode Expression
             }
         , field1Up :
             List
                 { range : Elm.Syntax.Range.Range
                 , name : String
                 , nameRange : Elm.Syntax.Range.Range
-                , value : TypedNode (Expression type_) type_
+                , value : TypedNode Expression
                 }
         }
     | ExpressionLambda
-        { parameter0 : TypedNode (Pattern type_) type_
-        , parameter1Up : List (TypedNode (Pattern type_) type_)
-        , result : TypedNode (Expression type_) type_
+        { parameter0 : TypedNode Pattern
+        , parameter1Up : List (TypedNode Pattern)
+        , result : TypedNode Expression
         }
     | ExpressionCaseOf
-        { matchedExpression : TypedNode (Expression type_) type_
+        { matchedExpression : TypedNode Expression
         , case0 :
-            { pattern : TypedNode (Pattern type_) type_
-            , result : TypedNode (Expression type_) type_
+            { pattern : TypedNode Pattern
+            , result : TypedNode Expression
             }
         , case1Up :
             List
-                { pattern : TypedNode (Pattern type_) type_
-                , result : TypedNode (Expression type_) type_
+                { pattern : TypedNode Pattern
+                , result : TypedNode Expression
                 }
         }
     | ExpressionLetIn
         { declaration0 :
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration type_
+            , declaration : LetDeclaration
             }
         , declaration1Up :
             List
                 { range : Elm.Syntax.Range.Range
-                , declaration : LetDeclaration type_
+                , declaration : LetDeclaration
                 }
-        , result : TypedNode (Expression type_) type_
+        , result : TypedNode Expression
         }
 
 
 {-| Like [`Elm.Syntax.Expression.LetDeclaration`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#LetDeclaration)
 but its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
-type LetDeclaration type_
+type LetDeclaration
     = LetDestructuring
-        { pattern : TypedNode (Pattern type_) type_
-        , expression : TypedNode (Expression type_) type_
+        { pattern : TypedNode Pattern
+        , expression : TypedNode Expression
         }
     | LetValueOrFunctionDeclaration
         { signature :
@@ -4790,42 +4789,42 @@ type LetDeclaration type_
                 }
         , nameRange : Elm.Syntax.Range.Range
         , name : String
-        , parameters : List (TypedNode (Pattern type_) type_)
-        , result : TypedNode (Expression type_) type_
-        , type_ : type_
+        , parameters : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type
         }
 
 
 {-| Like [`Elm.Syntax.Pattern.Pattern`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Pattern#Pattern)
 but all its sub-nodes are [`TypedNode`](#TypedNode)s
 -}
-type Pattern type_
+type Pattern
     = PatternIgnored
     | PatternVariable String
-    | PatternParenthesized (TypedNode (Pattern type_) type_)
+    | PatternParenthesized (TypedNode Pattern)
     | PatternAs
-        { pattern : TypedNode (Pattern type_) type_
-        , variable : TypedNode String type_
+        { pattern : TypedNode Pattern
+        , variable : TypedNode String
         }
     | PatternUnit
     | PatternChar Char
     | PatternString String
     | PatternInt { base : Base10Or16, value : Int }
     | PatternTuple
-        { part0 : TypedNode (Pattern type_) type_
-        , part1 : TypedNode (Pattern type_) type_
+        { part0 : TypedNode Pattern
+        , part1 : TypedNode Pattern
         }
     | PatternTriple
-        { part0 : TypedNode (Pattern type_) type_
-        , part1 : TypedNode (Pattern type_) type_
-        , part2 : TypedNode (Pattern type_) type_
+        { part0 : TypedNode Pattern
+        , part1 : TypedNode Pattern
+        , part2 : TypedNode Pattern
         }
-    | PatternRecord (List (TypedNode String type_))
+    | PatternRecord (List (TypedNode String))
     | PatternListCons
-        { head : TypedNode (Pattern type_) type_
-        , tail : TypedNode (Pattern type_) type_
+        { head : TypedNode Pattern
+        , tail : TypedNode Pattern
         }
-    | PatternListExact (List (TypedNode (Pattern type_) type_))
+    | PatternListExact (List (TypedNode Pattern))
     | PatternVariant
         { moduleOrigin :
             -- `[]` for current module
@@ -4834,7 +4833,7 @@ type Pattern type_
             -- `[]` for no qualification
             Elm.Syntax.ModuleName.ModuleName
         , name : String
-        , values : List (TypedNode (Pattern type_) type_)
+        , values : List (TypedNode Pattern)
         }
 
 
@@ -4968,8 +4967,8 @@ typeUrlParserQueryParser a =
 
 
 patternTypedNodeIntroducedVariables :
-    TypedNode (Pattern type_) type_
-    -> FastDict.Dict String type_
+    TypedNode Pattern
+    -> FastDict.Dict String Type
 patternTypedNodeIntroducedVariables patternTypedNode =
     -- IGNORE TCO
     case patternTypedNode.value of
@@ -5035,13 +5034,7 @@ patternTypeInfer :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern
-    ->
-        Result
-            String
-            (TypedNode
-                (Pattern Type)
-                Type
-            )
+    -> Result String (TypedNode Pattern)
 patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
     -- IGNORE TCO
     case pattern of
@@ -5214,7 +5207,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
 
         Elm.Syntax.Pattern.RecordPattern recordFields ->
             let
-                fieldTypedNodes : List (TypedNode String Type)
+                fieldTypedNodes : List (TypedNode String)
                 fieldTypedNodes =
                     recordFields
                         |> List.map
@@ -5463,7 +5456,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 }
 
 
-patternListExactEmpty : Pattern type_
+patternListExactEmpty : Pattern
 patternListExactEmpty =
     PatternListExact []
 
@@ -5482,13 +5475,7 @@ patternVariantTypeInfer :
         , variantValueTypes : List Type
         , values : List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
         }
-    ->
-        Result
-            String
-            (TypedNode
-                (Pattern Type)
-                Type
-            )
+    -> Result String (TypedNode Pattern)
 patternVariantTypeInfer context patternVariant =
     Result.map
         (\valuesAndResultTypeUnified ->
@@ -5601,13 +5588,7 @@ expressionTypeInfer :
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
-    ->
-        Result
-            String
-            (TypedNode
-                (Expression Type)
-                Type
-            )
+    -> Result String (TypedNode Expression)
 expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
     -- IGNORE TCO
     case expression of
@@ -6490,13 +6471,7 @@ expressionLetInTypeInfer :
         , fullRange : Elm.Syntax.Range.Range
         , expression : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
         }
-    ->
-        Result
-            String
-            (TypedNode
-                (Expression Type)
-                Type
-            )
+    -> Result String (TypedNode Expression)
 expressionLetInTypeInfer context syntaxExpressionLetIn =
     Result.andThen
         (\acrossLetInIncludingContextSoFar ->
@@ -6524,10 +6499,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
             resultAndThen3
                 (\declaration0Inferred declaration1UpInferred resultInferred ->
                     let
-                        letInTypedNodeInferred :
-                            TypedNode
-                                (Expression Type)
-                                Type
+                        letInTypedNodeInferred : TypedNode Expression
                         letInTypedNodeInferred =
                             { range = syntaxExpressionLetIn.fullRange
                             , type_ = resultInferred.type_
@@ -6721,10 +6693,7 @@ substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
     }
     -> FastDict.Dict String Type
-    ->
-        TypedNode
-            (Expression Type)
-            Type
+    -> TypedNode Expression
     -> Result String VariableSubstitutions
 substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context introducedVariables expressionTypedNode =
     expressionTypedNode
@@ -6780,10 +6749,7 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression :
             { range : Elm.Syntax.Range.Range
             , type_ : Type
             }
-    ->
-        TypedNode
-            (Expression Type)
-            Type
+    -> TypedNode Expression
     -> Result String VariableSubstitutions
 substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     expressionTypedNode
@@ -6873,10 +6839,7 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression :
             { range : Elm.Syntax.Range.Range
             , type_ : Type
             }
-    ->
-        TypedNode
-            (Expression Type)
-            Type
+    -> TypedNode Expression
     -> Result String VariableSubstitutions
 substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
     expressionTypedNode
@@ -6952,7 +6915,7 @@ typeUnit =
     TypeNotVariable TypeUnit
 
 
-expressionListEmpty : Expression type_
+expressionListEmpty : Expression
 expressionListEmpty =
     ExpressionList []
 
@@ -6976,14 +6939,8 @@ expressionCaseTypeInfer :
     ->
         Result
             String
-            { pattern :
-                TypedNode
-                    (Pattern Type)
-                    Type
-            , result :
-                TypedNode
-                    (Expression Type)
-                    Type
+            { pattern : TypedNode Pattern
+            , result : TypedNode Expression
             }
 expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
     Result.andThen
@@ -7075,7 +7032,6 @@ expressionReferenceTypeInfer :
                 , qualification : Elm.Syntax.ModuleName.ModuleName
                 , name : String
                 }
-                Type
             )
 expressionReferenceTypeInfer context expressionReference =
     let
@@ -7086,7 +7042,6 @@ expressionReferenceTypeInfer context expressionReference =
                     , qualification : Elm.Syntax.ModuleName.ModuleName
                     , name : String
                     }
-                    Type
                 )
         useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration =
             case expressionReference.qualification of
@@ -7417,7 +7372,7 @@ letDeclarationTypeInfer :
         Result
             String
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration Type
+            , declaration : LetDeclaration
             }
 letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDeclaration) =
     case letDeclaration of
@@ -7487,7 +7442,7 @@ letFunctionOrValueDeclarationTypeInfer :
         Result
             String
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration Type
+            , declaration : LetDeclaration
             }
 letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letValueOrFunction) =
     let
@@ -7763,13 +7718,7 @@ expressionInfixOperationTypeInfer :
         , left : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
         , right : Elm.Syntax.Node.Node Elm.Syntax.Expression.Expression
         }
-    ->
-        Result
-            String
-            (TypedNode
-                (Expression Type)
-                Type
-            )
+    -> Result String (TypedNode Expression)
 expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
         (\operatorAsFunctionType leftInferred rightInferred ->
@@ -8548,8 +8497,8 @@ valueAndFunctionDeclarations :
             (FastDict.Dict
                 String
                 { parameters :
-                    List (TypedNode (Pattern Type) Type)
-                , result : TypedNode (Expression Type) Type
+                    List (TypedNode Pattern)
+                , result : TypedNode Expression
                 , type_ : Type
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation :
@@ -9464,8 +9413,8 @@ type alias ValueOrFunctionDeclarationInfo type_ =
             , annotationTypeRange : Elm.Syntax.Range.Range
             }
     , parameters :
-        List (TypedNode (Pattern type_) type_)
-    , result : TypedNode (Expression type_) type_
+        List (TypedNode Pattern)
+    , result : TypedNode Expression
     , type_ : type_
     }
 
@@ -9520,7 +9469,7 @@ valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction 
 
 
 patternTypedNodeContainedTypeVariables :
-    TypedNode (Pattern Type) Type
+    TypedNode Pattern
     -> TypeVariableFromContextSet
 patternTypedNodeContainedTypeVariables patternTypedNode =
     DictByTypeVariableFromContext.union
@@ -9533,7 +9482,7 @@ patternTypedNodeContainedTypeVariables patternTypedNode =
 
 
 patternContainedTypeVariables :
-    Pattern Type
+    Pattern
     -> TypeVariableFromContextSet
 patternContainedTypeVariables pattern =
     case pattern of
@@ -9704,17 +9653,11 @@ valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect infer
 -}
 expressionTypedNodeUsesOfLocalReferences :
     FastDict.Dict String whatever_
-    ->
-        TypedNode
-            (Expression Type)
-            Type
+    -> TypedNode Expression
     ->
         FastDict.Dict
             String
-            (Rope
-                Elm.Syntax.Range.Range
-                Type
-            )
+            (Rope Elm.Syntax.Range.Range Type)
 expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionTypedNode =
     -- IGNORE TCO
     case expressionTypedNode.value of
@@ -9916,16 +9859,13 @@ expressionLetInUsesOfLocalReferences :
         { declaration1Up :
             List
                 { range : Elm.Syntax.Range.Range
-                , declaration : LetDeclaration Type
+                , declaration : LetDeclaration
                 }
         , declaration0 :
             { range : Elm.Syntax.Range.Range
-            , declaration : LetDeclaration Type
+            , declaration : LetDeclaration
             }
-        , result :
-            TypedNode
-                (Expression Type)
-                Type
+        , result : TypedNode Expression
         }
     ->
         FastDict.Dict
@@ -9956,7 +9896,7 @@ expressionLetInUsesOfLocalReferences localReferencesToCollect expressionLetIn =
 
 letDeclarationUsesOfLocalReferences :
     FastDict.Dict String whatever_
-    -> LetDeclaration Type
+    -> LetDeclaration
     ->
         FastDict.Dict
             String
@@ -10057,7 +9997,7 @@ fastDictUnionWith combineValuesFromBothAndKey aDict bDict =
 
 
 expressionTypedNodeContainedTypeVariables :
-    TypedNode (Expression Type) Type
+    TypedNode Expression
     -> TypeVariableFromContextSet
 expressionTypedNodeContainedTypeVariables expressionTypedNode =
     DictByTypeVariableFromContext.union
@@ -10070,7 +10010,7 @@ expressionTypedNodeContainedTypeVariables expressionTypedNode =
 
 
 expressionContainedTypeVariables :
-    Expression Type
+    Expression
     -> TypeVariableFromContextSet
 expressionContainedTypeVariables expression =
     case expression of
@@ -10250,7 +10190,7 @@ expressionContainedTypeVariables expression =
 
 
 letDeclarationContainedTypeVariables :
-    LetDeclaration Type
+    LetDeclaration
     -> TypeVariableFromContextSet
 letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
@@ -10278,8 +10218,8 @@ letDeclarationContainedTypeVariables letDeclaration =
 
 
 expressionCaseOfCaseContainedTypeVariables :
-    { pattern : TypedNode (Pattern Type) Type
-    , result : TypedNode (Expression Type) Type
+    { pattern : TypedNode Pattern
+    , result : TypedNode Expression
     }
     -> TypeVariableFromContextSet
 expressionCaseOfCaseContainedTypeVariables syntaxCase =
@@ -10735,19 +10675,13 @@ expressionTypedNodeSubstituteVariableByType :
         (TypeVariableFromContext
          -> Maybe Type
         )
-    ->
-        TypedNode
-            (Expression Type)
-            Type
+    -> TypedNode Expression
     ->
         Result
             String
             { unchanged : Bool
             , substitutions : VariableSubstitutions
-            , node :
-                TypedNode
-                    (Expression Type)
-                    Type
+            , node : TypedNode Expression
             }
 expressionTypedNodeSubstituteVariableByType declarationTypes replacement expressionTypedNode =
     -- IGNORE TCO
@@ -11817,10 +11751,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
                     else
                         let
-                            resultLetInNode :
-                                TypedNode
-                                    (Expression Type)
-                                    Type
+                            resultLetInNode : TypedNode Expression
                             resultLetInNode =
                                 { range = expressionTypedNode.range
                                 , value =
@@ -12016,7 +11947,7 @@ letDeclarationSubstituteVariableByType :
         )
     ->
         { range : Elm.Syntax.Range.Range
-        , declaration : LetDeclaration Type
+        , declaration : LetDeclaration
         }
     ->
         Result
@@ -12024,7 +11955,7 @@ letDeclarationSubstituteVariableByType :
             { unchanged : Bool
             , node :
                 { range : Elm.Syntax.Range.Range
-                , declaration : LetDeclaration Type
+                , declaration : LetDeclaration
                 }
             , updatedValueOrFunctionType :
                 Maybe
@@ -12243,8 +12174,8 @@ typesAreEquallyStrict aType bType =
 -}
 expressionTypedNodeMapTypeVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
-    -> TypedNode (Expression Type) Type
-    -> TypedNode (Expression Type) Type
+    -> TypedNode Expression
+    -> TypedNode Expression
 expressionTypedNodeMapTypeVariables typeVariableChange expressionTypedNode =
     expressionTypedNode
         |> expressionTypedNodeMapTypes
@@ -12252,9 +12183,9 @@ expressionTypedNodeMapTypeVariables typeVariableChange expressionTypedNode =
 
 
 expressionTypedNodeMapTypes :
-    (type_ -> changedType)
-    -> TypedNode (Expression type_) type_
-    -> TypedNode (Expression changedType) changedType
+    (Type -> Type)
+    -> TypedNode Expression
+    -> TypedNode Expression
 expressionTypedNodeMapTypes typeChange expressionTypedNode =
     { range = expressionTypedNode.range
     , value =
@@ -12267,9 +12198,9 @@ expressionTypedNodeMapTypes typeChange expressionTypedNode =
 
 
 expressionMapTypes :
-    (type_ -> changedType)
-    -> Expression type_
-    -> Expression changedType
+    (Type -> Type)
+    -> Expression
+    -> Expression
 expressionMapTypes typeChange expression =
     -- IGNORE TCO
     case expression of
@@ -12517,9 +12448,9 @@ expressionMapTypes typeChange expression =
 
 
 letDeclarationMapTypes :
-    (type_ -> changedType)
-    -> LetDeclaration type_
-    -> LetDeclaration changedType
+    (Type -> Type)
+    -> LetDeclaration
+    -> LetDeclaration
 letDeclarationMapTypes typeChange expressionLetDeclaration =
     case expressionLetDeclaration of
         LetDestructuring letDestructuring ->
@@ -12555,17 +12486,8 @@ letDeclarationMapTypes typeChange expressionLetDeclaration =
 expressionTypedNodeApplyVariableSubstitutions :
     ModuleLevelDeclarationTypesAvailableInModule
     -> VariableSubstitutions
-    ->
-        TypedNode
-            (Expression Type)
-            Type
-    ->
-        Result
-            String
-            (TypedNode
-                (Expression Type)
-                Type
-            )
+    -> TypedNode Expression
+    -> Result String (TypedNode Expression)
 expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions expressionTypedNode =
     if
         (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
@@ -12695,17 +12617,8 @@ createBatchOfSubstitutionsToApply context substitutions =
 patternTypedNodeApplyVariableSubstitutions :
     ModuleLevelDeclarationTypesAvailableInModule
     -> VariableSubstitutions
-    ->
-        TypedNode
-            (Pattern Type)
-            Type
-    ->
-        Result
-            String
-            (TypedNode
-                (Pattern Type)
-                Type
-            )
+    -> TypedNode Pattern
+    -> Result String (TypedNode Pattern)
 patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patternTypedNode =
     if
         (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
@@ -12837,19 +12750,13 @@ patternTypedNodeSubstituteVariableByType :
         (TypeVariableFromContext
          -> Maybe Type
         )
-    ->
-        TypedNode
-            (Pattern Type)
-            Type
+    -> TypedNode Pattern
     ->
         Result
             String
             { unchanged : Bool
             , substitutions : VariableSubstitutions
-            , node :
-                TypedNode
-                    (Pattern Type)
-                    Type
+            , node : TypedNode Pattern
             }
 patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTypedNode =
     -- IGNORE TCO
@@ -13425,8 +13332,8 @@ substitutionsNoneNodesEmptyAllUnchangedTrue =
 
 patternTypedNodeMapTypeVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
-    -> TypedNode (Pattern Type) Type
-    -> TypedNode (Pattern Type) Type
+    -> TypedNode Pattern
+    -> TypedNode Pattern
 patternTypedNodeMapTypeVariables typeVariableChange patternTypedNode =
     patternTypedNode
         |> patternTypedNodeMapTypes
@@ -13434,9 +13341,9 @@ patternTypedNodeMapTypeVariables typeVariableChange patternTypedNode =
 
 
 patternTypedNodeMapTypes :
-    (type_ -> changedType)
-    -> TypedNode (Pattern type_) type_
-    -> TypedNode (Pattern changedType) changedType
+    (Type -> Type)
+    -> TypedNode Pattern
+    -> TypedNode Pattern
 patternTypedNodeMapTypes typeChange patternTypedNode =
     { range = patternTypedNode.range
     , value =
@@ -13449,9 +13356,9 @@ patternTypedNodeMapTypes typeChange patternTypedNode =
 
 
 patternMapTypes :
-    (type_ -> changedType)
-    -> Pattern type_
-    -> Pattern changedType
+    (Type -> Type)
+    -> Pattern
+    -> Pattern
 patternMapTypes typeChange pattern =
     -- IGNORE TCO
     case pattern of
@@ -13481,7 +13388,7 @@ patternMapTypes typeChange pattern =
 
         PatternAs patternAs ->
             let
-                patternWithTypeWithVariablesChanged : TypedNode (Pattern changedType) changedType
+                patternWithTypeWithVariablesChanged : TypedNode Pattern
                 patternWithTypeWithVariablesChanged =
                     patternAs.pattern
                         |> patternTypedNodeMapTypes typeChange
@@ -13661,11 +13568,7 @@ parameterPatternsTypeInfer :
             { introducedExpressionVariables :
                 FastDict.Dict String Type
             , nodes :
-                List
-                    (TypedNode
-                        (Pattern Type)
-                        Type
-                    )
+                List (TypedNode Pattern)
             }
 parameterPatternsTypeInfer context parameterPatterns =
     parameterPatterns

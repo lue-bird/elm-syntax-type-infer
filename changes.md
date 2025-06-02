@@ -1,9 +1,10 @@
 ## 2.0.0 (unreleased)
+- keep use ranges at resulting type variables for the output
+  to determine which variables are introduced by a let.
+- do not parameterize type variables and types, just use regular Type for everything
+
 TODO
 - rename `matchedExpression` to `matched`
-- keep useRange at type variables for the user-facing output
-  to determine which variables are introduced by a let.
-  Also avoids all the complexity around type variable tracking
 
 considering
 - embed origin module if from local module top level as the actual name, not []
