@@ -150,17 +150,15 @@ accessors = [ .a, .b ]
             )
         , Test.test "unify integer and float in addition"
             (\() ->
-                Elm.Syntax.Expression.OperatorApplication
-                    "+"
-                    Elm.Syntax.Infix.Left
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Integer 1)
-                    )
-                    (Elm.Syntax.Node.empty
-                        (Elm.Syntax.Expression.Floatable 2.2)
-                    )
-                    |> expressionExpectInferredType
-                        typeFloat
+                """module A exposing (..)
+float = 1 + 2.2
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeFloat
+                        )
             )
         , Test.test "(independent) integers and float in triple ( 1, 2.2, 3 )"
             (\() ->
