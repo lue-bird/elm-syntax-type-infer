@@ -4,16 +4,15 @@ import Elm.Syntax.Range
 
 
 type alias TypeVariableFromContext =
-    ( -- combined Range from all uses
-      Elm.Syntax.Range.Range
-    , String
-    )
+    { useRange : Elm.Syntax.Range.Range
+    , name : String
+    }
 
 
 equals : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-equals ( aRange, aName ) ( bRange, bName ) =
-    rangeEquals aRange bRange
-        && (aName == bName)
+equals a b =
+    rangeEquals a.useRange b.useRange
+        && (a.name == b.name)
 
 
 rangeEquals : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
@@ -29,67 +28,67 @@ locationEquals a b =
 
 
 compare : TypeVariableFromContext -> TypeVariableFromContext -> Order
-compare ( aRange, aName ) ( bRange, bName ) =
-    if aRange.start.row - bRange.start.row < 0 then
+compare a b =
+    if a.useRange.start.row - b.useRange.start.row < 0 then
         LT
 
-    else if aRange.start.row - bRange.start.row > 0 then
+    else if a.useRange.start.row - b.useRange.start.row > 0 then
         GT
 
-    else if aRange.start.column - bRange.start.column < 0 then
+    else if a.useRange.start.column - b.useRange.start.column < 0 then
         LT
 
-    else if aRange.start.column - bRange.start.column > 0 then
+    else if a.useRange.start.column - b.useRange.start.column > 0 then
         GT
 
     else
-    -- aRange.start == bRange.start
+    -- a.useRange.start == b.useRange.start
     if
-        aRange.end.row - bRange.end.row < 0
+        a.useRange.end.row - b.useRange.end.row < 0
     then
         LT
 
-    else if aRange.end.row - bRange.end.row > 0 then
+    else if a.useRange.end.row - b.useRange.end.row > 0 then
         GT
 
-    else if aRange.end.column - bRange.end.column < 0 then
+    else if a.useRange.end.column - b.useRange.end.column < 0 then
         LT
 
-    else if aRange.end.column - bRange.end.column > 0 then
+    else if a.useRange.end.column - b.useRange.end.column > 0 then
         GT
 
     else
-        -- aRange == bRange
-        Basics.compare aName bName
+        -- a.useRange == b.useRange
+        Basics.compare a.name b.name
 
 
 lessThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-lessThan ( aRange, aName ) ( bRange, bName ) =
-    if aRange.start.row - bRange.start.row < 0 then
+lessThan a b =
+    if a.useRange.start.row - b.useRange.start.row < 0 then
         True
 
-    else if aRange.start.row - bRange.start.row > 0 then
+    else if a.useRange.start.row - b.useRange.start.row > 0 then
         False
 
     else
     -- a.start.row == b.start.row
     if
-        aRange.start.column - bRange.start.column < 0
+        a.useRange.start.column - b.useRange.start.column < 0
     then
         True
 
-    else if aRange.start.column - bRange.start.column > 0 then
+    else if a.useRange.start.column - b.useRange.start.column > 0 then
         False
 
     else
     -- b.start == b.end
     if
-        locationEquals aRange.end bRange.end
+        locationEquals a.useRange.end b.useRange.end
     then
-        aName < bName
+        a.name < b.name
 
     else
-        locationLessThen aRange.end bRange.end
+        locationLessThen a.useRange.end b.useRange.end
 
 
 locationLessThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
@@ -101,32 +100,32 @@ locationLessThen a b =
 
 
 greaterThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
-greaterThan ( aRange, aName ) ( bRange, bName ) =
-    if aRange.start.row - bRange.start.row > 0 then
+greaterThan a b =
+    if a.useRange.start.row - b.useRange.start.row > 0 then
         True
 
-    else if aRange.start.row - bRange.start.row < 0 then
+    else if a.useRange.start.row - b.useRange.start.row < 0 then
         False
 
     else
     -- a.start.row == b.start.row
     if
-        aRange.start.column - bRange.start.column > 0
+        a.useRange.start.column - b.useRange.start.column > 0
     then
         True
 
-    else if aRange.start.column - bRange.start.column < 0 then
+    else if a.useRange.start.column - b.useRange.start.column < 0 then
         False
 
     else
     -- a.start == b.start
     if
-        locationEquals aRange.end bRange.end
+        locationEquals a.useRange.end b.useRange.end
     then
-        aName > bName
+        a.name > b.name
 
     else
-        locationGreaterThen aRange.end bRange.end
+        locationGreaterThen a.useRange.end b.useRange.end
 
 
 locationGreaterThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool

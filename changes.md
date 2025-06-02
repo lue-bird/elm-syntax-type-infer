@@ -1,6 +1,11 @@
 ## 2.0.0 (unreleased)
-considering
+TODO
 - rename `matchedExpression` to `matched`
+- keep useRange at type variables for the user-facing output
+  to determine which variables are introduced by a let.
+  Also avoids all the complexity around type variable tracking
+
+considering
 - embed origin module if from local module top level as the actual name, not []
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 
@@ -12,7 +17,10 @@ optimization ideas
   since introduced variables are usually few
 - make ropeFoldlWhileOkFrom TCO
 - (breaking) lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
+- specialized Set instead of DictBy... () to avoid extra memory for unit fields
+- check for equivalent variable set overarching use range
 - convert Result to { ok, List error }
+- typeVariablesFromContextToDisambiguationLookup use DictByTypeVariableFromContext.mapAccum
 
 #### 1.0.10 (unreleased)
 - update top-level unannotated declaration instances across more than one other declaration

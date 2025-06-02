@@ -124,10 +124,9 @@ There might be some other way to track this but I couldn't think of one.
 
 -}
 type alias TypeVariableFromContext =
-    ( -- combined Range from all uses
-      Elm.Syntax.Range.Range
-    , String
-    )
+    { useRange : Elm.Syntax.Range.Range
+    , name : String
+    }
 
 
 type TypeVariableConstraint
@@ -135,11 +134,6 @@ type TypeVariableConstraint
     | TypeVariableConstraintAppendable
     | TypeVariableConstraintComparable
     | TypeVariableConstraintCompappend
-
-
-typeVariableIgnoringContext : TypeVariableFromContext -> String
-typeVariableIgnoringContext ( _, name ) =
-    name
 
 
 typeVariableConstraint : String -> Maybe TypeVariableConstraint
@@ -1592,7 +1586,7 @@ typeSubstituteVariableByType context replacement type_ =
                                 }
 
                         TypeNotVariable replacementTypeNotVariable ->
-                            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+                            case typeVariable |> .name |> typeVariableConstraint of
                                 Nothing ->
                                     Ok
                                         { unchanged = False
@@ -1707,8 +1701,11 @@ typeToInfoString type_ =
 
 
 typeVariableFromContextToInfoString : TypeVariableFromContext -> String
-typeVariableFromContextToInfoString ( range, variable ) =
-    variable ++ "(" ++ (range |> rangeToInfoString) ++ ")"
+typeVariableFromContextToInfoString typeVariableFromContext =
+    typeVariableFromContext.name
+        ++ "("
+        ++ (typeVariableFromContext.useRange |> rangeToInfoString)
+        ++ ")"
 
 
 typeNotVariableToInfoString : TypeNotVariable TypeVariableFromContext -> String
@@ -2309,7 +2306,7 @@ typeIsNumber :
 typeIsNumber declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+            case typeVariable |> .name |> typeVariableConstraint of
                 Nothing ->
                     False
 
@@ -2392,7 +2389,7 @@ typeIsAppendable :
 typeIsAppendable declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+            case typeVariable |> .name |> typeVariableConstraint of
                 Nothing ->
                     False
 
@@ -2480,7 +2477,7 @@ typeIsComparable :
 typeIsComparable declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+            case typeVariable |> .name |> typeVariableConstraint of
                 Nothing ->
                     False
 
@@ -2596,7 +2593,7 @@ typeIsCompappend :
 typeIsCompappend declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> typeVariableIgnoringContext |> typeVariableConstraint of
+            case typeVariable |> .name |> typeVariableConstraint of
                 Nothing ->
                     False
 
@@ -2728,7 +2725,9 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                             , parameterToTypeNotVariable =
                                                 soFar.parameterToTypeNotVariable
                                                     |> DictByTypeVariableFromContext.insert
-                                                        ( Elm.Syntax.Range.empty, parameterName )
+                                                        { useRange = Elm.Syntax.Range.empty
+                                                        , name = parameterName
+                                                        }
                                                         argumentTypeNotVariable
                                             }
                                 )
@@ -2746,7 +2745,9 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                                 variable
 
                                             Nothing ->
-                                                ( Elm.Syntax.Range.empty, parameterName )
+                                                { useRange = Elm.Syntax.Range.empty
+                                                , name = parameterName
+                                                }
                                     )
                     in
                     if
@@ -3003,13 +3004,6 @@ equivalentVariablesMergeWithSetOf2Into :
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
-            let
-                ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
-                    aEquivalentVariable
-
-                ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
-                    bEquivalentVariable
-            in
             Result.map
                 (\abConstraint ->
                     { variables =
@@ -3017,22 +3011,18 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     , constraint = abConstraint
                     , overarchingRange =
                         rangeOverarching
-                            aEquivalentVariableUseRangeAsComparable
-                            bEquivalentVariableUseRangeAsComparable
+                            aEquivalentVariable.useRange
+                            bEquivalentVariable.useRange
                     }
                         :: soFar
                 )
                 (maybeTypeVariableConstraintMerge
-                    (aEquivalentVariableName |> typeVariableConstraint)
-                    (bEquivalentVariableName |> typeVariableConstraint)
+                    (aEquivalentVariable.name |> typeVariableConstraint)
+                    (bEquivalentVariable.name |> typeVariableConstraint)
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
             if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member aEquivalentVariable then
-                let
-                    ( bEquivalentVariableUseRangeAsComparable, bEquivalentVariableName ) =
-                        bEquivalentVariable
-                in
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
@@ -3042,7 +3032,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                         , overarchingRange =
                             rangeOverarching
                                 equivalentVariablesSet0.overarchingRange
-                                bEquivalentVariableUseRangeAsComparable
+                                bEquivalentVariable.useRange
                         }
                             :: listAppendFastButInReverseOrder
                                 soFar
@@ -3050,14 +3040,10 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     )
                     (maybeTypeVariableConstraintMerge
                         equivalentVariablesSet0.constraint
-                        (bEquivalentVariableName |> typeVariableConstraint)
+                        (bEquivalentVariable.name |> typeVariableConstraint)
                     )
 
             else if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member bEquivalentVariable then
-                let
-                    ( aEquivalentVariableUseRangeAsComparable, aEquivalentVariableName ) =
-                        aEquivalentVariable
-                in
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
@@ -3067,7 +3053,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                         , overarchingRange =
                             rangeOverarching
                                 equivalentVariablesSet0.overarchingRange
-                                aEquivalentVariableUseRangeAsComparable
+                                aEquivalentVariable.useRange
                         }
                             :: listAppendFastButInReverseOrder
                                 soFar
@@ -3075,7 +3061,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     )
                     (maybeTypeVariableConstraintMerge
                         equivalentVariablesSet0.constraint
-                        (aEquivalentVariableName |> typeVariableConstraint)
+                        (aEquivalentVariable.name |> typeVariableConstraint)
                     )
 
             else
@@ -4270,9 +4256,9 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                 aOriginAliasDeclaration.type_
                                     |> typeMapVariables
                                         (\aliasVariable ->
-                                            ( context.range
-                                            , prefix ++ (aliasVariable |> stringFirstCharToUpper)
-                                            )
+                                            { useRange = context.range
+                                            , name = prefix ++ (aliasVariable |> stringFirstCharToUpper)
+                                            }
                                         )
                             , substitutions = variableSubstitutionsNone
                             }
@@ -4295,9 +4281,9 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                                     (constructedAliasedTypeSoFar.type_
                                         |> typeSubstituteVariable context
                                             { variable =
-                                                ( context.range
-                                                , prefix ++ (parameterName |> stringFirstCharToUpper)
-                                                )
+                                                { useRange = context.range
+                                                , name = prefix ++ (parameterName |> stringFirstCharToUpper)
+                                                }
                                             , type_ = argument
                                             }
                                     )
@@ -4482,19 +4468,14 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
     Result.andThen
         (\forFields ->
             let
-                ( aRecordExtensionRecordVariableUsesRangeAsComparable, aRecordExtensionRecordVariableName ) =
-                    aRecordExtension.recordVariable
-
-                ( bRecordExtensionRecordVariableUsesRangeAsComparable, _ ) =
-                    bRecordExtension.recordVariable
-
                 newBaseVariable : TypeVariableFromContext
                 newBaseVariable =
-                    ( rangeOverarching
-                        aRecordExtensionRecordVariableUsesRangeAsComparable
-                        bRecordExtensionRecordVariableUsesRangeAsComparable
-                    , aRecordExtensionRecordVariableName
-                    )
+                    { useRange =
+                        rangeOverarching
+                            aRecordExtension.recordVariable.useRange
+                            bRecordExtension.recordVariable.useRange
+                    , name = aRecordExtension.recordVariable.name
+                    }
             in
             Result.map
                 (\fullSubstitutions ->
@@ -5057,7 +5038,9 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Ok
                 { range = fullRange
                 , value = PatternIgnored
-                , type_ = TypeVariable ( fullRange, "ignored" )
+                , type_ =
+                    TypeVariable
+                        { useRange = fullRange, name = "ignored" }
                 }
 
         Elm.Syntax.Pattern.UnitPattern ->
@@ -5099,7 +5082,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Ok
                 { range = fullRange
                 , value = PatternVariable variableName
-                , type_ = TypeVariable ( fullRange, variableName )
+                , type_ = TypeVariable { useRange = fullRange, name = variableName }
                 }
 
         Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->
@@ -5221,9 +5204,9 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 , value = fieldName
                                 , type_ =
                                     TypeVariable
-                                        ( fieldRange
-                                        , fieldName
-                                        )
+                                        { useRange = fieldRange
+                                        , name = fieldName
+                                        }
                                 }
                             )
             in
@@ -5234,7 +5217,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     TypeNotVariable
                         (TypeRecordExtension
                             { recordVariable =
-                                ( fullRange, "record" )
+                                { useRange = fullRange, name = "record" }
                             , fields =
                                 fieldTypedNodes
                                     |> listMapToFastDict
@@ -5294,7 +5277,9 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         , value = patternListExactEmpty
                         , type_ =
                             typeListList
-                                (TypeVariable ( fullRange, "element" ))
+                                (TypeVariable
+                                    { useRange = fullRange, name = "element" }
+                                )
                         }
 
                 head :: tail ->
@@ -5513,9 +5498,9 @@ patternVariantTypeInfer context patternVariant =
                                 |> List.map
                                     (\parameter ->
                                         TypeVariable
-                                            ( patternVariant.fullRange
-                                            , parameter
-                                            )
+                                            { useRange = patternVariant.fullRange
+                                            , name = parameter
+                                            }
                                     )
                         }
                     )
@@ -5558,9 +5543,9 @@ patternVariantTypeInfer context patternVariant =
                                 (typeInVariant
                                     |> typeMapVariables
                                         (\variableName ->
-                                            ( patternVariant.fullRange
-                                            , variableName
-                                            )
+                                            { useRange = patternVariant.fullRange
+                                            , name = variableName
+                                            }
                                         )
                                 )
                             )
@@ -5618,14 +5603,18 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
             Ok
                 { range = fullRange
                 , value = ExpressionInteger { base = Base10, value = intValue }
-                , type_ = TypeVariable ( fullRange, "number" )
+                , type_ =
+                    TypeVariable
+                        { useRange = fullRange, name = "number" }
                 }
 
         Elm.Syntax.Expression.Hex intValue ->
             Ok
                 { range = fullRange
                 , value = ExpressionInteger { base = Base16, value = intValue }
-                , type_ = TypeVariable ( fullRange, "number" )
+                , type_ =
+                    TypeVariable
+                        { useRange = fullRange, name = "number" }
                 }
 
         Elm.Syntax.Expression.Floatable floatValue ->
@@ -5704,14 +5693,15 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 fieldValueType : Type TypeVariableFromContext
                 fieldValueType =
                     TypeVariable
-                        ( { start =
+                        { useRange =
+                            { start =
                                 { row = fullRange.start.row
                                 , column = fullRange.start.column + 1
                                 }
-                          , end = fullRange.end
-                          }
-                        , fieldName
-                        )
+                            , end = fullRange.end
+                            }
+                        , name = fieldName
+                        }
             in
             Ok
                 { range = fullRange
@@ -5724,9 +5714,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 TypeNotVariable
                                     (TypeRecordExtension
                                         { recordVariable =
-                                            ( fullRange
-                                            , "record"
-                                            )
+                                            { useRange = fullRange
+                                            , name = "record"
+                                            }
                                         , fields =
                                             FastDict.singleton fieldName
                                                 fieldValueType
@@ -5763,7 +5753,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     substitutionsFromUnifyingNegatedWithNumber
                         )
                         (variableSubstitutionsFromVariableToType context.declarationTypes
-                            ( fullRange, "number" )
+                            { useRange = fullRange, name = "number" }
                             negatedInferred.type_
                         )
                 )
@@ -5779,9 +5769,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         introducedFieldValueTypeVariable : Type TypeVariableFromContext
                         introducedFieldValueTypeVariable =
                             TypeVariable
-                                ( fieldRange
-                                , fieldName
-                                )
+                                { useRange = fieldRange
+                                , name = fieldName
+                                }
                     in
                     Result.andThen
                         (\recordWithAccessedFieldUnified ->
@@ -5805,9 +5795,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             }
                             (TypeRecordExtension
                                 { recordVariable =
-                                    ( fullRange
-                                    , "record"
-                                    )
+                                    { useRange = fullRange
+                                    , name = "record"
+                                    }
                                 , fields =
                                     FastDict.singleton fieldName
                                         introducedFieldValueTypeVariable
@@ -5954,7 +5944,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                         , value = expressionListEmpty
                         , type_ =
                             typeListList
-                                (TypeVariable ( fullRange, "element" ))
+                                (TypeVariable
+                                    { useRange = fullRange, name = "element" }
+                                )
                         }
 
                 head :: tail ->
@@ -6036,7 +6028,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 introducedResultTypeVariable : Type TypeVariableFromContext
                                 introducedResultTypeVariable =
                                     TypeVariable
-                                        ( fullRange, "callResult" )
+                                        { useRange = fullRange
+                                        , name = "callResult"
+                                        }
                             in
                             Result.andThen
                                 (\callTypeUnified ->
@@ -6175,7 +6169,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     (TypeNotVariable
                                         (TypeRecordExtension
                                             { recordVariable =
-                                                ( fullRange, recordVariableInferred.value.name )
+                                                { useRange = fullRange
+                                                , name = recordVariableInferred.value.name
+                                                }
                                             , fields =
                                                 field1UpInferred
                                                     |> List.foldl
@@ -6672,9 +6668,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                     { range = letDeclarationRange
                                                     , type_ =
                                                         TypeVariable
-                                                            ( letDeclarationRange
-                                                            , name
-                                                            )
+                                                            { useRange = letDeclarationRange
+                                                            , name = name
+                                                            }
                                                     }
                                         }
 
@@ -6694,9 +6690,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                                             type_
                                                                 |> typeMapVariables
                                                                     (\variable ->
-                                                                        ( letDeclarationRange
-                                                                        , variable
-                                                                        )
+                                                                        { useRange = letDeclarationRange
+                                                                        , name = variable
+                                                                        }
                                                                     )
                                                         }
                                             }
@@ -6804,18 +6800,14 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                             inferredDeclarationType.type_
                                                 |> typeMapVariables
                                                     (\inferredDeclarationTypeVariable ->
-                                                        let
-                                                            ( inferredDeclarationTypeVariableUsesRangeAsComparable, inferredDeclarationTypeVariableName ) =
-                                                                inferredDeclarationTypeVariable
-                                                        in
                                                         if
                                                             inferredDeclarationType.range
                                                                 |> rangeIncludesRange
-                                                                    inferredDeclarationTypeVariableUsesRangeAsComparable
+                                                                    inferredDeclarationTypeVariable.useRange
                                                         then
-                                                            ( useRange
-                                                            , inferredDeclarationTypeVariableName
-                                                            )
+                                                            { useRange = useRange
+                                                            , name = inferredDeclarationTypeVariable.name
+                                                            }
 
                                                         else
                                                             inferredDeclarationTypeVariable
@@ -6901,13 +6893,9 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                             inferredDeclarationType.type_
                                                 |> typeMapVariables
                                                     (\inferredDeclarationTypeVariable ->
-                                                        let
-                                                            ( _, inferredDeclarationTypeVariableName ) =
-                                                                inferredDeclarationTypeVariable
-                                                        in
-                                                        ( useRange
-                                                        , inferredDeclarationTypeVariableName
-                                                        )
+                                                        { useRange = useRange
+                                                        , name = inferredDeclarationTypeVariable.name
+                                                        }
                                                     )
                                     in
                                     Result.andThen
@@ -7130,18 +7118,14 @@ expressionReferenceTypeInfer context expressionReference =
                                             locallyIntroducedDeclarationType.type_
                                                 |> typeMapVariables
                                                     (\partiallyInferredTypeVariable ->
-                                                        let
-                                                            ( partiallyInferredTypeVariableUsesRange, partiallyInferredTypeVariableName ) =
-                                                                partiallyInferredTypeVariable
-                                                        in
                                                         if
                                                             locallyIntroducedDeclarationType.range
                                                                 |> rangeIncludesRange
-                                                                    partiallyInferredTypeVariableUsesRange
+                                                                    partiallyInferredTypeVariable.useRange
                                                         then
-                                                            ( expressionReference.fullRange
-                                                            , partiallyInferredTypeVariableName
-                                                            )
+                                                            { useRange = expressionReference.fullRange
+                                                            , name = partiallyInferredTypeVariable.name
+                                                            }
 
                                                         else
                                                             partiallyInferredTypeVariable
@@ -7203,9 +7187,9 @@ expressionReferenceTypeInfer context expressionReference =
                                             signatureType
                                                 |> typeMapVariables
                                                     (\variableName ->
-                                                        ( expressionReference.fullRange
-                                                        , variableName
-                                                        )
+                                                        { useRange = expressionReference.fullRange
+                                                        , name = variableName
+                                                        }
                                                     )
                                         }
 
@@ -7243,9 +7227,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                             argument
                                                                                 |> typeMapVariables
                                                                                     (\variableName ->
-                                                                                        ( expressionReference.fullRange
-                                                                                        , variableName
-                                                                                        )
+                                                                                        { useRange = expressionReference.fullRange
+                                                                                        , name = variableName
+                                                                                        }
                                                                                     )
                                                                         , output = output
                                                                         }
@@ -7260,9 +7244,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                             |> List.map
                                                                                 (\parameter ->
                                                                                     TypeVariable
-                                                                                        ( expressionReference.fullRange
-                                                                                        , parameter
-                                                                                        )
+                                                                                        { useRange = expressionReference.fullRange
+                                                                                        , name = parameter
+                                                                                        }
                                                                                 )
                                                                     }
                                                                 )
@@ -7306,9 +7290,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                                     fieldValueType
                                                                                                         |> typeMapVariables
                                                                                                             (\name ->
-                                                                                                                ( expressionReference.fullRange
-                                                                                                                , name
-                                                                                                                )
+                                                                                                                { useRange = expressionReference.fullRange
+                                                                                                                , name = name
+                                                                                                                }
                                                                                                             )
                                                                                                 , output = outputTypeSoFar
                                                                                                 }
@@ -7323,9 +7307,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                                                             |> List.map
                                                                                                 (\parameterName ->
                                                                                                     TypeVariable
-                                                                                                        ( expressionReference.fullRange
-                                                                                                        , parameterName
-                                                                                                        )
+                                                                                                        { useRange = expressionReference.fullRange
+                                                                                                        , name = parameterName
+                                                                                                        }
                                                                                                 )
                                                                                     }
                                                                                 )
@@ -7601,10 +7585,11 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                         context.locallyIntroducedExpressionVariables
                                         |> FastDict.insert name
                                             (TypeVariable
-                                                ( letValueOrFunction
-                                                    |> syntaxValueOrFunctionDeclarationRange
-                                                , name
-                                                )
+                                                { useRange =
+                                                    letValueOrFunction
+                                                        |> syntaxValueOrFunctionDeclarationRange
+                                                , name = name
+                                                }
                                             )
                                 }
                         )
@@ -7618,10 +7603,11 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                     annotationAsType
                                         |> typeMapVariables
                                             (\variable ->
-                                                ( letValueOrFunction
-                                                    |> syntaxValueOrFunctionDeclarationRange
-                                                , variable
-                                                )
+                                                { useRange =
+                                                    letValueOrFunction
+                                                        |> syntaxValueOrFunctionDeclarationRange
+                                                , name = variable
+                                                }
                                             )
                             in
                             Result.andThen
@@ -7943,11 +7929,11 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7966,11 +7952,11 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -7989,15 +7975,15 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.range, "c" )
+                    TypeVariable { useRange = context.range, name = "c" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8028,15 +8014,15 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.range, "c" )
+                    TypeVariable { useRange = context.range, name = "c" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8067,7 +8053,7 @@ operatorFunctionType context operator =
             let
                 appendable : Type TypeVariableFromContext
                 appendable =
-                    TypeVariable ( context.range, "appendable" )
+                    TypeVariable { useRange = context.range, name = "appendable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8080,7 +8066,7 @@ operatorFunctionType context operator =
             let
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.range, "equatable" )
+                    TypeVariable { useRange = context.range, name = "equatable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8093,7 +8079,7 @@ operatorFunctionType context operator =
             let
                 equatable : Type TypeVariableFromContext
                 equatable =
-                    TypeVariable ( context.range, "equatable" )
+                    TypeVariable { useRange = context.range, name = "equatable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8106,7 +8092,7 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "element" )
+                    TypeVariable { useRange = context.range, name = "element" }
             in
             Ok
                 { moduleOrigin = moduleNameList
@@ -8119,7 +8105,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range, "number" )
+                    TypeVariable { useRange = context.range, name = "number" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8132,7 +8118,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range, "number" )
+                    TypeVariable { useRange = context.range, name = "number" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8145,7 +8131,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range, "number" )
+                    TypeVariable { useRange = context.range, name = "number" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8161,7 +8147,7 @@ operatorFunctionType context operator =
             let
                 number : Type TypeVariableFromContext
                 number =
-                    TypeVariable ( context.range, "number" )
+                    TypeVariable { useRange = context.range, name = "number" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8174,7 +8160,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range, "comparable" )
+                    TypeVariable { useRange = context.range, name = "comparable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8187,7 +8173,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range, "comparable" )
+                    TypeVariable { useRange = context.range, name = "comparable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8200,7 +8186,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range, "comparable" )
+                    TypeVariable { useRange = context.range, name = "comparable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8213,7 +8199,7 @@ operatorFunctionType context operator =
             let
                 comparable : Type TypeVariableFromContext
                 comparable =
-                    TypeVariable ( context.range, "comparable" )
+                    TypeVariable { useRange = context.range, name = "comparable" }
             in
             Ok
                 { moduleOrigin = moduleNameBasics
@@ -8237,19 +8223,19 @@ operatorFunctionType context operator =
                     let
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( context.range, "context" )
+                            TypeVariable { useRange = context.range, name = "context" }
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( context.range, "problem" )
+                            TypeVariable { useRange = context.range, name = "problem" }
 
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( context.range, "keep" )
+                            TypeVariable { useRange = context.range, name = "keep" }
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( context.range, "ignore" )
+                            TypeVariable { useRange = context.range, name = "ignore" }
                     in
                     { moduleOrigin = moduleNameParserAdvanced
                     , leftType = typeParserAdvancedParser varContext problem keep
@@ -8261,11 +8247,11 @@ operatorFunctionType context operator =
                     let
                         keep : Type TypeVariableFromContext
                         keep =
-                            TypeVariable ( context.range, "keep" )
+                            TypeVariable { useRange = context.range, name = "keep" }
 
                         ignore : Type TypeVariableFromContext
                         ignore =
-                            TypeVariable ( context.range, "ignore" )
+                            TypeVariable { useRange = context.range, name = "ignore" }
                     in
                     { moduleOrigin = moduleNameParser
                     , leftType = typeParserParser keep
@@ -8280,19 +8266,19 @@ operatorFunctionType context operator =
                     let
                         varContext : Type TypeVariableFromContext
                         varContext =
-                            TypeVariable ( context.range, "context" )
+                            TypeVariable { useRange = context.range, name = "context" }
 
                         problem : Type TypeVariableFromContext
                         problem =
-                            TypeVariable ( context.range, "problem" )
+                            TypeVariable { useRange = context.range, name = "problem" }
 
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( context.range, "a" )
+                            TypeVariable { useRange = context.range, name = "a" }
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( context.range, "b" )
+                            TypeVariable { useRange = context.range, name = "b" }
                     in
                     { moduleOrigin = moduleNameParserAdvanced
                     , leftType =
@@ -8314,11 +8300,11 @@ operatorFunctionType context operator =
                     let
                         a : Type TypeVariableFromContext
                         a =
-                            TypeVariable ( context.range, "a" )
+                            TypeVariable { useRange = context.range, name = "a" }
 
                         b : Type TypeVariableFromContext
                         b =
-                            TypeVariable ( context.range, "b" )
+                            TypeVariable { useRange = context.range, name = "b" }
                     in
                     { moduleOrigin = moduleNameParser
                     , leftType =
@@ -8339,15 +8325,15 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
 
                 c : Type TypeVariableFromContext
                 c =
-                    TypeVariable ( context.range, "c" )
+                    TypeVariable { useRange = context.range, name = "c" }
             in
             Ok
                 { moduleOrigin = moduleNameUrlParser
@@ -8360,15 +8346,15 @@ operatorFunctionType context operator =
             let
                 a : Type TypeVariableFromContext
                 a =
-                    TypeVariable ( context.range, "a" )
+                    TypeVariable { useRange = context.range, name = "a" }
 
                 b : Type TypeVariableFromContext
                 b =
-                    TypeVariable ( context.range, "b" )
+                    TypeVariable { useRange = context.range, name = "b" }
 
                 query : Type TypeVariableFromContext
                 query =
-                    TypeVariable ( context.range, "query" )
+                    TypeVariable { useRange = context.range, name = "query" }
             in
             Ok
                 { moduleOrigin = moduleNameUrlParser
@@ -8694,9 +8680,9 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                         |> FastDict.insert name
                                             { type_ =
                                                 TypeVariable
-                                                    ( declarationRange
-                                                    , name
-                                                    )
+                                                    { useRange = declarationRange
+                                                    , name = name
+                                                    }
                                             , range = declarationRange
                                             }
                                 }
@@ -8880,9 +8866,9 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                 parametersInferred.introducedExpressionVariables
                                                     |> FastDict.insert name
                                                         (TypeVariable
-                                                            ( valueOrFunctionDeclarationToInferRange
-                                                            , name
-                                                            )
+                                                            { useRange = valueOrFunctionDeclarationToInferRange
+                                                            , name = name
+                                                            }
                                                         )
                                             , locallyIntroducedDeclarationTypes =
                                                 acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
@@ -8925,9 +8911,9 @@ valueAndFunctionDeclarations typesAndOriginLookup syntaxValueAndFunctionDeclarat
                                                         annotationType
                                                             |> typeMapVariables
                                                                 (\variable ->
-                                                                    ( valueOrFunctionDeclarationToInferRange
-                                                                    , variable
-                                                                    )
+                                                                    { useRange = valueOrFunctionDeclarationToInferRange
+                                                                    , name = variable
+                                                                    }
                                                                 )
                                                 in
                                                 resultAndThen2
@@ -9234,10 +9220,10 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                                             partialTypeNewInstance =
                                                                 substitutionOfPartiallyInferredDeclaration.partiallyInferredDeclarationType
                                                                     |> typeMapVariables
-                                                                        (\( _, variableName ) ->
-                                                                            ( useRange
-                                                                            , variableName
-                                                                            )
+                                                                        (\declarationTypeVariable ->
+                                                                            { useRange = useRange
+                                                                            , name = declarationTypeVariable.name
+                                                                            }
                                                                         )
                                                         in
                                                         Result.andThen
@@ -9454,13 +9440,6 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
         okVariableSubstitutionsNone
 
     else
-        let
-            ( aVariableUseRangeAsComparable, aVariableName ) =
-                aVariable
-
-            ( bVariableUseRangeAsComparable, bVariableName ) =
-                bVariable
-        in
         Result.map
             (\abConstraint ->
                 { variableToType = DictByTypeVariableFromContext.empty
@@ -9470,15 +9449,15 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                       , constraint = abConstraint
                       , overarchingRange =
                             rangeOverarching
-                                aVariableUseRangeAsComparable
-                                bVariableUseRangeAsComparable
+                                aVariable.useRange
+                                bVariable.useRange
                       }
                     ]
                 }
             )
             (maybeTypeVariableConstraintMerge
-                (aVariableName |> typeVariableConstraint)
-                (bVariableName |> typeVariableConstraint)
+                (aVariable.name |> typeVariableConstraint)
+                (bVariable.name |> typeVariableConstraint)
             )
 
 
@@ -11916,13 +11895,9 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                                                             |> rangeIncludesRange
                                                                                                 useRange
                                                                                     then
-                                                                                        let
-                                                                                            ( _, inferredDeclarationTypeVariableName ) =
-                                                                                                inferredDeclarationTypeVariable
-                                                                                        in
-                                                                                        ( useRange
-                                                                                        , inferredDeclarationTypeVariableName
-                                                                                        )
+                                                                                        { useRange = useRange
+                                                                                        , name = inferredDeclarationTypeVariable.name
+                                                                                        }
 
                                                                                     else
                                                                                         inferredDeclarationTypeVariable
@@ -12256,8 +12231,8 @@ typesAreEquallyStrict aType bType =
     ((aType |> DictByTypeVariableFromContext.size) - (bType |> DictByTypeVariableFromContext.size) == 0)
         && ((aType
                 |> typeVariableFromContextSetToListHighestToLowestAndMap
-                    (\( _, aVariable ) ->
-                        aVariable
+                    (\aVariable ->
+                        aVariable.name
                             |> typeVariableConstraint
                             |> maybeTypeVariableConstraintToString
                     )
@@ -12265,8 +12240,8 @@ typesAreEquallyStrict aType bType =
             )
                 == (bType
                         |> typeVariableFromContextSetToListHighestToLowestAndMap
-                            (\( _, bVariable ) ->
-                                bVariable
+                            (\bVariable ->
+                                bVariable.name
                                     |> typeVariableConstraint
                                     |> maybeTypeVariableConstraintToString
                             )
@@ -13612,18 +13587,15 @@ equivalentVariablesCreateCondensedVariable set =
 
         Just variable0 ->
             Ok
-                ( set.overarchingRange
-                , case set.constraint of
-                    Nothing ->
-                        let
-                            ( _, variable0Name ) =
-                                variable0
-                        in
-                        variable0Name
+                { useRange = set.overarchingRange
+                , name =
+                    case set.constraint of
+                        Nothing ->
+                            variable0.name
 
-                    Just unifiedConstraint ->
-                        unifiedConstraint |> typeVariableConstraintToString
-                )
+                        Just unifiedConstraint ->
+                            unifiedConstraint |> typeVariableConstraintToString
+                }
 
 
 maybeTypeVariableConstraintToString : Maybe TypeVariableConstraint -> String
@@ -14290,9 +14262,6 @@ typeVariablesFromContextToDisambiguationLookup variables =
         |> DictByTypeVariableFromContext.foldl
             (\variable () soFar ->
                 let
-                    ( _, name ) =
-                        variable
-
                     alreadyExists : String -> Bool
                     alreadyExists toDisambiguate =
                         soFar
@@ -14303,7 +14272,7 @@ typeVariablesFromContextToDisambiguationLookup variables =
 
                     variableAsDisambiguatedString : String
                     variableAsDisambiguatedString =
-                        name |> nameDisambiguateBy alreadyExists
+                        variable.name |> nameDisambiguateBy alreadyExists
                 in
                 soFar
                     |> DictByTypeVariableFromContext.insert variable
