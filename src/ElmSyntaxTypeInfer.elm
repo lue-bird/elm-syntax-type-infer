@@ -9210,140 +9210,6 @@ unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty =
     }
 
 
-moduleTypesSetLocalTypesToOrigin : String -> ModuleTypes -> ModuleTypes
-moduleTypesSetLocalTypesToOrigin moduleOrigin moduleTypes =
-    { signatures =
-        moduleTypes.signatures
-            |> FastDict.map
-                (\_ type_ ->
-                    type_ |> typeSetLocalToOrigin moduleOrigin
-                )
-    , typeAliases =
-        moduleTypes.typeAliases
-            |> FastDict.map
-                (\_ typeAlias ->
-                    { parameters = typeAlias.parameters
-                    , recordFieldOrder = typeAlias.recordFieldOrder
-                    , type_ =
-                        typeAlias.type_
-                            |> typeSetLocalToOrigin moduleOrigin
-                    }
-                )
-    , choiceTypes =
-        moduleTypes.choiceTypes
-            |> FastDict.map
-                (\_ typeAlias ->
-                    { parameters = typeAlias.parameters
-                    , variants =
-                        typeAlias.variants
-                            |> FastDict.map
-                                (\_ values ->
-                                    values
-                                        |> List.map
-                                            (\type_ ->
-                                                type_ |> typeSetLocalToOrigin moduleOrigin
-                                            )
-                                )
-                    }
-                )
-    }
-
-
-typeSetLocalToOrigin : String -> Type -> Type
-typeSetLocalToOrigin moduleOrigin type_ =
-    case type_ of
-        TypeVariable variable ->
-            TypeVariable variable
-
-        TypeNotVariable typeNotVariable ->
-            TypeNotVariable
-                (typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable)
-
-
-typeNotVariableSetLocalToOrigin :
-    String
-    -> TypeNotVariable
-    -> TypeNotVariable
-typeNotVariableSetLocalToOrigin moduleOrigin typeNotVariable =
-    case typeNotVariable of
-        TypeConstruct typeConstruct ->
-            TypeConstruct
-                { name = typeConstruct.name
-                , moduleOrigin =
-                    case typeConstruct.moduleOrigin of
-                        "" ->
-                            moduleOrigin
-
-                        aliasOrModuleName ->
-                            aliasOrModuleName
-                , arguments =
-                    typeConstruct.arguments
-                        |> List.map
-                            (\argument ->
-                                argument
-                                    |> typeSetLocalToOrigin moduleOrigin
-                            )
-                }
-
-        TypeUnit ->
-            TypeUnit
-
-        TypeFunction parts ->
-            TypeFunction
-                { input =
-                    parts.input
-                        |> typeSetLocalToOrigin moduleOrigin
-                , output =
-                    parts.output
-                        |> typeSetLocalToOrigin moduleOrigin
-                }
-
-        TypeTuple parts ->
-            TypeTuple
-                { part0 =
-                    parts.part0
-                        |> typeSetLocalToOrigin moduleOrigin
-                , part1 =
-                    parts.part1
-                        |> typeSetLocalToOrigin moduleOrigin
-                }
-
-        TypeTriple parts ->
-            TypeTriple
-                { part0 =
-                    parts.part0
-                        |> typeSetLocalToOrigin moduleOrigin
-                , part1 =
-                    parts.part1
-                        |> typeSetLocalToOrigin moduleOrigin
-                , part2 =
-                    parts.part2
-                        |> typeSetLocalToOrigin moduleOrigin
-                }
-
-        TypeRecord fields ->
-            TypeRecord
-                (fields
-                    |> FastDict.map
-                        (\_ fieldValue ->
-                            fieldValue
-                                |> typeSetLocalToOrigin moduleOrigin
-                        )
-                )
-
-        TypeRecordExtension typeRecordExtension ->
-            TypeRecordExtension
-                { recordVariable = typeRecordExtension.recordVariable
-                , fields =
-                    typeRecordExtension.fields
-                        |> FastDict.map
-                            (\_ fieldValue ->
-                                fieldValue
-                                    |> typeSetLocalToOrigin moduleOrigin
-                            )
-                }
-
-
 variableSubstitutionsFromVariableToType :
     ModuleLevelDeclarationTypesAvailableInModule
     -> TypeVariableFromContext
@@ -13908,6 +13774,13 @@ interfaceToType typeInterface =
                 )
 
 
+splitIntoBeforeAndAfterLastDot :
+    String
+    ->
+        Maybe
+            { beforeLastDot : String
+            , afterLastDot : String
+            }
 splitIntoBeforeAndAfterLastDot string =
     -- TODO optimize
     case string |> String.split "." |> List.reverse of

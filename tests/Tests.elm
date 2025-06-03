@@ -6,7 +6,6 @@ import Elm.Syntax.Exposing
 import Elm.Syntax.Expression
 import Elm.Syntax.Infix
 import Elm.Syntax.Module
-import Elm.Syntax.ModuleName
 import Elm.Syntax.Node
 import Elm.Syntax.Pattern
 import Elm.Syntax.Range
@@ -15,7 +14,6 @@ import ElmSyntaxTypeInfer
 import Expect
 import FastDict
 import Test exposing (Test)
-import TypeVariableFromContext exposing (TypeVariableFromContext)
 
 
 suite : Test
