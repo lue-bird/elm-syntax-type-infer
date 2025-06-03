@@ -3905,7 +3905,7 @@ eat yum = ()
                                             { range = Elm.Syntax.Range.empty
                                             , type_ = typeBool
                                             , value =
-                                                ElmSyntaxTypeInfer.ExpressionReference
+                                                ElmSyntaxTypeInfer.ExpressionReferenceVariant
                                                     { moduleOrigin = "Basics"
                                                     , name = "True"
                                                     , qualification = ""
@@ -4719,7 +4719,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                             { range = Elm.Syntax.Range.empty
                                             , type_ = typeBool
                                             , value =
-                                                ElmSyntaxTypeInfer.ExpressionReference
+                                                ElmSyntaxTypeInfer.ExpressionReferenceVariant
                                                     { moduleOrigin = "Basics"
                                                     , name = "True"
                                                     , qualification = ""

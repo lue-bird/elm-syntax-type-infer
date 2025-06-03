@@ -4660,7 +4660,12 @@ type alias TypedNode value =
 
 
 {-| Like [`Elm.Syntax.Expression.Expression`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/Elm-Syntax-Expression#Expression)
-but its sub-nodes are [`TypedNode`](#TypedNode)s
+but its sub-nodes are [`TypedNode`](#TypedNode)s.
+
+Be aware when trying to match references that they are split into multiple variants:
+  - `ExpressionReference` (TODO rename)
+  - `ExpressionReferenceVariant`
+
 -}
 type Expression
     = ExpressionUnit
@@ -4672,6 +4677,15 @@ type Expression
     | ExpressionString String
     | ExpressionChar Char
     | ExpressionReference
+        { moduleOrigin :
+            -- `""` for pattern variable and let declaration uses
+            String
+        , qualification :
+            -- `""` for no qualification
+            String
+        , name : String
+        }
+    | ExpressionReferenceVariant
         { moduleOrigin :
             -- `""` for pattern variable and let declaration uses
             String
@@ -5687,19 +5701,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 )
 
         Elm.Syntax.Expression.FunctionOrValue qualificationDotSeparated name ->
-            Result.map
-                (\inferred ->
-                    { type_ = inferred.type_
-                    , range = fullRange
-                    , value = ExpressionReference inferred.value
-                    }
-                )
-                (expressionReferenceTypeInfer context
-                    { fullRange = fullRange
-                    , qualification = qualificationDotSeparated |> String.join "."
-                    , name = name
-                    }
-                )
+            expressionReferenceTypeInfer context
+                { fullRange = fullRange
+                , qualification = qualificationDotSeparated |> String.join "."
+                , name = name
+                }
 
         Elm.Syntax.Expression.RecordAccessFunction dotFieldName ->
             let
@@ -6155,56 +6161,60 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 (Elm.Syntax.Node.Node field0Range ( Elm.Syntax.Node.Node field0NameRange field0Name, field0ValueNode )) :: field1Up ->
                     resultAndThen3
                         (\recordVariableInferred field0Inferred field1UpInferred ->
-                            Result.andThen
-                                (\recordVariableUnifiedWithUpdate ->
-                                    { range = fullRange
-                                    , value =
-                                        ExpressionRecordUpdate
-                                            { recordVariable =
-                                                { range = recordVariableInferred.range
-                                                , value =
-                                                    { moduleOrigin =
-                                                        recordVariableInferred.value.moduleOrigin
-                                                    , name = recordVariableInferred.value.name
+                            case recordVariableInferred.value of
+                                ExpressionReference recordVariableReference ->
+                                    Result.andThen
+                                        (\recordVariableUnifiedWithUpdate ->
+                                            { range = fullRange
+                                            , value =
+                                                ExpressionRecordUpdate
+                                                    { recordVariable =
+                                                        { range = recordVariableInferred.range
+                                                        , value =
+                                                            { moduleOrigin = recordVariableReference.moduleOrigin
+                                                            , name = recordVariableReference.name
+                                                            }
+                                                        , type_ = recordVariableInferred.type_
+                                                        }
+                                                    , field0 = field0Inferred
+                                                    , field1Up = field1UpInferred
                                                     }
-                                                , type_ = recordVariableInferred.type_
-                                                }
-                                            , field0 = field0Inferred
-                                            , field1Up = field1UpInferred
+                                            , type_ = recordVariableInferred.type_
                                             }
-                                    , type_ = recordVariableInferred.type_
-                                    }
-                                        |> expressionTypedNodeApplyVariableSubstitutions
-                                            context.declarationTypes
-                                            recordVariableUnifiedWithUpdate.substitutions
-                                )
-                                (typeUnify
-                                    { declarationTypes = context.declarationTypes
-                                    , range = fullRange
-                                    }
-                                    recordVariableInferred.type_
-                                    (TypeNotVariable
-                                        (TypeRecordExtension
-                                            { recordVariable =
-                                                { useRange = fullRange
-                                                , name = recordVariableInferred.value.name
-                                                }
-                                            , fields =
-                                                field1UpInferred
-                                                    |> List.foldl
-                                                        (\fieldInferred soFar ->
-                                                            soFar
-                                                                |> FastDict.insert fieldInferred.name
-                                                                    fieldInferred.value.type_
-                                                        )
-                                                        (FastDict.singleton
-                                                            field0Inferred.name
-                                                            field0Inferred.value.type_
-                                                        )
-                                            }
+                                                |> expressionTypedNodeApplyVariableSubstitutions
+                                                    context.declarationTypes
+                                                    recordVariableUnifiedWithUpdate.substitutions
                                         )
-                                    )
-                                )
+                                        (typeUnify
+                                            { declarationTypes = context.declarationTypes
+                                            , range = fullRange
+                                            }
+                                            recordVariableInferred.type_
+                                            (TypeNotVariable
+                                                (TypeRecordExtension
+                                                    { recordVariable =
+                                                        { useRange = fullRange
+                                                        , name = recordVariableReference.name
+                                                        }
+                                                    , fields =
+                                                        field1UpInferred
+                                                            |> List.foldl
+                                                                (\fieldInferred soFar ->
+                                                                    soFar
+                                                                        |> FastDict.insert fieldInferred.name
+                                                                            fieldInferred.value.type_
+                                                                )
+                                                                (FastDict.singleton
+                                                                    field0Inferred.name
+                                                                    field0Inferred.value.type_
+                                                                )
+                                                    }
+                                                )
+                                            )
+                                        )
+
+                                _ ->
+                                    Err "record update variable needs to be a reference to a lowercase value or function"
                         )
                         ({ fullRange = recordVariableRange
                          , qualification = ""
@@ -7047,25 +7057,10 @@ expressionReferenceTypeInfer :
         , qualification : String
         , name : String
         }
-    ->
-        Result
-            String
-            (TypedNode
-                { moduleOrigin : String
-                , qualification : String
-                , name : String
-                }
-            )
+    -> Result String (TypedNode Expression)
 expressionReferenceTypeInfer context expressionReference =
     let
-        useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration :
-            Maybe
-                (TypedNode
-                    { moduleOrigin : String
-                    , qualification : String
-                    , name : String
-                    }
-                )
+        useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration : Maybe (TypedNode Expression)
         useOfLocallyIntroducedExpressionVariablesOrLocallyIntroducedDeclaration =
             case expressionReference.qualification of
                 "" ->
@@ -7077,10 +7072,11 @@ expressionReferenceTypeInfer context expressionReference =
                             Just
                                 { range = expressionReference.fullRange
                                 , value =
-                                    { qualification = ""
-                                    , moduleOrigin = ""
-                                    , name = expressionReference.name
-                                    }
+                                    ExpressionReference
+                                        { qualification = ""
+                                        , moduleOrigin = ""
+                                        , name = expressionReference.name
+                                        }
                                 , type_ = locallyIntroducedExpressionVariableType
                                 }
 
@@ -7096,10 +7092,11 @@ expressionReferenceTypeInfer context expressionReference =
                                     Just
                                         { range = expressionReference.fullRange
                                         , value =
-                                            { qualification = ""
-                                            , moduleOrigin = locallyIntroducedDeclarationType.moduleLevel
-                                            , name = expressionReference.name
-                                            }
+                                            ExpressionReference
+                                                { qualification = ""
+                                                , moduleOrigin = locallyIntroducedDeclarationType.moduleLevel
+                                                , name = expressionReference.name
+                                                }
                                         , type_ =
                                             locallyIntroducedDeclarationType.type_
                                                 |> typeMapVariables
@@ -7169,10 +7166,11 @@ expressionReferenceTypeInfer context expressionReference =
                                     Ok
                                         { range = expressionReference.fullRange
                                         , value =
-                                            { qualification = expressionReference.qualification
-                                            , moduleOrigin = moduleOrigin
-                                            , name = expressionReference.name
-                                            }
+                                            ExpressionReference
+                                                { qualification = expressionReference.qualification
+                                                , moduleOrigin = moduleOrigin
+                                                , name = expressionReference.name
+                                                }
                                         , type_ =
                                             signatureType
                                                 |> typeMapVariables
@@ -7203,10 +7201,11 @@ expressionReferenceTypeInfer context expressionReference =
                                             Ok
                                                 { range = expressionReference.fullRange
                                                 , value =
-                                                    { qualification = expressionReference.qualification
-                                                    , moduleOrigin = moduleOrigin
-                                                    , name = expressionReference.name
-                                                    }
+                                                    ExpressionReferenceVariant
+                                                        { qualification = expressionReference.qualification
+                                                        , moduleOrigin = moduleOrigin
+                                                        , name = expressionReference.name
+                                                        }
                                                 , type_ =
                                                     variant.variantValues
                                                         |> List.foldr
@@ -7261,10 +7260,11 @@ expressionReferenceTypeInfer context expressionReference =
                                                             Ok
                                                                 { range = expressionReference.fullRange
                                                                 , value =
-                                                                    { qualification = expressionReference.qualification
-                                                                    , moduleOrigin = moduleOrigin
-                                                                    , name = expressionReference.name
-                                                                    }
+                                                                    ExpressionReference
+                                                                        { qualification = expressionReference.qualification
+                                                                        , moduleOrigin = moduleOrigin
+                                                                        , name = expressionReference.name
+                                                                        }
                                                                 , type_ =
                                                                     fieldOrder
                                                                         |> List.foldr
@@ -9669,6 +9669,9 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
         ExpressionChar _ ->
             FastDict.empty
 
+        ExpressionReferenceVariant _ ->
+            FastDict.empty
+
         ExpressionReference reference ->
             -- we're checking against qualification, not moduleOrigin
             -- because referencing other module-level declared things
@@ -10024,6 +10027,9 @@ expressionContainedTypeVariables expression =
             DictByTypeVariableFromContext.empty
 
         ExpressionChar _ ->
+            DictByTypeVariableFromContext.empty
+
+        ExpressionReferenceVariant _ ->
             DictByTypeVariableFromContext.empty
 
         ExpressionReference _ ->
@@ -10726,6 +10732,33 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , node =
                             { range = expressionTypedNode.range
                             , value = ExpressionInteger integer
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
+                )
+                (expressionTypedNode.type_
+                    |> typeSubstituteVariableByType
+                        { declarationTypes = declarationTypes
+                        , range = expressionTypedNode.range
+                        }
+                        replacement
+                )
+
+        ExpressionReferenceVariant reference ->
+            Result.map
+                (\typeSubstituted ->
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
+                        }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionReference reference
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -12215,6 +12248,9 @@ expressionMapTypes typeChange expression =
 
         ExpressionInteger expressionNumber ->
             ExpressionInteger expressionNumber
+
+        ExpressionReferenceVariant reference ->
+            ExpressionReferenceVariant reference
 
         ExpressionReference reference ->
             ExpressionReference reference
