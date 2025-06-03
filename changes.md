@@ -8,11 +8,6 @@
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let.
 
-considering
-- split ExpressionReference further into ExpressionReferenceLetDeclared, ExpressionReferencePatternVariable and ExpressionReferenceModuleDeclared
-- remove "otherModuleDeclaredTypes" in favor of users adding them via FastDict.insert
-  into importedTypes (maybe just named types)
-
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
