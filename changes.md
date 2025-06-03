@@ -7,7 +7,6 @@
   to determine which variables are introduced by a let.
 
 considering
-- embed origin module if from local module top level as the actual name, not ""
 - split ExpressionReference into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceVariant, ReferenceRecordTypeAliasConstructor)
 - remove "otherModuleDeclaredTypes" in favor of users adding them via FastDict.insert
   into importedTypes (maybe just named types)
