@@ -1314,6 +1314,17 @@ syntaxToType :
     -> Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
     -> Result String Type
 syntaxToType moduleOriginLookup syntaxTypeNode =
+    syntaxToTypeInRootRange moduleOriginLookup
+        (syntaxTypeNode |> Elm.Syntax.Node.range)
+        syntaxTypeNode
+
+
+syntaxToTypeInRootRange :
+    ModuleOriginLookup
+    -> Elm.Syntax.Range.Range
+    -> Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
+    -> Result String Type
+syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
     -- IGNORE TCO
     case syntaxTypeNode |> Elm.Syntax.Node.value of
         Elm.Syntax.TypeAnnotation.Unit ->
@@ -1322,7 +1333,7 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
         Elm.Syntax.TypeAnnotation.GenericType variableName ->
             Ok
                 (TypeVariable
-                    { useRange = syntaxTypeNode |> Elm.Syntax.Node.range
+                    { useRange = rootRange
                     , name = variableName
                     }
                 )
@@ -1358,7 +1369,7 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                         (argumentNodes
                             |> listMapAndCombineOk
                                 (\argument ->
-                                    argument |> syntaxToType moduleOriginLookup
+                                    argument |> syntaxToTypeInRootRange moduleOriginLookup rootRange
                                 )
                         )
 
@@ -1368,7 +1379,7 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                     okTypeUnit
 
                 [ inParens ] ->
-                    inParens |> syntaxToType moduleOriginLookup
+                    inParens |> syntaxToTypeInRootRange moduleOriginLookup rootRange
 
                 [ syntaxPart0, syntaxPart1 ] ->
                     Result.map2
@@ -1376,8 +1387,8 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                             TypeNotVariable
                                 (TypeTuple { part0 = part0, part1 = part1 })
                         )
-                        (syntaxPart0 |> syntaxToType moduleOriginLookup)
-                        (syntaxPart1 |> syntaxToType moduleOriginLookup)
+                        (syntaxPart0 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                        (syntaxPart1 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
 
                 [ syntaxPart0, syntaxPart1, syntaxPart2 ] ->
                     Result.map3
@@ -1385,9 +1396,9 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                             TypeNotVariable
                                 (TypeTriple { part0 = part0, part1 = part1, part2 = part2 })
                         )
-                        (syntaxPart0 |> syntaxToType moduleOriginLookup)
-                        (syntaxPart1 |> syntaxToType moduleOriginLookup)
-                        (syntaxPart2 |> syntaxToType moduleOriginLookup)
+                        (syntaxPart0 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                        (syntaxPart1 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                        (syntaxPart2 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
 
                 _ :: _ :: _ :: _ :: _ ->
                     Err "too many tuple parts"
@@ -1402,11 +1413,11 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                                 (\fieldValueType ->
                                     soFar |> FastDict.insert fieldName fieldValueType
                                 )
-                                (fieldValue |> syntaxToType moduleOriginLookup)
+                                (fieldValue |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
                         )
                 )
 
-        Elm.Syntax.TypeAnnotation.GenericRecord (Elm.Syntax.Node.Node recordVariableRange recordVariableName) (Elm.Syntax.Node.Node _ recordExtensionFields) ->
+        Elm.Syntax.TypeAnnotation.GenericRecord (Elm.Syntax.Node.Node _ recordVariableName) (Elm.Syntax.Node.Node _ recordExtensionFields) ->
             case recordExtensionFields of
                 [] ->
                     Err "record extension by 0 fields is invalid syntax"
@@ -1417,7 +1428,7 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                             TypeNotVariable
                                 (TypeRecordExtension
                                     { recordVariable =
-                                        { useRange = recordVariableRange
+                                        { useRange = rootRange
                                         , name = recordVariableName
                                         }
                                     , fields = fields
@@ -1432,7 +1443,7 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                                         (\fieldValueType ->
                                             soFar |> FastDict.insert fieldName fieldValueType
                                         )
-                                        (fieldValue |> syntaxToType moduleOriginLookup)
+                                        (fieldValue |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
                                 )
                         )
 
@@ -1442,8 +1453,8 @@ syntaxToType moduleOriginLookup syntaxTypeNode =
                     TypeNotVariable
                         (TypeFunction { input = input, output = output })
                 )
-                (syntaxInput |> syntaxToType moduleOriginLookup)
-                (syntaxOutput |> syntaxToType moduleOriginLookup)
+                (syntaxInput |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                (syntaxOutput |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
 
 
 qualifiedToString :
