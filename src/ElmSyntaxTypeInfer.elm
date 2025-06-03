@@ -4663,7 +4663,7 @@ type alias TypedNode value =
 but its sub-nodes are [`TypedNode`](#TypedNode)s.
 
 Be aware when trying to match references that they are split into multiple variants:
-  - `ExpressionReference` (TODO rename)
+  - `ExpressionReference` (for let/module declared value/function or port or pattern variable use)
   - `ExpressionReferenceVariant`
   - `ExpressionReferenceRecordTypeAliasConstructorFunction`
 
@@ -7270,7 +7270,7 @@ expressionReferenceTypeInfer context expressionReference =
                                                             Ok
                                                                 { range = expressionReference.fullRange
                                                                 , value =
-                                                                    ExpressionReference
+                                                                    ExpressionReferenceRecordTypeAliasConstructorFunction
                                                                         { qualification = expressionReference.qualification
                                                                         , moduleOrigin = moduleOrigin
                                                                         , name = expressionReference.name
