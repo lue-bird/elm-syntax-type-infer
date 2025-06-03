@@ -3,6 +3,7 @@
 - represent module name as plain string instead of `ELm.Syntax.ModuleName.ModuleName`
 - split `ExpressionReference` into `ExpressionReferenceVariant`, `ExpressionReferenceRecordTypeAliasConstructorFunction` and `ExpressionReference`
 - in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
+- in variant `PatternVariant`, add field `choiceTypeName`
 - `valueAndFunctionDeclarations` and `moduleDeclarationsToTypes` now additionally require the module name. In return, references to things declared in the current module will have the current module name as their origin
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let.

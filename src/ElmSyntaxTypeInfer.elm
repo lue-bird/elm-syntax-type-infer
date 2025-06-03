@@ -4688,6 +4688,7 @@ type Expression
         }
     | ExpressionReferenceVariant
         { moduleOrigin : String
+        , choiceTypeName : String
         , qualification :
             -- `""` for no qualification
             String
@@ -4861,6 +4862,7 @@ type Pattern
     | PatternListExact (List (TypedNode Pattern))
     | PatternVariant
         { moduleOrigin : String
+        , choiceTypeName : String
         , qualification :
             -- `""` for no qualification
             String
@@ -5519,6 +5521,7 @@ patternVariantTypeInfer context patternVariant =
             , value =
                 PatternVariant
                     { moduleOrigin = patternVariant.moduleOrigin
+                    , choiceTypeName = patternVariant.choiceTypeName
                     , qualification = patternVariant.qualification
                     , name = patternVariant.name
                     , values =
@@ -7208,8 +7211,9 @@ expressionReferenceTypeInfer context expressionReference =
                                                 { range = expressionReference.fullRange
                                                 , value =
                                                     ExpressionReferenceVariant
-                                                        { qualification = expressionReference.qualification
-                                                        , moduleOrigin = moduleOrigin
+                                                        { moduleOrigin = moduleOrigin
+                                                        , choiceTypeName = variant.choiceTypeName
+                                                        , qualification = expressionReference.qualification
                                                         , name = expressionReference.name
                                                         }
                                                 , type_ =
@@ -13180,9 +13184,10 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
                                     { range = patternTypedNode.range
                                     , value =
                                         PatternVariant
-                                            { qualification = patternVariant.qualification
+                                            { moduleOrigin = patternVariant.moduleOrigin
+                                            , choiceTypeName = patternVariant.choiceTypeName
+                                            , qualification = patternVariant.qualification
                                             , name = patternVariant.name
-                                            , moduleOrigin = patternVariant.moduleOrigin
                                             , values = valuesSubstituted.nodes
                                             }
                                     , type_ = typeSubstituted.type_
@@ -13398,9 +13403,10 @@ patternMapTypes typeChange pattern =
 
         PatternVariant patternVariant ->
             PatternVariant
-                { qualification = patternVariant.qualification
+                { moduleOrigin = patternVariant.moduleOrigin
+                , choiceTypeName = patternVariant.choiceTypeName
+                , qualification = patternVariant.qualification
                 , name = patternVariant.name
-                , moduleOrigin = patternVariant.moduleOrigin
                 , values =
                     patternVariant.values
                         |> List.map
