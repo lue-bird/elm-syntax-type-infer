@@ -36,7 +36,7 @@ main =
 moduleInterfaceAsTypesToExpression : Elm.Docs.Module -> Elm.Expression
 moduleInterfaceAsTypesToExpression moduleInterface =
     Elm.tuple
-        (moduleNameToExpression (moduleInterface.name |> String.split "."))
+        (Elm.string moduleInterface.name)
         (Elm.record
             [ ( "signatures"
               , Gen.FastDict.fromList
@@ -179,7 +179,7 @@ typeNotVariableToExpression type_ =
         ElmSyntaxTypeInfer.TypeConstruct typeConstruct ->
             Gen.ElmSyntaxTypeInfer.make_.typeConstruct
                 (Elm.record
-                    [ ( "moduleOrigin", typeConstruct.moduleOrigin |> moduleNameToExpression )
+                    [ ( "moduleOrigin", Elm.string typeConstruct.moduleOrigin )
                     , ( "name", Elm.string typeConstruct.name )
                     , ( "arguments", Elm.list (typeConstruct.arguments |> List.map typeToExpression) )
                     ]
@@ -315,6 +315,7 @@ interfaceToType typeInterface =
                                     { moduleOrigin =
                                         (referenceModulePartLast :: referenceModulePartBeforeLastDown)
                                             |> List.reverse
+                                            |> String.join "."
                                     , name = referenceName
                                     , arguments = arguments
                                     }

@@ -1,8 +1,9 @@
 ## 2.0.0 (unreleased)
+- do not parameterize type variables and types, just use regular Type for everything
+- represent module name as plain string instead of `ELm.Syntax.ModuleName.ModuleName`
+- in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let.
-- do not parameterize type variables and types, just use regular Type for everything
-- in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
 
 considering
 - embed origin module if from local module top level as the actual name, not []

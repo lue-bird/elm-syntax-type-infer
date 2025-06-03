@@ -540,22 +540,8 @@ aaaa = \\a -> if a then a else a
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Bool"
-                                                , arguments = []
-                                                }
-                                            )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Bool"
-                                                , arguments = []
-                                                }
-                                            )
+                                    { input = typeBool
+                                    , output = typeBool
                                     }
                                 )
                             )
@@ -877,14 +863,7 @@ orderToInt =
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeFunction
-                                    { input =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { arguments = []
-                                                , moduleOrigin = [ "Basics" ]
-                                                , name = "Order"
-                                                }
-                                            )
+                                    { input = typeOrder
                                     , output =
                                         ElmSyntaxTypeInfer.TypeVariable
                                             { useRange = { end = { column = 20, row = 7 }, start = { column = 26, row = 5 } }
@@ -1013,7 +992,7 @@ doubleTrouble =
                                                             { expression =
                                                                 { range = { end = { column = 16, row = 5 }, start = { column = 15, row = 5 } }
                                                                 , type_ = typeFloat
-                                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
+                                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "a", qualification = "" }
                                                                 }
                                                             , pattern =
                                                                 { range = { end = { column = 12, row = 5 }, start = { column = 9, row = 5 } }
@@ -1032,7 +1011,7 @@ doubleTrouble =
                                             , result =
                                                 { range = { end = { column = 6, row = 7 }, start = { column = 5, row = 7 } }
                                                 , type_ = typeFloat
-                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "b", qualification = [] }
+                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "b", qualification = "" }
                                                 }
                                             }
                                     }
@@ -1277,11 +1256,11 @@ tuple = "" |> Tuple.pair
                     |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
                         declarationTypes
 
-            declarationTypes : FastDict.Dict Elm.Syntax.ModuleName.ModuleName ElmSyntaxTypeInfer.ModuleTypes
+            declarationTypes : FastDict.Dict String ElmSyntaxTypeInfer.ModuleTypes
             declarationTypes =
                 ElmSyntaxTypeInfer.elmCoreTypes
                     |> FastDict.insert
-                        [ "Id" ]
+                        "Id"
                         ([ Elm.Syntax.Declaration.CustomTypeDeclaration
                             { documentation = Nothing
                             , name = Elm.Syntax.Node.empty "Id"
@@ -1329,7 +1308,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Id" ]
+                                    { moduleOrigin = "Id"
                                     , name = "Id"
                                     , arguments = []
                                     }
@@ -1361,11 +1340,11 @@ tuple = "" |> Tuple.pair
                     |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
                         declarationTypes
 
-            declarationTypes : FastDict.Dict Elm.Syntax.ModuleName.ModuleName ElmSyntaxTypeInfer.ModuleTypes
+            declarationTypes : FastDict.Dict String ElmSyntaxTypeInfer.ModuleTypes
             declarationTypes =
                 ElmSyntaxTypeInfer.elmCoreTypes
                     |> FastDict.insert
-                        [ "Id" ]
+                        "Id"
                         ([ Elm.Syntax.Declaration.CustomTypeDeclaration
                             { documentation = Nothing
                             , name = Elm.Syntax.Node.empty "Id"
@@ -1413,7 +1392,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Id" ]
+                                    { moduleOrigin = "Id"
                                     , name = "Id"
                                     , arguments = []
                                     }
@@ -1469,7 +1448,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = []
+                                    { moduleOrigin = ""
                                     , name = "Two"
                                     , arguments = []
                                     }
@@ -1538,7 +1517,7 @@ tuple = "" |> Tuple.pair
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = []
+                                                { moduleOrigin = ""
                                                 , name = "Two"
                                                 , arguments = []
                                                 }
@@ -1573,7 +1552,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Task" ]
+                                    { moduleOrigin = "Task"
                                     , name = "Task"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeVariable
@@ -1736,7 +1715,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = []
+                                    { moduleOrigin = ""
                                     , name = "Record"
                                     , arguments = []
                                     }
@@ -1745,14 +1724,11 @@ tuple = "" |> Tuple.pair
                         )
             )
         , let
-            importedTypes :
-                FastDict.Dict
-                    Elm.Syntax.ModuleName.ModuleName
-                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes : FastDict.Dict String ElmSyntaxTypeInfer.ModuleTypes
             importedTypes =
                 FastDict.union
                     ElmSyntaxTypeInfer.elmCoreTypes
-                    (FastDict.singleton [ "Imported" ]
+                    (FastDict.singleton "Imported"
                         ([ Elm.Syntax.Declaration.AliasDeclaration
                             { documentation = Nothing
                             , name = Elm.Syntax.Node.empty "Record"
@@ -1827,7 +1803,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Imported" ]
+                                    { moduleOrigin = "Imported"
                                     , name = "Record"
                                     , arguments = []
                                     }
@@ -1836,14 +1812,11 @@ tuple = "" |> Tuple.pair
                         )
             )
         , let
-            importedTypes :
-                FastDict.Dict
-                    Elm.Syntax.ModuleName.ModuleName
-                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes : FastDict.Dict String ElmSyntaxTypeInfer.ModuleTypes
             importedTypes =
                 FastDict.union
                     ElmSyntaxTypeInfer.elmCoreTypes
-                    (FastDict.singleton [ "Imported" ]
+                    (FastDict.singleton "Imported"
                         ([ Elm.Syntax.Declaration.AliasDeclaration
                             { documentation = Nothing
                             , name = Elm.Syntax.Node.empty "Record"
@@ -1922,7 +1895,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Imported" ]
+                                    { moduleOrigin = "Imported"
                                     , name = "Record"
                                     , arguments = []
                                     }
@@ -1931,14 +1904,11 @@ tuple = "" |> Tuple.pair
                         )
             )
         , let
-            importedTypes :
-                FastDict.Dict
-                    Elm.Syntax.ModuleName.ModuleName
-                    ElmSyntaxTypeInfer.ModuleTypes
+            importedTypes : FastDict.Dict String ElmSyntaxTypeInfer.ModuleTypes
             importedTypes =
                 FastDict.union
                     ElmSyntaxTypeInfer.elmCoreTypes
-                    (FastDict.singleton [ "Imported" ]
+                    (FastDict.singleton "Imported"
                         ([ Elm.Syntax.Declaration.AliasDeclaration
                             { documentation = Nothing
                             , name = Elm.Syntax.Node.empty "Record"
@@ -2009,7 +1979,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = [ "Imported" ]
+                                    { moduleOrigin = "Imported"
                                     , name = "Record"
                                     , arguments = []
                                     }
@@ -2074,12 +2044,12 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = []
+                                    { moduleOrigin = ""
                                     , name = "Just"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = []
+                                                { moduleOrigin = ""
                                                 , name = "Just"
                                                 , arguments =
                                                     [ typeString
@@ -2172,19 +2142,12 @@ tuple = "" |> Tuple.pair
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = []
+                                                { moduleOrigin = ""
                                                 , name = "L"
                                                 , arguments = []
                                                 }
                                             )
-                                    , output =
-                                        ElmSyntaxTypeInfer.TypeNotVariable
-                                            (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = [ "Basics" ]
-                                                , name = "Bool"
-                                                , arguments = []
-                                                }
-                                            )
+                                    , output = typeBool
                                     }
                                 )
                             )
@@ -2250,7 +2213,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = []
+                                    { moduleOrigin = ""
                                     , name = "L"
                                     , arguments = []
                                     }
@@ -2330,7 +2293,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = []
+                                    { moduleOrigin = ""
                                     , name = "Wrap"
                                     , arguments = []
                                     }
@@ -3004,7 +2967,7 @@ majorVersions = List.map (\\a -> a) [ 2.2 ]
                                                             , result =
                                                                 { range = { end = { column = 34, row = 2 }, start = { column = 33, row = 2 } }
                                                                 , type_ = typeFloat
-                                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
+                                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "a", qualification = "" }
                                                                 }
                                                             }
                                                     }
@@ -3044,7 +3007,7 @@ majorVersions = List.map (\\a -> a) [ 2.2 ]
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
+                                                    { moduleOrigin = "List", name = "map", qualification = "List" }
                                             }
                                         }
                                 }
@@ -3213,8 +3176,8 @@ eat yum = ()
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "List" ]
-                                                    , qualification = [ "List" ]
+                                                    { moduleOrigin = "List"
+                                                    , qualification = "List"
                                                     , name = "map"
                                                     }
                                             }
@@ -3239,8 +3202,8 @@ eat yum = ()
                                                         , type_ = typeFloat
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = []
-                                                                , qualification = []
+                                                                { moduleOrigin = ""
+                                                                , qualification = ""
                                                                 , name = "a"
                                                                 }
                                                         }
@@ -3251,8 +3214,8 @@ eat yum = ()
                                               , type_ = typeList typeFloat
                                               , value =
                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                        { moduleOrigin = []
-                                                        , qualification = []
+                                                        { moduleOrigin = ""
+                                                        , qualification = ""
                                                         , name = "listFloat"
                                                         }
                                               }
@@ -3377,8 +3340,8 @@ eat yum = ()
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "List" ]
-                                                    , qualification = [ "List" ]
+                                                    { moduleOrigin = "List"
+                                                    , qualification = "List"
                                                     , name = "map"
                                                     }
                                             }
@@ -3420,8 +3383,8 @@ eat yum = ()
                                                                             )
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { moduleOrigin = [ "String" ]
-                                                                            , qualification = [ "String" ]
+                                                                            { moduleOrigin = "String"
+                                                                            , qualification = "String"
                                                                             , name = "dropLeft"
                                                                             }
                                                                     }
@@ -3439,8 +3402,8 @@ eat yum = ()
                                                                       , type_ = typeString
                                                                       , value =
                                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                                { moduleOrigin = []
-                                                                                , qualification = []
+                                                                                { moduleOrigin = ""
+                                                                                , qualification = ""
                                                                                 , name = "line"
                                                                                 }
                                                                       }
@@ -3454,8 +3417,8 @@ eat yum = ()
                                               , type_ = typeList typeString
                                               , value =
                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                        { moduleOrigin = []
-                                                        , qualification = []
+                                                        { moduleOrigin = ""
+                                                        , qualification = ""
                                                         , name = "lines"
                                                         }
                                               }
@@ -3587,8 +3550,8 @@ eat yum = ()
                                                     )
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "List" ]
-                                                    , qualification = [ "List" ]
+                                                    { moduleOrigin = "List"
+                                                    , qualification = "List"
                                                     , name = "map"
                                                     }
                                             }
@@ -3614,7 +3577,7 @@ eat yum = ()
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionInfixOperation
                                                                 { operator =
-                                                                    { moduleOrigin = [ "Basics" ]
+                                                                    { moduleOrigin = "Basics"
                                                                     , symbol = "|>"
                                                                     , type_ =
                                                                         ElmSyntaxTypeInfer.TypeNotVariable
@@ -3641,8 +3604,8 @@ eat yum = ()
                                                                     , type_ = typeString
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { moduleOrigin = []
-                                                                            , qualification = []
+                                                                            { moduleOrigin = ""
+                                                                            , qualification = ""
                                                                             , name = "line"
                                                                             }
                                                                     }
@@ -3674,8 +3637,8 @@ eat yum = ()
                                                                                         )
                                                                                 , value =
                                                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                                                        { moduleOrigin = [ "String" ]
-                                                                                        , qualification = [ "String" ]
+                                                                                        { moduleOrigin = "String"
+                                                                                        , qualification = "String"
                                                                                         , name = "dropLeft"
                                                                                         }
                                                                                 }
@@ -3700,8 +3663,8 @@ eat yum = ()
                                               , type_ = typeList typeString
                                               , value =
                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                        { moduleOrigin = []
-                                                        , qualification = []
+                                                        { moduleOrigin = ""
+                                                        , qualification = ""
                                                         , name = "lines"
                                                         }
                                               }
@@ -3825,9 +3788,9 @@ eat yum = ()
                                             , type_ = typeBool
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "Basics" ]
+                                                    { moduleOrigin = "Basics"
                                                     , name = "True"
-                                                    , qualification = []
+                                                    , qualification = ""
                                                     }
                                             }
                                         , onTrue =
@@ -3835,9 +3798,9 @@ eat yum = ()
                                             , type_ = typeList typeString
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = []
+                                                    { moduleOrigin = ""
                                                     , name = "lines"
-                                                    , qualification = []
+                                                    , qualification = ""
                                                     }
                                             }
                                         , onFalse =
@@ -3868,8 +3831,8 @@ eat yum = ()
                                                                 )
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = [ "List" ]
-                                                                , qualification = [ "List" ]
+                                                                { moduleOrigin = "List"
+                                                                , qualification = "List"
                                                                 , name = "map"
                                                                 }
                                                         }
@@ -3895,7 +3858,7 @@ eat yum = ()
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionInfixOperation
                                                                             { operator =
-                                                                                { moduleOrigin = [ "Basics" ]
+                                                                                { moduleOrigin = "Basics"
                                                                                 , symbol = "|>"
                                                                                 , type_ =
                                                                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -3922,8 +3885,8 @@ eat yum = ()
                                                                                 , type_ = typeString
                                                                                 , value =
                                                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                                                        { moduleOrigin = []
-                                                                                        , qualification = []
+                                                                                        { moduleOrigin = ""
+                                                                                        , qualification = ""
                                                                                         , name = "line"
                                                                                         }
                                                                                 }
@@ -3955,8 +3918,8 @@ eat yum = ()
                                                                                                     )
                                                                                             , value =
                                                                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                                                                    { moduleOrigin = [ "String" ]
-                                                                                                    , qualification = [ "String" ]
+                                                                                                    { moduleOrigin = "String"
+                                                                                                    , qualification = "String"
                                                                                                     , name = "dropLeft"
                                                                                                     }
                                                                                             }
@@ -3981,8 +3944,8 @@ eat yum = ()
                                                           , type_ = typeList typeString
                                                           , value =
                                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                                    { moduleOrigin = []
-                                                                    , qualification = []
+                                                                    { moduleOrigin = ""
+                                                                    , qualification = ""
                                                                     , name = "lines"
                                                                     }
                                                           }
@@ -4027,10 +3990,10 @@ unindent lines = lines |> List.map identity
                                             { left =
                                                 { range = { end = { column = 23, row = 3 }, start = { column = 18, row = 3 } }
                                                 , type_ = typeList typeString
-                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "lines", qualification = [] }
+                                                , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "lines", qualification = "" }
                                                 }
                                             , operator =
-                                                { moduleOrigin = [ "Basics" ]
+                                                { moduleOrigin = "Basics"
                                                 , symbol = "|>"
                                                 , type_ =
                                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -4073,7 +4036,7 @@ unindent lines = lines |> List.map identity
                                                                         }
                                                                     )
                                                             , value =
-                                                                ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "Basics" ], name = "identity", qualification = [] }
+                                                                ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "Basics", name = "identity", qualification = "" }
                                                             }
                                                         , argument1Up = []
                                                         , called =
@@ -4097,7 +4060,7 @@ unindent lines = lines |> List.map identity
                                                                                 )
                                                                         }
                                                                     )
-                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
+                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "List", name = "map", qualification = "List" }
                                                             }
                                                         }
                                                 }
@@ -4125,10 +4088,10 @@ unindent lines = lines |> List.map (\\line -> line)
                                         { left =
                                             { range = { end = { column = 23, row = 3 }, start = { column = 18, row = 3 } }
                                             , type_ = typeList typeString
-                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "lines", qualification = [] }
+                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "lines", qualification = "" }
                                             }
                                         , operator =
-                                            { moduleOrigin = [ "Basics" ]
+                                            { moduleOrigin = "Basics"
                                             , symbol = "|>"
                                             , type_ =
                                                 ElmSyntaxTypeInfer.TypeNotVariable
@@ -4191,7 +4154,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                         , result =
                                                                             { range = { end = { column = 50, row = 3 }, start = { column = 46, row = 3 } }
                                                                             , type_ = typeString
-                                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "line", qualification = [] }
+                                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "line", qualification = "" }
                                                                             }
                                                                         }
                                                                 }
@@ -4218,7 +4181,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                             )
                                                                     }
                                                                 )
-                                                        , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [ "List" ], name = "map", qualification = [ "List" ] }
+                                                        , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "List", name = "map", qualification = "List" }
                                                         }
                                                     }
                                             }
@@ -4332,7 +4295,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                 , value =
                                     ElmSyntaxTypeInfer.ExpressionInfixOperation
                                         { operator =
-                                            { moduleOrigin = [ "Basics" ]
+                                            { moduleOrigin = "Basics"
                                             , symbol = "|>"
                                             , type_ =
                                                 ElmSyntaxTypeInfer.TypeNotVariable
@@ -4359,8 +4322,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                             , type_ = typeList typeString
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = []
-                                                    , qualification = []
+                                                    { moduleOrigin = ""
+                                                    , qualification = ""
                                                     , name = "lines"
                                                     }
                                             }
@@ -4398,8 +4361,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                 )
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = [ "List" ]
-                                                                , qualification = [ "List" ]
+                                                                { moduleOrigin = "List"
+                                                                , qualification = "List"
                                                                 , name = "map"
                                                                 }
                                                         }
@@ -4425,7 +4388,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionInfixOperation
                                                                             { operator =
-                                                                                { moduleOrigin = [ "Basics" ]
+                                                                                { moduleOrigin = "Basics"
                                                                                 , symbol = "|>"
                                                                                 , type_ =
                                                                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -4452,8 +4415,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                                 , type_ = typeString
                                                                                 , value =
                                                                                     ElmSyntaxTypeInfer.ExpressionReference
-                                                                                        { moduleOrigin = []
-                                                                                        , qualification = []
+                                                                                        { moduleOrigin = ""
+                                                                                        , qualification = ""
                                                                                         , name = "line"
                                                                                         }
                                                                                 }
@@ -4485,8 +4448,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                                                     )
                                                                                             , value =
                                                                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                                                                    { moduleOrigin = [ "String" ]
-                                                                                                    , qualification = [ "String" ]
+                                                                                                    { moduleOrigin = "String"
+                                                                                                    , qualification = "String"
                                                                                                     , name = "dropLeft"
                                                                                                     }
                                                                                             }
@@ -4633,9 +4596,9 @@ unindent lines = lines |> List.map (\\line -> line)
                                             , type_ = typeBool
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = [ "Basics" ]
+                                                    { moduleOrigin = "Basics"
                                                     , name = "True"
-                                                    , qualification = []
+                                                    , qualification = ""
                                                     }
                                             }
                                         , onTrue =
@@ -4643,9 +4606,9 @@ unindent lines = lines |> List.map (\\line -> line)
                                             , type_ = typeList typeString
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                    { moduleOrigin = []
+                                                    { moduleOrigin = ""
                                                     , name = "lines"
-                                                    , qualification = []
+                                                    , qualification = ""
                                                     }
                                             }
                                         , onFalse =
@@ -4654,7 +4617,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                             , value =
                                                 ElmSyntaxTypeInfer.ExpressionInfixOperation
                                                     { operator =
-                                                        { moduleOrigin = [ "Basics" ]
+                                                        { moduleOrigin = "Basics"
                                                         , symbol = "|>"
                                                         , type_ =
                                                             ElmSyntaxTypeInfer.TypeNotVariable
@@ -4681,8 +4644,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                         , type_ = typeList typeString
                                                         , value =
                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                { moduleOrigin = []
-                                                                , qualification = []
+                                                                { moduleOrigin = ""
+                                                                , qualification = ""
                                                                 , name = "lines"
                                                                 }
                                                         }
@@ -4720,8 +4683,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                             )
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { moduleOrigin = [ "List" ]
-                                                                            , qualification = [ "List" ]
+                                                                            { moduleOrigin = "List"
+                                                                            , qualification = "List"
                                                                             , name = "map"
                                                                             }
                                                                     }
@@ -4747,7 +4710,7 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                                 , value =
                                                                                     ElmSyntaxTypeInfer.ExpressionInfixOperation
                                                                                         { operator =
-                                                                                            { moduleOrigin = [ "Basics" ]
+                                                                                            { moduleOrigin = "Basics"
                                                                                             , symbol = "|>"
                                                                                             , type_ =
                                                                                                 ElmSyntaxTypeInfer.TypeNotVariable
@@ -4774,8 +4737,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                                             , type_ = typeString
                                                                                             , value =
                                                                                                 ElmSyntaxTypeInfer.ExpressionReference
-                                                                                                    { moduleOrigin = []
-                                                                                                    , qualification = []
+                                                                                                    { moduleOrigin = ""
+                                                                                                    , qualification = ""
                                                                                                     , name = "line"
                                                                                                     }
                                                                                             }
@@ -4807,8 +4770,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                                                                 )
                                                                                                         , value =
                                                                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                                                                { moduleOrigin = [ "String" ]
-                                                                                                                , qualification = [ "String" ]
+                                                                                                                { moduleOrigin = "String"
+                                                                                                                , qualification = "String"
                                                                                                                 , name = "dropLeft"
                                                                                                                 }
                                                                                                         }
@@ -4956,8 +4919,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                             )
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { qualification = [ "Tuple" ]
-                                                                            , moduleOrigin = [ "Tuple" ]
+                                                                            { qualification = "Tuple"
+                                                                            , moduleOrigin = "Tuple"
                                                                             , name = "first"
                                                                             }
                                                                     }
@@ -4970,8 +4933,8 @@ unindent lines = lines |> List.map (\\line -> line)
                                                                             )
                                                                     , value =
                                                                         ElmSyntaxTypeInfer.ExpressionReference
-                                                                            { qualification = []
-                                                                            , moduleOrigin = []
+                                                                            { qualification = ""
+                                                                            , moduleOrigin = ""
                                                                             , name = "tuple"
                                                                             }
                                                                     }
@@ -5159,7 +5122,7 @@ waste =
                                                                     { useRange = { end = { column = 14, row = 5 }, start = { column = 13, row = 5 } }
                                                                     , name = "number1"
                                                                     }
-                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
+                                                            , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "a", qualification = "" }
                                                             }
                                                         , signature = Nothing
                                                         , type_ =
@@ -5251,7 +5214,7 @@ waste =
                                                                             { useRange = { end = { column = 15, row = 5 }, start = { column = 13, row = 5 } }
                                                                             , name = "number1"
                                                                             }
-                                                                    , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = [], name = "a", qualification = [] }
+                                                                    , value = ElmSyntaxTypeInfer.ExpressionReference { moduleOrigin = "", name = "a", qualification = "" }
                                                                     }
                                                             }
                                                         , signature = Nothing
@@ -5425,8 +5388,8 @@ waste =
                                                                                 )
                                                                         , value =
                                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                                { moduleOrigin = [ "Basics" ]
-                                                                                , qualification = []
+                                                                                { moduleOrigin = "Basics"
+                                                                                , qualification = ""
                                                                                 , name = "round"
                                                                                 }
                                                                         }
@@ -5438,8 +5401,8 @@ waste =
                                                                         , type_ = typeFloat
                                                                         , value =
                                                                             ElmSyntaxTypeInfer.ExpressionReference
-                                                                                { moduleOrigin = []
-                                                                                , qualification = []
+                                                                                { moduleOrigin = ""
+                                                                                , qualification = ""
                                                                                 , name = "a"
                                                                                 }
                                                                         }
@@ -5523,7 +5486,7 @@ typeList : ElmSyntaxTypeInfer.Type -> ElmSyntaxTypeInfer.Type
 typeList element =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "List" ]
+            { moduleOrigin = "List"
             , name = "List"
             , arguments = [ element ]
             }
@@ -5534,7 +5497,7 @@ typeMaybe : ElmSyntaxTypeInfer.Type -> ElmSyntaxTypeInfer.Type
 typeMaybe value =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "Maybe" ]
+            { moduleOrigin = "Maybe"
             , name = "Maybe"
             , arguments = [ value ]
             }
@@ -5545,7 +5508,7 @@ typeFloat : ElmSyntaxTypeInfer.Type
 typeFloat =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "Basics" ]
+            { moduleOrigin = "Basics"
             , name = "Float"
             , arguments = []
             }
@@ -5556,19 +5519,8 @@ typeInt : ElmSyntaxTypeInfer.Type
 typeInt =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "Basics" ]
+            { moduleOrigin = "Basics"
             , name = "Int"
-            , arguments = []
-            }
-        )
-
-
-typeString : ElmSyntaxTypeInfer.Type
-typeString =
-    ElmSyntaxTypeInfer.TypeNotVariable
-        (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "String" ]
-            , name = "String"
             , arguments = []
             }
         )
@@ -5578,8 +5530,30 @@ typeBool : ElmSyntaxTypeInfer.Type
 typeBool =
     ElmSyntaxTypeInfer.TypeNotVariable
         (ElmSyntaxTypeInfer.TypeConstruct
-            { moduleOrigin = [ "Basics" ]
+            { moduleOrigin = "Basics"
             , name = "Bool"
+            , arguments = []
+            }
+        )
+
+
+typeOrder : ElmSyntaxTypeInfer.Type
+typeOrder =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = "Basics"
+            , name = "Order"
+            , arguments = []
+            }
+        )
+
+
+typeString : ElmSyntaxTypeInfer.Type
+typeString =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = "String"
+            , name = "String"
             , arguments = []
             }
         )
