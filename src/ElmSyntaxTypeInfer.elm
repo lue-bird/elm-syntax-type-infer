@@ -4654,8 +4654,8 @@ okFieldsUnifiedEmptySubstitutionsNone =
 -}
 type alias TypedNode value =
     { range : Elm.Syntax.Range.Range
-    , value : value
     , type_ : Type
+    , value : value
     }
 
 
@@ -4665,6 +4665,7 @@ but its sub-nodes are [`TypedNode`](#TypedNode)s.
 Be aware when trying to match references that they are split into multiple variants:
   - `ExpressionReference` (TODO rename)
   - `ExpressionReferenceVariant`
+  - `ExpressionReferenceRecordTypeAliasConstructorFunction`
 
 -}
 type Expression
@@ -4686,9 +4687,14 @@ type Expression
         , name : String
         }
     | ExpressionReferenceVariant
-        { moduleOrigin :
-            -- `""` for pattern variable and let declaration uses
+        { moduleOrigin : String
+        , qualification :
+            -- `""` for no qualification
             String
+        , name : String
+        }
+    | ExpressionReferenceRecordTypeAliasConstructorFunction
+        { moduleOrigin : String
         , qualification :
             -- `""` for no qualification
             String
@@ -9538,6 +9544,9 @@ expressionTypedNodeUsesOfLocalReferences localReferencesToCollect expressionType
         ExpressionReferenceVariant _ ->
             FastDict.empty
 
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
+            FastDict.empty
+
         ExpressionReference reference ->
             -- we're checking against qualification, not moduleOrigin
             -- because referencing other module-level declared things
@@ -9899,6 +9908,9 @@ expressionContainedTypeVariables expression =
             DictByTypeVariableFromContext.empty
 
         ExpressionReference _ ->
+            DictByTypeVariableFromContext.empty
+
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
             DictByTypeVariableFromContext.empty
 
         ExpressionOperatorFunction _ ->
@@ -10610,6 +10622,33 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
+        ExpressionReferenceRecordTypeAliasConstructorFunction reference ->
+            Result.map
+                (\typeSubstituted ->
+                    if typeSubstituted.unchanged then
+                        { unchanged = True
+                        , node = expressionTypedNode
+                        , substitutions = variableSubstitutionsNone
+                        }
+
+                    else
+                        { unchanged = False
+                        , substitutions = typeSubstituted.substitutions
+                        , node =
+                            { range = expressionTypedNode.range
+                            , value = ExpressionReferenceRecordTypeAliasConstructorFunction reference
+                            , type_ = typeSubstituted.type_
+                            }
+                        }
+                )
+                (expressionTypedNode.type_
+                    |> typeSubstituteVariableByType
+                        { declarationTypes = declarationTypes
+                        , range = expressionTypedNode.range
+                        }
+                        replacement
+                )
+
         ExpressionReferenceVariant reference ->
             Result.map
                 (\typeSubstituted ->
@@ -10624,7 +10663,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = typeSubstituted.substitutions
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionReference reference
+                            , value = ExpressionReferenceVariant reference
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -12093,10 +12132,7 @@ expressionTypedNodeMapTypes typeChange expressionTypedNode =
     }
 
 
-expressionMapTypes :
-    (Type -> Type)
-    -> Expression
-    -> Expression
+expressionMapTypes : (Type -> Type) -> Expression -> Expression
 expressionMapTypes typeChange expression =
     -- IGNORE TCO
     case expression of
@@ -12117,6 +12153,9 @@ expressionMapTypes typeChange expression =
 
         ExpressionReferenceVariant reference ->
             ExpressionReferenceVariant reference
+
+        ExpressionReferenceRecordTypeAliasConstructorFunction reference ->
+            ExpressionReferenceRecordTypeAliasConstructorFunction reference
 
         ExpressionReference reference ->
             ExpressionReference reference

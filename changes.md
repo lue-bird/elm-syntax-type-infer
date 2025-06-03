@@ -1,14 +1,14 @@
 ## 2.0.0 (unreleased)
 - do not parameterize type variables and types, just use regular Type for everything
 - represent module name as plain string instead of `ELm.Syntax.ModuleName.ModuleName`
-- split `ExpressionReference` into `ExpressionReferenceVariant` and `ExpressionReference`
+- split `ExpressionReference` into `ExpressionReferenceVariant`, `ExpressionReferenceRecordTypeAliasConstructorFunction` and `ExpressionReference`
 - in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
 - `valueAndFunctionDeclarations` and `moduleDeclarationsToTypes` now additionally require the module name. In return, references to things declared in the current module will have the current module name as their origin
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let.
 
 considering
-- split ExpressionReference further into ReferenceLetDeclaration, ReferencePatternVariable and ReferenceModuleDeclaration(, ReferenceRecordTypeAliasConstructor)
+- split ExpressionReference further into ExpressionReferenceLetDeclared, ExpressionReferencePatternVariable and ExpressionReferenceModuleDeclared
 - remove "otherModuleDeclaredTypes" in favor of users adding them via FastDict.insert
   into importedTypes (maybe just named types)
 
