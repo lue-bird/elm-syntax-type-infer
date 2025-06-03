@@ -31,7 +31,8 @@ import ElmSyntaxTypeInfer
   }
 ]
     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+        { moduleName = "Sample"
+        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
         , moduleOriginLookup = exampleModuleOriginLookup
         , otherModuleDeclaredTypes =
             []

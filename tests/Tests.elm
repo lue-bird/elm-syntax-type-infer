@@ -5,6 +5,7 @@ import Elm.Syntax.Declaration
 import Elm.Syntax.Exposing
 import Elm.Syntax.Expression
 import Elm.Syntax.Infix
+import Elm.Syntax.Module
 import Elm.Syntax.ModuleName
 import Elm.Syntax.Node
 import Elm.Syntax.Pattern
@@ -39,12 +40,15 @@ suite =
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen
@@ -82,12 +86,15 @@ suite =
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen
@@ -1127,12 +1134,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1178,12 +1188,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1218,12 +1231,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1280,7 +1296,9 @@ tuple = "" |> Tuple.pair
                             }
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                exampleModuleOriginLookup
+                                { moduleName = "A"
+                                , moduleOriginLookup = exampleModuleOriginLookup
+                                }
                             |> .types
                         )
           in
@@ -1295,12 +1313,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = declarationTypes
+                        { moduleName = "A"
+                        , importedTypes = declarationTypes
                         , moduleOriginLookup = moduleOriginLookupImportingId
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookupImportingId
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = moduleOriginLookupImportingId
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1364,7 +1385,9 @@ tuple = "" |> Tuple.pair
                             }
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                exampleModuleOriginLookup
+                                { moduleName = "A"
+                                , moduleOriginLookup = exampleModuleOriginLookup
+                                }
                             |> .types
                         )
           in
@@ -1379,12 +1402,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = declarationTypes
+                        { moduleName = "A"
+                        , importedTypes = declarationTypes
                         , moduleOriginLookup = moduleOriginLookupImportingId
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookupImportingId
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = moduleOriginLookupImportingId
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1413,7 +1439,8 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.CustomTypeDeclaration
@@ -1440,7 +1467,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1448,7 +1477,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = ""
+                                    { moduleOrigin = "A"
                                     , name = "Two"
                                     , arguments = []
                                     }
@@ -1479,7 +1508,8 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.CustomTypeDeclaration
@@ -1506,7 +1536,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1517,7 +1549,7 @@ tuple = "" |> Tuple.pair
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = ""
+                                                { moduleOrigin = "A"
                                                 , name = "Two"
                                                 , arguments = []
                                                 }
@@ -1539,12 +1571,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1578,12 +1613,15 @@ tuple = "" |> Tuple.pair
                     |> expressionWrapInExampleDeclaration
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingProcess
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingProcess
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1684,7 +1722,8 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.AliasDeclaration
@@ -1707,7 +1746,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1715,7 +1756,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = ""
+                                    { moduleOrigin = "A"
                                     , name = "Record"
                                     , arguments = []
                                     }
@@ -1749,7 +1790,9 @@ tuple = "" |> Tuple.pair
                             }
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                exampleModuleOriginLookup
+                                { moduleName = "A"
+                                , moduleOriginLookup = exampleModuleOriginLookup
+                                }
                             |> .types
                         )
                     )
@@ -1790,12 +1833,15 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = importedTypes
+                        { moduleName = "A"
+                        , importedTypes = importedTypes
                         , moduleOriginLookup = moduleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = moduleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1837,7 +1883,9 @@ tuple = "" |> Tuple.pair
                             }
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                exampleModuleOriginLookup
+                                { moduleName = "A"
+                                , moduleOriginLookup = exampleModuleOriginLookup
+                                }
                             |> .types
                         )
                     )
@@ -1882,12 +1930,15 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = importedTypes
+                        { moduleName = "A"
+                        , importedTypes = importedTypes
                         , moduleOriginLookup = moduleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = moduleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -1929,7 +1980,9 @@ tuple = "" |> Tuple.pair
                             }
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                exampleModuleOriginLookup
+                                { moduleName = "A"
+                                , moduleOriginLookup = exampleModuleOriginLookup
+                                }
                             |> .types
                         )
                     )
@@ -1966,12 +2019,15 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = importedTypes
+                        { moduleName = "A"
+                        , importedTypes = importedTypes
                         , moduleOriginLookup = moduleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = moduleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2023,7 +2079,8 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.AliasDeclaration
@@ -2036,7 +2093,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2044,12 +2103,12 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = ""
+                                    { moduleOrigin = "A"
                                     , name = "Just"
                                     , arguments =
                                         [ ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = ""
+                                                { moduleOrigin = "A"
                                                 , name = "Just"
                                                 , arguments =
                                                     [ typeString
@@ -2110,7 +2169,8 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.AliasDeclaration
@@ -2131,7 +2191,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2142,7 +2204,7 @@ tuple = "" |> Tuple.pair
                                     { input =
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeConstruct
-                                                { moduleOrigin = ""
+                                                { moduleOrigin = "A"
                                                 , name = "L"
                                                 , arguments = []
                                                 }
@@ -2179,7 +2241,8 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingDict
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.AliasDeclaration
@@ -2205,7 +2268,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingDict
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingDict
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2213,7 +2278,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = ""
+                                    { moduleOrigin = "A"
                                     , name = "L"
                                     , arguments = []
                                     }
@@ -2242,7 +2307,8 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookupImportingDict
                         , otherModuleDeclaredTypes =
                             [ Elm.Syntax.Declaration.AliasDeclaration
@@ -2285,7 +2351,9 @@ tuple = "" |> Tuple.pair
                                 }
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookupImportingDict
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookupImportingDict
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2293,7 +2361,7 @@ tuple = "" |> Tuple.pair
                         (Ok
                             (ElmSyntaxTypeInfer.TypeNotVariable
                                 (ElmSyntaxTypeInfer.TypeConstruct
-                                    { moduleOrigin = ""
+                                    { moduleOrigin = "A"
                                     , name = "Wrap"
                                     , arguments = []
                                     }
@@ -2397,12 +2465,15 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2502,12 +2573,15 @@ tuple = "" |> Tuple.pair
                   }
                 ]
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.andThen toSingleInferredDeclaration
@@ -2889,6 +2963,38 @@ b = a
                             ]
                         )
             )
+        , Test.test "inner result types and module origins are consistent in transitive un-annotated top level declarations: a = 2.2; b = a"
+            (\() ->
+                """module A exposing (..)
+a = 2.2
+b = a
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map
+                        (\declarationsTyped ->
+                            declarationsTyped
+                                |> FastDict.map (\_ -> .result)
+                                |> FastDict.toList
+                        )
+                    |> Expect.equal
+                        (Ok
+                            [ ( "a"
+                              , { type_ = typeFloat
+                                , range = { end = { column = 8, row = 2 }, start = { column = 5, row = 2 } }
+                                , value = ElmSyntaxTypeInfer.ExpressionFloat 2.2
+                                }
+                              )
+                            , ( "b"
+                              , { type_ = typeFloat
+                                , range = { end = { column = 6, row = 3 }, start = { column = 5, row = 3 } }
+                                , value =
+                                    ElmSyntaxTypeInfer.ExpressionReference
+                                        { moduleOrigin = "A", name = "a", qualification = "" }
+                                }
+                              )
+                            ]
+                        )
+            )
         , Test.test "mutually influencing un-annotated top level declarations: a = 2 + b; b = a"
             (\() ->
                 """module A exposing (..)
@@ -3139,12 +3245,15 @@ eat yum = ()
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -3301,12 +3410,15 @@ eat yum = ()
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -3511,12 +3623,15 @@ eat yum = ()
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -3767,12 +3882,15 @@ eat yum = ()
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -4278,12 +4396,15 @@ unindent lines = lines |> List.map (\\line -> line)
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -4575,12 +4696,15 @@ unindent lines = lines |> List.map (\\line -> line)
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -4873,12 +4997,15 @@ unindent lines = lines |> List.map (\\line -> line)
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -5001,12 +5128,15 @@ unindent lines = lines |> List.map (\\line -> line)
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -5314,12 +5444,15 @@ waste =
                 }
                     |> List.singleton
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = "A"
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = exampleModuleOriginLookup
                         , otherModuleDeclaredTypes =
                             []
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    exampleModuleOriginLookup
+                                    { moduleName = "A"
+                                    , moduleOriginLookup = exampleModuleOriginLookup
+                                    }
                                 |> .types
                         }
                     |> Result.map (FastDict.map (\_ -> .result))
@@ -5592,12 +5725,15 @@ expressionToInferredType :
 expressionToInferredType expression =
     [ expressionWrapInExampleDeclaration expression ]
         |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-            { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+            { moduleName = "A"
+            , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
             , moduleOriginLookup = exampleModuleOriginLookup
             , otherModuleDeclaredTypes =
                 []
                     |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                        exampleModuleOriginLookup
+                        { moduleName = "A"
+                        , moduleOriginLookup = exampleModuleOriginLookup
+                        }
                     |> .types
             }
         |> Debug.log "actual"
@@ -5680,6 +5816,12 @@ typeInferModuleFromSource moduleSource =
                         parsed.imports
                             |> ElmSyntaxTypeInfer.importsToModuleOriginLookup
                                 ElmSyntaxTypeInfer.elmCoreTypes
+
+                    moduleName : String
+                    moduleName =
+                        parsed.moduleDefinition
+                            |> Elm.Syntax.Node.value
+                            |> moduleHeaderName
                 in
                 parsed.declarations
                     |> List.filterMap
@@ -5704,13 +5846,32 @@ typeInferModuleFromSource moduleSource =
                                     Nothing
                         )
                     |> ElmSyntaxTypeInfer.valueAndFunctionDeclarations
-                        { importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
+                        { moduleName = moduleName
+                        , importedTypes = ElmSyntaxTypeInfer.elmCoreTypes
                         , moduleOriginLookup = moduleOriginLookup
                         , otherModuleDeclaredTypes =
                             parsed.declarations
                                 |> List.map Elm.Syntax.Node.value
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
-                                    moduleOriginLookup
+                                    { moduleName = moduleName
+                                    , moduleOriginLookup = moduleOriginLookup
+                                    }
                                 |> .types
                         }
             )
+
+
+moduleHeaderName : Elm.Syntax.Module.Module -> String
+moduleHeaderName moduleHeader =
+    (case moduleHeader of
+        Elm.Syntax.Module.NormalModule header ->
+            header.moduleName
+
+        Elm.Syntax.Module.PortModule header ->
+            header.moduleName
+
+        Elm.Syntax.Module.EffectModule header ->
+            header.moduleName
+    )
+        |> Elm.Syntax.Node.value
+        |> String.join "."
