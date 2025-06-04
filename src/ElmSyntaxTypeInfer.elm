@@ -1565,20 +1565,17 @@ typeApplyVariableSubstitutions context substitutions originalType =
 
                         else
                             case
-                                equivalentVariableSetMerge
+                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                    substitutedType.substitutions.variableToType
                                     substitutedType.substitutions.equivalentVariables
                                     batchOfSubstitutionsToApply.newEquivalentVariables
                             of
                                 Err error ->
                                     Err error
 
-                                Ok newEquivalentVariables ->
+                                Ok withNewEquivalentVariables ->
                                     typeApplyVariableSubstitutions context
-                                        { variableToType =
-                                            substitutedType.substitutions.variableToType
-                                        , equivalentVariables =
-                                            newEquivalentVariables
-                                        }
+                                        withNewEquivalentVariables
                                         substitutedType.type_
 
 
@@ -2862,16 +2859,10 @@ variableSubstitutionsMerge context a b =
                 Ok b
 
             _ :: _ ->
-                Result.map
-                    (\abEquivalentVariables ->
-                        { variableToType = b.variableToType
-                        , equivalentVariables = abEquivalentVariables
-                        }
-                    )
-                    (equivalentVariableSetMerge
-                        a.equivalentVariables
-                        b.equivalentVariables
-                    )
+                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                    b.variableToType
+                    a.equivalentVariables
+                    b.equivalentVariables
 
     else if b.variableToType |> DictByTypeVariableFromContext.isEmpty then
         case b.equivalentVariables of
@@ -2879,16 +2870,10 @@ variableSubstitutionsMerge context a b =
                 Ok a
 
             _ :: _ ->
-                Result.map
-                    (\abEquivalentVariables ->
-                        { variableToType = a.variableToType
-                        , equivalentVariables = abEquivalentVariables
-                        }
-                    )
-                    (equivalentVariableSetMerge
-                        a.equivalentVariables
-                        b.equivalentVariables
-                    )
+                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                    a.variableToType
+                    a.equivalentVariables
+                    b.equivalentVariables
 
     else
         DictByTypeVariableFromContext.merge
@@ -2957,16 +2942,10 @@ variableSubstitutionsMerge context a b =
             )
             a.variableToType
             b.variableToType
-            (Result.map
-                (\abEquivalentVariables ->
-                    { variableToType = DictByTypeVariableFromContext.empty
-                    , equivalentVariables = abEquivalentVariables
-                    }
-                )
-                (equivalentVariableSetMerge
-                    a.equivalentVariables
-                    b.equivalentVariables
-                )
+            (equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                DictByTypeVariableFromContext.empty
+                a.equivalentVariables
+                b.equivalentVariables
             )
 
 
@@ -3115,26 +3094,36 @@ listAppendFastButInReverseOrder aList bList =
             listAppendFastButInReverseOrder aTail (aHead :: bList)
 
 
-equivalentVariableSetMerge :
-    List EquivalentTypeVariableSet
+equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType :
+    DictByTypeVariableFromContext TypeNotVariable
     -> List EquivalentTypeVariableSet
-    -> Result String (List EquivalentTypeVariableSet)
-equivalentVariableSetMerge a b =
+    -> List EquivalentTypeVariableSet
+    -> Result String VariableSubstitutions
+equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType variableToType a b =
     case a of
         [] ->
-            Ok b
+            Ok
+                { variableToType = variableToType
+                , equivalentVariables = b
+                }
 
         _ :: _ ->
             case b of
                 [] ->
-                    Ok a
+                    Ok
+                        { variableToType = variableToType
+                        , equivalentVariables = a
+                        }
 
                 _ :: _ ->
                     Result.map
                         (\mergedIntoA ->
-                            listAppendFastButInReverseOrder
-                                mergedIntoA.sets
-                                mergedIntoA.bRemaining
+                            { variableToType = variableToType
+                            , equivalentVariables =
+                                listAppendFastButInReverseOrder
+                                    mergedIntoA.sets
+                                    mergedIntoA.bRemaining
+                            }
                         )
                         (a
                             |> listFoldlWhileOkFrom
@@ -6873,17 +6862,10 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
                                                     (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                     (useType |> typeContainedVariables)
                                             then
-                                                Result.map
-                                                    (\mergedEquivalentVariables ->
-                                                        { equivalentVariables =
-                                                            mergedEquivalentVariables
-                                                        , variableToType = soFarWithUses.variableToType
-                                                        }
-                                                    )
-                                                    (equivalentVariableSetMerge
-                                                        soFarWithUses.equivalentVariables
-                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                    )
+                                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                                    soFarWithUses.variableToType
+                                                    soFarWithUses.equivalentVariables
+                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
 
                                             else
                                                 variableSubstitutionsMerge context
@@ -6955,16 +6937,10 @@ substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression context 
                                                     (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                     (useType |> typeContainedVariables)
                                             then
-                                                Result.map
-                                                    (\mergedEquivalentVariables ->
-                                                        { equivalentVariables = mergedEquivalentVariables
-                                                        , variableToType = soFarWithUses.variableToType
-                                                        }
-                                                    )
-                                                    (equivalentVariableSetMerge
-                                                        soFarWithUses.equivalentVariables
-                                                        useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                    )
+                                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                                    soFarWithUses.variableToType
+                                                    soFarWithUses.equivalentVariables
+                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
 
                                             else
                                                 variableSubstitutionsMerge context
@@ -11805,16 +11781,10 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                                                 (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
                                                                                 (useType |> typeContainedVariables)
                                                                         then
-                                                                            Result.map
-                                                                                (\mergedEquivalentVariables ->
-                                                                                    { equivalentVariables = mergedEquivalentVariables
-                                                                                    , variableToType = soFarWithUses.variableToType
-                                                                                    }
-                                                                                )
-                                                                                (equivalentVariableSetMerge
-                                                                                    soFarWithUses.equivalentVariables
-                                                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-                                                                                )
+                                                                            equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                                                                soFarWithUses.variableToType
+                                                                                soFarWithUses.equivalentVariables
+                                                                                useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
 
                                                                         else
                                                                             variableSubstitutionsMerge
@@ -12493,20 +12463,17 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
 
                         else
                             case
-                                equivalentVariableSetMerge
+                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                    substitutedExpressionTypedNode.substitutions.variableToType
                                     substitutedExpressionTypedNode.substitutions.equivalentVariables
                                     batchOfSubstitutionsToApply.newEquivalentVariables
                             of
                                 Err error ->
                                     Err error
 
-                                Ok newEquivalentVariables ->
+                                Ok withNewEquivalentVariables ->
                                     expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                        { variableToType =
-                                            substitutedExpressionTypedNode.substitutions.variableToType
-                                        , equivalentVariables =
-                                            newEquivalentVariables
-                                        }
+                                        withNewEquivalentVariables
                                         substitutedExpressionTypedNode.node
 
 
@@ -12624,20 +12591,17 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
 
                         else
                             case
-                                equivalentVariableSetMerge
+                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                    substitutedPatternTypedNode.substitutions.variableToType
                                     substitutedPatternTypedNode.substitutions.equivalentVariables
                                     batchOfSubstitutionsToApply.newEquivalentVariables
                             of
                                 Err error ->
                                     Err error
 
-                                Ok newEquivalentVariables ->
+                                Ok withNewEquivalentVariables ->
                                     patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                        { variableToType =
-                                            substitutedPatternTypedNode.substitutions.variableToType
-                                        , equivalentVariables =
-                                            newEquivalentVariables
-                                        }
+                                        withNewEquivalentVariables
                                         substitutedPatternTypedNode.node
 
 
