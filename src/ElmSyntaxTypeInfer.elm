@@ -763,12 +763,22 @@ while also using an (implicitly) imported `List` type.
 type alias ModuleOriginLookup =
     { references :
         FastDict.Dict
-            ( {- qualification -} String, String )
+            -- qualification
             String
+            (FastDict.Dict
+                -- name
+                String
+                String
+            )
     , typeConstructs :
         FastDict.Dict
-            ( {- qualification -} String, String )
+            -- qualification
             String
+            (FastDict.Dict
+                -- name
+                String
+                String
+            )
     , keepOperatorIsExposedFromParserAdvanced : Bool
     , ignoreOperatorIsExposedFromParserAdvanced : Bool
     }
@@ -839,100 +849,102 @@ importsToModuleOriginLookup modulesTypes imports =
 
                                     Just importAlias ->
                                         importAlias
-
-                            exposedTypeConstructsFromImportedModuleItself :
-                                FastDict.Dict
-                                    ( String, String )
-                                    String
-                            exposedTypeConstructsFromImportedModuleItself =
-                                moduleTypes.choiceTypes
-                                    |> FastDict.foldl
-                                        (\choiceTypeName _ variantNamesSoFar ->
-                                            variantNamesSoFar
-                                                |> FastDict.insert
-                                                    ( moduleAliasOrFullName, choiceTypeName )
-                                                    syntaxImport.moduleName
-                                        )
-                                        (moduleTypes.typeAliases
-                                            |> FastDict.foldl
-                                                (\typeAliasName _ referenceNamesSoFar ->
-                                                    referenceNamesSoFar
-                                                        |> FastDict.insert
-                                                            ( moduleAliasOrFullName, typeAliasName )
-                                                            syntaxImport.moduleName
-                                                )
-                                                FastDict.empty
-                                        )
-
-                            exposedReferencesFromImportedModuleItself :
-                                FastDict.Dict
-                                    ( String, String )
-                                    String
-                            exposedReferencesFromImportedModuleItself =
-                                moduleTypes.choiceTypes
-                                    |> FastDict.foldl
-                                        (\_ choiceType variantNamesSoFar ->
-                                            choiceType.variants
-                                                |> FastDict.foldl
-                                                    (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
-                                                        soFarAndVariantNamesOfCurrentChoiceType
-                                                            |> FastDict.insert
-                                                                ( moduleAliasOrFullName, variantName )
-                                                                syntaxImport.moduleName
-                                                    )
-                                                    variantNamesSoFar
-                                        )
-                                        (moduleTypes.signatures
-                                            |> FastDict.foldl
-                                                (\reference _ referenceNamesSoFar ->
-                                                    referenceNamesSoFar
-                                                        |> FastDict.insert
-                                                            ( moduleAliasOrFullName, reference )
-                                                            syntaxImport.moduleName
-                                                )
-                                                (moduleTypes.typeAliases
-                                                    |> FastDict.foldl
-                                                        (\typeAliasName typeAliasInfo recordTypeALiasNamesSoFar ->
-                                                            case typeAliasInfo.recordFieldOrder of
-                                                                Nothing ->
-                                                                    recordTypeALiasNamesSoFar
-
-                                                                Just _ ->
-                                                                    recordTypeALiasNamesSoFar
-                                                                        |> FastDict.insert
-                                                                            ( moduleAliasOrFullName, typeAliasName )
-                                                                            syntaxImport.moduleName
-                                                        )
-                                                        FastDict.empty
-                                                )
-                                        )
                         in
                         { keepOperatorIsExposedFromParserAdvanced =
                             soFar.keepOperatorIsExposedFromParserAdvanced
                         , ignoreOperatorIsExposedFromParserAdvanced =
                             soFar.ignoreOperatorIsExposedFromParserAdvanced
                         , references =
-                            syntaxImport.referenceExposes
-                                |> List.foldl
-                                    (\expose referencesSoFarAndImportExposed ->
-                                        referencesSoFarAndImportExposed
-                                            |> FastDict.insert ( "", expose )
-                                                syntaxImport.moduleName
+                            soFar.references
+                                |> FastDict.update ""
+                                    (\exposedReferencesSoFar ->
+                                        syntaxImport.referenceExposes
+                                            |> List.foldl
+                                                (\expose referencesSoFarAndImportExposed ->
+                                                    referencesSoFarAndImportExposed
+                                                        |> FastDict.insert expose
+                                                            syntaxImport.moduleName
+                                                )
+                                                (exposedReferencesSoFar
+                                                    |> Maybe.withDefault FastDict.empty
+                                                )
+                                            |> Just
                                     )
-                                    soFar.references
-                                |> FastDict.union
-                                    exposedReferencesFromImportedModuleItself
+                                |> FastDict.insert moduleAliasOrFullName
+                                    (moduleTypes.choiceTypes
+                                        |> FastDict.foldl
+                                            (\_ choiceType variantNamesSoFar ->
+                                                choiceType.variants
+                                                    |> FastDict.foldl
+                                                        (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
+                                                            soFarAndVariantNamesOfCurrentChoiceType
+                                                                |> FastDict.insert
+                                                                    variantName
+                                                                    syntaxImport.moduleName
+                                                        )
+                                                        variantNamesSoFar
+                                            )
+                                            (moduleTypes.signatures
+                                                |> FastDict.foldl
+                                                    (\reference _ referenceNamesSoFar ->
+                                                        referenceNamesSoFar
+                                                            |> FastDict.insert
+                                                                reference
+                                                                syntaxImport.moduleName
+                                                    )
+                                                    (moduleTypes.typeAliases
+                                                        |> FastDict.foldl
+                                                            (\typeAliasName typeAliasInfo recordTypeALiasNamesSoFar ->
+                                                                case typeAliasInfo.recordFieldOrder of
+                                                                    Nothing ->
+                                                                        recordTypeALiasNamesSoFar
+
+                                                                    Just _ ->
+                                                                        recordTypeALiasNamesSoFar
+                                                                            |> FastDict.insert
+                                                                                typeAliasName
+                                                                                syntaxImport.moduleName
+                                                            )
+                                                            FastDict.empty
+                                                    )
+                                            )
+                                    )
                         , typeConstructs =
-                            syntaxImport.typeExposes
-                                |> List.foldl
-                                    (\expose typeConstructsSoFarAndImportExposed ->
-                                        typeConstructsSoFarAndImportExposed
-                                            |> FastDict.insert ( "", expose )
-                                                syntaxImport.moduleName
+                            soFar.typeConstructs
+                                |> FastDict.update ""
+                                    (\typeConstructsExposedSoFar ->
+                                        syntaxImport.typeExposes
+                                            |> List.foldl
+                                                (\expose typeConstructsSoFarAndImportExposed ->
+                                                    typeConstructsSoFarAndImportExposed
+                                                        |> FastDict.insert expose
+                                                            syntaxImport.moduleName
+                                                )
+                                                (typeConstructsExposedSoFar
+                                                    |> Maybe.withDefault FastDict.empty
+                                                )
+                                            |> Just
                                     )
-                                    soFar.typeConstructs
-                                |> FastDict.union
-                                    exposedTypeConstructsFromImportedModuleItself
+                                |> FastDict.insert moduleAliasOrFullName
+                                    (moduleTypes.choiceTypes
+                                        |> FastDict.foldl
+                                            (\choiceTypeName _ variantNamesSoFar ->
+                                                variantNamesSoFar
+                                                    |> FastDict.insert
+                                                        choiceTypeName
+                                                        syntaxImport.moduleName
+                                            )
+                                            (moduleTypes.typeAliases
+                                                |> FastDict.foldl
+                                                    (\typeAliasName _ referenceNamesSoFar ->
+                                                        referenceNamesSoFar
+                                                            |> FastDict.insert
+                                                                typeAliasName
+                                                                syntaxImport.moduleName
+                                                    )
+                                                    FastDict.empty
+                                            )
+                                    )
                         }
             )
             { references = FastDict.empty
@@ -1344,7 +1356,14 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                 qualification =
                     qualificationAsDotSeparated |> String.join "."
             in
-            case moduleOriginLookup.typeConstructs |> FastDict.get ( qualification, unqualifiedName ) of
+            case
+                moduleOriginLookup.typeConstructs
+                    |> FastDict.get qualification
+                    |> Maybe.andThen
+                        (\lookupInModule ->
+                            lookupInModule |> FastDict.get unqualifiedName
+                        )
+            of
                 Nothing ->
                     Err
                         (case qualificationAsDotSeparated of
@@ -5434,7 +5453,14 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                         , declarationTypes : ModuleTypes
                         }
                 moduleOriginInfoOrError =
-                    case context.moduleOriginLookup.references |> FastDict.get ( qualification, qualified.name ) of
+                    case
+                        context.moduleOriginLookup.references
+                            |> FastDict.get qualification
+                            |> Maybe.andThen
+                                (\inModuleLookup ->
+                                    inModuleLookup |> FastDict.get qualified.name
+                                )
+                    of
                         Nothing ->
                             Err
                                 ("("
@@ -7140,7 +7166,11 @@ expressionReferenceTypeInfer context expressionReference =
         Nothing ->
             case
                 context.moduleOriginLookup.references
-                    |> FastDict.get ( expressionReference.qualification, expressionReference.name )
+                    |> FastDict.get expressionReference.qualification
+                    |> Maybe.andThen
+                        (\inModuleLookup ->
+                            inModuleLookup |> FastDict.get expressionReference.name
+                        )
             of
                 Nothing ->
                     Err
@@ -8537,70 +8567,83 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
             , ignoreOperatorIsExposedFromParserAdvanced =
                 context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
             , typeConstructs =
-                context.otherModuleDeclaredTypes.choiceTypes
-                    |> FastDict.foldl
-                        (\choiceTypeName _ soFar ->
-                            soFar
-                                |> FastDict.insert ( "", choiceTypeName )
-                                    context.moduleName
-                        )
-                        (context.otherModuleDeclaredTypes.typeAliases
-                            |> FastDict.foldl
-                                (\typeAliasName _ soFar ->
-                                    soFar
-                                        |> FastDict.insert ( "", typeAliasName )
-                                            context.moduleName
-                                )
-                                context.moduleOriginLookup.typeConstructs
-                        )
-            , references =
-                context.otherModuleDeclaredTypes.choiceTypes
-                    |> FastDict.foldl
-                        (\_ info soFar ->
-                            info.variants
+                context.moduleOriginLookup.typeConstructs
+                    |> FastDict.update ""
+                        (\existingExposedTypeConstructs ->
+                            context.otherModuleDeclaredTypes.choiceTypes
                                 |> FastDict.foldl
-                                    (\variantName _ soFarWithVariantNames ->
-                                        soFarWithVariantNames
-                                            |> FastDict.insert ( "", variantName )
+                                    (\choiceTypeName _ soFar ->
+                                        soFar
+                                            |> FastDict.insert choiceTypeName
                                                 context.moduleName
                                     )
-                                    soFar
+                                    (context.otherModuleDeclaredTypes.typeAliases
+                                        |> FastDict.foldl
+                                            (\typeAliasName _ soFar ->
+                                                soFar
+                                                    |> FastDict.insert typeAliasName
+                                                        context.moduleName
+                                            )
+                                            (existingExposedTypeConstructs
+                                                |> Maybe.withDefault FastDict.empty
+                                            )
+                                    )
+                                |> Just
                         )
-                        (context.otherModuleDeclaredTypes.typeAliases
-                            |> FastDict.foldl
-                                (\typeAliasName info soFar ->
-                                    case info.recordFieldOrder of
-                                        Nothing ->
-                                            soFar
-
-                                        Just _ ->
-                                            soFar
-                                                |> FastDict.insert ( "", typeAliasName )
-                                                    context.moduleName
-                                )
-                                (context.otherModuleDeclaredTypes.signatures
-                                    |> FastDict.foldl
-                                        (\signatureName _ soFar ->
-                                            soFar
-                                                |> FastDict.insert ( "", signatureName )
-                                                    context.moduleName
-                                        )
-                                        (syntaxValueAndFunctionDeclarations
-                                            |> List.foldl
-                                                (\valueOrFunctionDeclaration soFar ->
-                                                    soFar
-                                                        |> FastDict.insert
-                                                            ( ""
-                                                            , valueOrFunctionDeclaration.declaration
-                                                                |> Elm.Syntax.Node.value
-                                                                |> .name
-                                                                |> Elm.Syntax.Node.value
-                                                            )
+            , references =
+                context.moduleOriginLookup.references
+                    |> FastDict.update ""
+                        (\existingExposedReferences ->
+                            context.otherModuleDeclaredTypes.choiceTypes
+                                |> FastDict.foldl
+                                    (\_ info soFar ->
+                                        info.variants
+                                            |> FastDict.foldl
+                                                (\variantName _ soFarWithVariantNames ->
+                                                    soFarWithVariantNames
+                                                        |> FastDict.insert variantName
                                                             context.moduleName
                                                 )
-                                                context.moduleOriginLookup.references
-                                        )
-                                )
+                                                soFar
+                                    )
+                                    (context.otherModuleDeclaredTypes.typeAliases
+                                        |> FastDict.foldl
+                                            (\typeAliasName info soFar ->
+                                                case info.recordFieldOrder of
+                                                    Nothing ->
+                                                        soFar
+
+                                                    Just _ ->
+                                                        soFar
+                                                            |> FastDict.insert typeAliasName
+                                                                context.moduleName
+                                            )
+                                            (context.otherModuleDeclaredTypes.signatures
+                                                |> FastDict.foldl
+                                                    (\signatureName _ soFar ->
+                                                        soFar
+                                                            |> FastDict.insert signatureName
+                                                                context.moduleName
+                                                    )
+                                                    (syntaxValueAndFunctionDeclarations
+                                                        |> List.foldl
+                                                            (\valueOrFunctionDeclaration soFar ->
+                                                                soFar
+                                                                    |> FastDict.insert
+                                                                        (valueOrFunctionDeclaration.declaration
+                                                                            |> Elm.Syntax.Node.value
+                                                                            |> .name
+                                                                            |> Elm.Syntax.Node.value
+                                                                        )
+                                                                        context.moduleName
+                                                            )
+                                                            (existingExposedReferences
+                                                                |> Maybe.withDefault FastDict.empty
+                                                            )
+                                                    )
+                                            )
+                                    )
+                                |> Just
                         )
             }
 
@@ -13858,8 +13901,8 @@ moduleDeclarationsToTypes :
     -> { types : ModuleTypes, errors : List String }
 moduleDeclarationsToTypes context declarations =
     let
-        moduleOriginLookup : ModuleOriginLookup
-        moduleOriginLookup =
+        localDeclarationsOriginLookup : { typeConstructs : FastDict.Dict String String, references : FastDict.Dict String String }
+        localDeclarationsOriginLookup =
             declarations
                 |> List.foldl
                     (\declaration soFar ->
@@ -13871,14 +13914,11 @@ moduleDeclarationsToTypes context declarations =
                                 soFar
 
                             Elm.Syntax.Declaration.FunctionDeclaration declarationValueOrFunction ->
-                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
-                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
-                                , typeConstructs = soFar.typeConstructs
+                                { typeConstructs = soFar.typeConstructs
                                 , references =
                                     soFar.references
                                         |> FastDict.insert
-                                            ( ""
-                                            , declarationValueOrFunction.declaration
+                                            (declarationValueOrFunction.declaration
                                                 |> Elm.Syntax.Node.value
                                                 |> .name
                                                 |> Elm.Syntax.Node.value
@@ -13887,23 +13927,19 @@ moduleDeclarationsToTypes context declarations =
                                 }
 
                             Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
-                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
-                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
-                                , references = soFar.references
+                                { references = soFar.references
                                 , typeConstructs =
                                     soFar.typeConstructs
                                         |> FastDict.insert
-                                            ( "", declarationTypeAlias.name |> Elm.Syntax.Node.value )
+                                            (declarationTypeAlias.name |> Elm.Syntax.Node.value)
                                             context.moduleName
                                 }
 
                             Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
-                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
-                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
-                                , typeConstructs =
+                                { typeConstructs =
                                     soFar.typeConstructs
                                         |> FastDict.insert
-                                            ( "", declarationChoiceType.name |> Elm.Syntax.Node.value )
+                                            (declarationChoiceType.name |> Elm.Syntax.Node.value)
                                             context.moduleName
                                 , references =
                                     declarationChoiceType.constructors
@@ -13911,24 +13947,60 @@ moduleDeclarationsToTypes context declarations =
                                             (\(Elm.Syntax.Node.Node _ variant) soFarReferencesIncludingVariantsSoFar ->
                                                 soFarReferencesIncludingVariantsSoFar
                                                     |> FastDict.insert
-                                                        ( "", variant.name |> Elm.Syntax.Node.value )
+                                                        (variant.name |> Elm.Syntax.Node.value)
                                                         context.moduleName
                                             )
                                             soFar.references
                                 }
 
                             Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
-                                { ignoreOperatorIsExposedFromParserAdvanced = soFar.ignoreOperatorIsExposedFromParserAdvanced
-                                , keepOperatorIsExposedFromParserAdvanced = soFar.keepOperatorIsExposedFromParserAdvanced
-                                , typeConstructs = soFar.typeConstructs
+                                { typeConstructs = soFar.typeConstructs
                                 , references =
                                     soFar.references
                                         |> FastDict.insert
-                                            ( "", declarationPortSignature.name |> Elm.Syntax.Node.value )
+                                            (declarationPortSignature.name |> Elm.Syntax.Node.value)
                                             context.moduleName
                                 }
                     )
-                    context.moduleOriginLookup
+                    { references = FastDict.empty
+                    , typeConstructs = FastDict.empty
+                    }
+
+        moduleOriginLookup : ModuleOriginLookup
+        moduleOriginLookup =
+            { keepOperatorIsExposedFromParserAdvanced =
+                context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced
+            , ignoreOperatorIsExposedFromParserAdvanced =
+                context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
+            , references =
+                context.moduleOriginLookup.references
+                    |> FastDict.update ""
+                        (\contextExposedReferencesOrNothing ->
+                            Just
+                                (case contextExposedReferencesOrNothing of
+                                    Nothing ->
+                                        localDeclarationsOriginLookup.references
+
+                                    Just contextReferences ->
+                                        FastDict.union contextReferences
+                                            localDeclarationsOriginLookup.references
+                                )
+                        )
+            , typeConstructs =
+                context.moduleOriginLookup.typeConstructs
+                    |> FastDict.update ""
+                        (\contextExposedTypeConstructsOrNothing ->
+                            Just
+                                (case contextExposedTypeConstructsOrNothing of
+                                    Nothing ->
+                                        localDeclarationsOriginLookup.typeConstructs
+
+                                    Just contextReferences ->
+                                        FastDict.union contextReferences
+                                            localDeclarationsOriginLookup.typeConstructs
+                                )
+                        )
+            }
     in
     declarations
         |> List.foldl
