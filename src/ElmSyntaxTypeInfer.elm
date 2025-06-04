@@ -2834,8 +2834,7 @@ type alias VariableSubstitutions =
 
 type alias EquivalentTypeVariableSet =
     { constraint : Maybe TypeVariableConstraint
-    , -- TODO rename to overarchingUseRange
-      overarchingRange : Elm.Syntax.Range.Range
+    , overarchingUseRange : Elm.Syntax.Range.Range
     , variables : TypeVariableFromContextSet
     }
 
@@ -3043,7 +3042,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     { variables =
                         DictByTypeVariableFromContext.twoDistinct aEquivalentVariable () bEquivalentVariable ()
                     , constraint = abConstraint
-                    , overarchingRange =
+                    , overarchingUseRange =
                         rangeOverarching
                             aEquivalentVariable.useRange
                             bEquivalentVariable.useRange
@@ -3063,9 +3062,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                             equivalentVariablesSet0.variables
                                 |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
                         , constraint = unifiedConstraint
-                        , overarchingRange =
+                        , overarchingUseRange =
                             rangeOverarching
-                                equivalentVariablesSet0.overarchingRange
+                                equivalentVariablesSet0.overarchingUseRange
                                 bEquivalentVariable.useRange
                         }
                             :: listAppendFastButInReverseOrder
@@ -3084,9 +3083,9 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                             equivalentVariablesSet0.variables
                                 |> DictByTypeVariableFromContext.insert aEquivalentVariable ()
                         , constraint = unifiedConstraint
-                        , overarchingRange =
+                        , overarchingUseRange =
                             rangeOverarching
-                                equivalentVariablesSet0.overarchingRange
+                                equivalentVariablesSet0.overarchingUseRange
                                 aEquivalentVariable.useRange
                         }
                             :: listAppendFastButInReverseOrder
@@ -3171,10 +3170,10 @@ equivalentVariableSetMerge a b =
                                                                 aEquivalentVariableSet.variables
                                                                 bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
-                                                        , overarchingRange =
+                                                        , overarchingUseRange =
                                                             rangeOverarching
-                                                                aEquivalentVariableSet.overarchingRange
-                                                                bEquivalentVariableSetAndRemaining.value.overarchingRange
+                                                                aEquivalentVariableSet.overarchingUseRange
+                                                                bEquivalentVariableSetAndRemaining.value.overarchingUseRange
                                                         }
                                                             :: soFar.sets
                                                     , bRemaining = bEquivalentVariableSetAndRemaining.remaining
@@ -3193,7 +3192,7 @@ equivalentTypeVariableSetShareElements :
     -> EquivalentTypeVariableSet
     -> Bool
 equivalentTypeVariableSetShareElements a b =
-    rangeAreOverlapping a.overarchingRange b.overarchingRange
+    rangeAreOverlapping a.overarchingUseRange b.overarchingUseRange
         && (a.variables
                 |> DictByTypeVariableFromContext.any
                     (\aKey () ->
@@ -3221,7 +3220,7 @@ equivalentTypeVariableFromContextSetContains :
     -> EquivalentTypeVariableSet
     -> Bool
 equivalentTypeVariableFromContextSetContains variableToCheckInclusionFor equivalentTypeVariableFromContextSet =
-    (equivalentTypeVariableFromContextSet.overarchingRange
+    (equivalentTypeVariableFromContextSet.overarchingUseRange
         |> rangeIncludesRange variableToCheckInclusionFor.useRange
     )
         && (equivalentTypeVariableFromContextSet.variables
@@ -9284,7 +9283,7 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
                     [ { variables =
                             DictByTypeVariableFromContext.twoDistinct aVariable () bVariable ()
                       , constraint = abConstraint
-                      , overarchingRange =
+                      , overarchingUseRange =
                             rangeOverarching
                                 aVariable.useRange
                                 bVariable.useRange
@@ -13457,7 +13456,7 @@ equivalentVariablesCreateCondensedVariable set =
 
         Just variable0 ->
             Ok
-                { useRange = set.overarchingRange
+                { useRange = set.overarchingUseRange
                 , name =
                     case set.constraint of
                         Nothing ->
