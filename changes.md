@@ -6,7 +6,8 @@
 - in variant `PatternVariant`, add field `choiceTypeName`
 - `valueAndFunctionDeclarations` and `moduleDeclarationsToTypes` now additionally require the module name. In return, references to things declared in the current module will have the current module name as their origin
 - keep use ranges at resulting type variables for the output
-  to determine which variables are introduced by a let.
+  to determine which variables are introduced by a let
+- a bit faster
 
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_

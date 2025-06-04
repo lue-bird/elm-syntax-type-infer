@@ -2826,15 +2826,16 @@ variable substitutions get passed all the way to the top and only get processed 
 -}
 type alias VariableSubstitutions =
     { equivalentVariables :
-        List EquivalentVariableSet
+        List EquivalentTypeVariableSet
     , variableToType :
         DictByTypeVariableFromContext TypeNotVariable
     }
 
 
-type alias EquivalentVariableSet =
+type alias EquivalentTypeVariableSet =
     { constraint : Maybe TypeVariableConstraint
-    , overarchingRange : Elm.Syntax.Range.Range
+    , -- TODO rename to overarchingUseRange
+      overarchingRange : Elm.Syntax.Range.Range
     , variables : TypeVariableFromContextSet
     }
 
@@ -3015,8 +3016,8 @@ variableSubstitutionsMerge4 context a b c d =
 equivalentVariablesMergeWithSetOf2 :
     TypeVariableFromContext
     -> TypeVariableFromContext
-    -> List EquivalentVariableSet
-    -> Result String (List EquivalentVariableSet)
+    -> List EquivalentTypeVariableSet
+    -> Result String (List EquivalentTypeVariableSet)
 equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equivalentVariables =
     if TypeVariableFromContext.equals aEquivalentVariable bEquivalentVariable then
         Ok equivalentVariables
@@ -3029,11 +3030,11 @@ equivalentVariablesMergeWithSetOf2 aEquivalentVariable bEquivalentVariable equiv
 
 
 equivalentVariablesMergeWithSetOf2Into :
-    List EquivalentVariableSet
+    List EquivalentTypeVariableSet
     -> TypeVariableFromContext
     -> TypeVariableFromContext
-    -> List EquivalentVariableSet
-    -> Result String (List EquivalentVariableSet)
+    -> List EquivalentTypeVariableSet
+    -> Result String (List EquivalentTypeVariableSet)
 equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVariable equivalentVariables =
     case equivalentVariables of
         [] ->
@@ -3055,7 +3056,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                 )
 
         equivalentVariablesSet0 :: equivalentVariablesSet1Up ->
-            if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member aEquivalentVariable then
+            if equivalentVariablesSet0 |> equivalentTypeVariableFromContextSetContains aEquivalentVariable then
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
@@ -3076,7 +3077,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                         (bEquivalentVariable.name |> typeVariableConstraint)
                     )
 
-            else if equivalentVariablesSet0.variables |> DictByTypeVariableFromContext.member bEquivalentVariable then
+            else if equivalentVariablesSet0 |> equivalentTypeVariableFromContextSetContains bEquivalentVariable then
                 Result.map
                     (\unifiedConstraint ->
                         { variables =
@@ -3116,9 +3117,9 @@ listAppendFastButInReverseOrder aList bList =
 
 
 equivalentVariableSetMerge :
-    List EquivalentVariableSet
-    -> List EquivalentVariableSet
-    -> Result String (List EquivalentVariableSet)
+    List EquivalentTypeVariableSet
+    -> List EquivalentTypeVariableSet
+    -> Result String (List EquivalentTypeVariableSet)
 equivalentVariableSetMerge a b =
     case a of
         [] ->
@@ -3145,9 +3146,9 @@ equivalentVariableSetMerge a b =
                                             |> listMapAndFirstJustAndRemainingAnyOrder
                                                 (\bEquivalentVariableSet ->
                                                     if
-                                                        typeVariableFromContextSetShareElements
-                                                            aEquivalentVariableSet.variables
-                                                            bEquivalentVariableSet.variables
+                                                        equivalentTypeVariableSetShareElements
+                                                            aEquivalentVariableSet
+                                                            bEquivalentVariableSet
                                                     then
                                                         Just bEquivalentVariableSet
 
@@ -3187,16 +3188,45 @@ equivalentVariableSetMerge a b =
                         )
 
 
-typeVariableFromContextSetShareElements :
-    TypeVariableFromContextSet
-    -> TypeVariableFromContextSet
+equivalentTypeVariableSetShareElements :
+    EquivalentTypeVariableSet
+    -> EquivalentTypeVariableSet
     -> Bool
-typeVariableFromContextSetShareElements a b =
-    a
-        |> DictByTypeVariableFromContext.any
-            (\aKey () ->
-                b |> DictByTypeVariableFromContext.member aKey
-            )
+equivalentTypeVariableSetShareElements a b =
+    rangeAreOverlapping a.overarchingRange b.overarchingRange
+        && (a.variables
+                |> DictByTypeVariableFromContext.any
+                    (\aKey () ->
+                        b |> equivalentTypeVariableFromContextSetContains aKey
+                    )
+           )
+
+
+rangeAreOverlapping : Elm.Syntax.Range.Range -> Elm.Syntax.Range.Range -> Bool
+rangeAreOverlapping a b =
+    locationGreaterOrEqualThan a.end b.start
+        && locationGreaterOrEqualThan b.end a.start
+
+
+locationGreaterOrEqualThan : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
+locationGreaterOrEqualThan a b =
+    (a.row - b.row > 0)
+        || ((a.row - b.row == 0)
+                && (a.column - b.column >= 0)
+           )
+
+
+equivalentTypeVariableFromContextSetContains :
+    TypeVariableFromContext
+    -> EquivalentTypeVariableSet
+    -> Bool
+equivalentTypeVariableFromContextSetContains variableToCheckInclusionFor equivalentTypeVariableFromContextSet =
+    (equivalentTypeVariableFromContextSet.overarchingRange
+        |> rangeIncludesRange variableToCheckInclusionFor.useRange
+    )
+        && (equivalentTypeVariableFromContextSet.variables
+                |> DictByTypeVariableFromContext.member variableToCheckInclusionFor
+           )
 
 
 listMapAndFirstJustAndRemainingAnyOrder :
@@ -10118,7 +10148,7 @@ expressionCaseOfCaseContainedTypeVariables syntaxCase =
 
 
 createEquivalentVariablesToCondensedVariableLookup :
-    List EquivalentVariableSet
+    List EquivalentTypeVariableSet
     -> Result String (DictByTypeVariableFromContext TypeVariableFromContext)
 createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
     equivalentVariables
@@ -12491,7 +12521,7 @@ createBatchOfSubstitutionsToApply :
     ->
         Result
             String
-            { newEquivalentVariables : List EquivalentVariableSet
+            { newEquivalentVariables : List EquivalentTypeVariableSet
             , substituteVariableByType :
                 TypeVariableFromContext
                 -> Maybe Type
@@ -13418,7 +13448,7 @@ patternMapTypes typeChange pattern =
                 }
 
 
-equivalentVariablesCreateCondensedVariable : EquivalentVariableSet -> Result String TypeVariableFromContext
+equivalentVariablesCreateCondensedVariable : EquivalentTypeVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
     -- TODO figure out why getMaxKey for example doesn't work. Makes no sense to me
     case set.variables |> DictByTypeVariableFromContext.getMinKey of
