@@ -13905,25 +13905,22 @@ moduleDeclarationsToTypes :
     { moduleOriginLookup : ModuleOriginLookup
     , moduleName : String
     }
-    -> List Elm.Syntax.Declaration.Declaration
+    -> List (Elm.Syntax.Node.Node Elm.Syntax.Declaration.Declaration)
     -> { types : ModuleTypes, errors : List String }
 moduleDeclarationsToTypes context declarations =
     let
         moduleOriginLookup : ModuleOriginLookup
         moduleOriginLookup =
-            { keepOperatorIsExposedFromParserAdvanced =
-                context.moduleOriginLookup.keepOperatorIsExposedFromParserAdvanced
-            , ignoreOperatorIsExposedFromParserAdvanced =
-                context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
-            , references =
-                context.moduleOriginLookup.references
+            { keepOperatorIsExposedFromParserAdvanced = {- dummy -} False
+            , ignoreOperatorIsExposedFromParserAdvanced = {- dummy -} False
+            , references = {- dummy -} FastDict.empty
             , typeConstructs =
                 context.moduleOriginLookup.typeConstructs
                     |> FastDict.update ""
                         (\contextExposedTypeConstructsOrNothing ->
                             declarations
                                 |> List.foldl
-                                    (\declaration soFar ->
+                                    (\(Elm.Syntax.Node.Node _ declaration) soFar ->
                                         case declaration of
                                             Elm.Syntax.Declaration.InfixDeclaration _ ->
                                                 soFar
@@ -13958,7 +13955,7 @@ moduleDeclarationsToTypes context declarations =
     in
     declarations
         |> List.foldl
-            (\declaration soFar ->
+            (\(Elm.Syntax.Node.Node _ declaration) soFar ->
                 case declaration of
                     Elm.Syntax.Declaration.InfixDeclaration _ ->
                         soFar

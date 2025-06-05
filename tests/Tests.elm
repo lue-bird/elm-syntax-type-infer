@@ -1292,6 +1292,7 @@ tuple = "" |> Tuple.pair
                                     }
                                 ]
                             }
+                            |> Elm.Syntax.Node.empty
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                 { moduleName = "A"
@@ -1381,6 +1382,7 @@ tuple = "" |> Tuple.pair
                                     }
                                 ]
                             }
+                            |> Elm.Syntax.Node.empty
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                 { moduleName = "A"
@@ -1463,6 +1465,7 @@ tuple = "" |> Tuple.pair
                                         }
                                     ]
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -1532,6 +1535,7 @@ tuple = "" |> Tuple.pair
                                         }
                                     ]
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -1742,6 +1746,7 @@ tuple = "" |> Tuple.pair
                                             ]
                                         )
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -1786,6 +1791,7 @@ tuple = "" |> Tuple.pair
                                         ]
                                     )
                             }
+                            |> Elm.Syntax.Node.empty
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                 { moduleName = "A"
@@ -1879,6 +1885,7 @@ tuple = "" |> Tuple.pair
                                         ]
                                     )
                             }
+                            |> Elm.Syntax.Node.empty
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                 { moduleName = "A"
@@ -1976,6 +1983,7 @@ tuple = "" |> Tuple.pair
                                         ]
                                     )
                             }
+                            |> Elm.Syntax.Node.empty
                          ]
                             |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                 { moduleName = "A"
@@ -2089,6 +2097,7 @@ tuple = "" |> Tuple.pair
                                     Elm.Syntax.Node.empty
                                         (Elm.Syntax.TypeAnnotation.GenericType "a")
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -2187,6 +2196,7 @@ tuple = "" |> Tuple.pair
                                             ]
                                         )
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -2264,6 +2274,7 @@ tuple = "" |> Tuple.pair
                                             ]
                                         )
                                 }
+                                |> Elm.Syntax.Node.empty
                             ]
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
@@ -2348,6 +2359,7 @@ tuple = "" |> Tuple.pair
                                     ]
                                 }
                             ]
+                                |> List.map Elm.Syntax.Node.empty
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = "A"
                                     , moduleOriginLookup = exampleModuleOriginLookupImportingDict
@@ -5851,7 +5863,6 @@ typeInferModuleFromSource moduleSource =
                         , moduleOriginLookup = moduleOriginLookup
                         , otherModuleDeclaredTypes =
                             parsed.declarations
-                                |> List.map Elm.Syntax.Node.value
                                 |> ElmSyntaxTypeInfer.moduleDeclarationsToTypes
                                     { moduleName = moduleName
                                     , moduleOriginLookup = moduleOriginLookup
