@@ -64,31 +64,27 @@ compare a b =
 
 lessThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
 lessThan a b =
-    if a.useRange.start.row - b.useRange.start.row < 0 then
-        True
+    (a.useRange.start.row - b.useRange.start.row < 0)
+        || (if a.useRange.start.row - b.useRange.start.row > 0 then
+                False
 
-    else if a.useRange.start.row - b.useRange.start.row > 0 then
-        False
+            else
+                -- a.start.row == b.start.row
+                (a.useRange.start.column - b.useRange.start.column < 0)
+                    || (if a.useRange.start.column - b.useRange.start.column > 0 then
+                            False
 
-    else
-    -- a.start.row == b.start.row
-    if
-        a.useRange.start.column - b.useRange.start.column < 0
-    then
-        True
+                        else
+                        -- b.start == b.end
+                        if
+                            locationEquals a.useRange.end b.useRange.end
+                        then
+                            a.name < b.name
 
-    else if a.useRange.start.column - b.useRange.start.column > 0 then
-        False
-
-    else
-    -- b.start == b.end
-    if
-        locationEquals a.useRange.end b.useRange.end
-    then
-        a.name < b.name
-
-    else
-        locationLessThen a.useRange.end b.useRange.end
+                        else
+                            locationLessThen a.useRange.end b.useRange.end
+                       )
+           )
 
 
 locationLessThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool
@@ -101,31 +97,27 @@ locationLessThen a b =
 
 greaterThan : TypeVariableFromContext -> TypeVariableFromContext -> Bool
 greaterThan a b =
-    if a.useRange.start.row - b.useRange.start.row > 0 then
-        True
+    (a.useRange.start.row - b.useRange.start.row > 0)
+        || (if a.useRange.start.row - b.useRange.start.row < 0 then
+                False
 
-    else if a.useRange.start.row - b.useRange.start.row < 0 then
-        False
+            else
+                -- a.start.row == b.start.row
+                (a.useRange.start.column - b.useRange.start.column > 0)
+                    || (if a.useRange.start.column - b.useRange.start.column < 0 then
+                            False
 
-    else
-    -- a.start.row == b.start.row
-    if
-        a.useRange.start.column - b.useRange.start.column > 0
-    then
-        True
+                        else
+                        -- a.start == b.start
+                        if
+                            locationEquals a.useRange.end b.useRange.end
+                        then
+                            a.name > b.name
 
-    else if a.useRange.start.column - b.useRange.start.column < 0 then
-        False
-
-    else
-    -- a.start == b.start
-    if
-        locationEquals a.useRange.end b.useRange.end
-    then
-        a.name > b.name
-
-    else
-        locationGreaterThen a.useRange.end b.useRange.end
+                        else
+                            locationGreaterThen a.useRange.end b.useRange.end
+                       )
+           )
 
 
 locationGreaterThen : Elm.Syntax.Range.Location -> Elm.Syntax.Range.Location -> Bool

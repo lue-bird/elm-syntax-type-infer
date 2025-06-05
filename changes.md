@@ -21,6 +21,7 @@ optimization ideas
 - check for equivalent variable set overarching use range
 - convert Result to { ok, List error }
 - typeVariablesFromContextToDisambiguationLookup use DictByTypeVariableFromContext.mapAccum
+- split DictByTypeVariableFromContext into first by Range dict, then by string dict
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration

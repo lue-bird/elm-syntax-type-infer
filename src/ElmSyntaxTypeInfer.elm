@@ -1636,7 +1636,7 @@ typeSubstituteVariableByType context replacement type_ =
                                 }
 
                         TypeNotVariable replacementTypeNotVariable ->
-                            case typeVariable |> .name |> typeVariableConstraint of
+                            case typeVariable.name |> typeVariableConstraint of
                                 Nothing ->
                                     Ok
                                         { unchanged = False
@@ -2356,21 +2356,23 @@ typeIsNumber :
 typeIsNumber declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> .name |> typeVariableConstraint of
+            case typeVariable.name |> typeVariableConstraint of
                 Nothing ->
                     False
 
-                Just TypeVariableConstraintAppendable ->
-                    True
+                Just constraint ->
+                    case constraint of
+                        TypeVariableConstraintAppendable ->
+                            True
 
-                Just TypeVariableConstraintCompappend ->
-                    True
+                        TypeVariableConstraintCompappend ->
+                            True
 
-                Just TypeVariableConstraintComparable ->
-                    False
+                        TypeVariableConstraintComparable ->
+                            False
 
-                Just TypeVariableConstraintNumber ->
-                    False
+                        TypeVariableConstraintNumber ->
+                            False
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableIsNumber declarationTypes
@@ -2439,21 +2441,23 @@ typeIsAppendable :
 typeIsAppendable declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> .name |> typeVariableConstraint of
+            case typeVariable.name |> typeVariableConstraint of
                 Nothing ->
                     False
 
-                Just TypeVariableConstraintAppendable ->
-                    True
+                Just constraint ->
+                    case constraint of
+                        TypeVariableConstraintAppendable ->
+                            True
 
-                Just TypeVariableConstraintCompappend ->
-                    True
+                        TypeVariableConstraintCompappend ->
+                            True
 
-                Just TypeVariableConstraintComparable ->
-                    False
+                        TypeVariableConstraintComparable ->
+                            False
 
-                Just TypeVariableConstraintNumber ->
-                    False
+                        TypeVariableConstraintNumber ->
+                            False
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableIsAppendable declarationTypes
@@ -2527,21 +2531,23 @@ typeIsComparable :
 typeIsComparable declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> .name |> typeVariableConstraint of
+            case typeVariable.name |> typeVariableConstraint of
                 Nothing ->
                     False
 
-                Just TypeVariableConstraintAppendable ->
-                    False
+                Just constraint ->
+                    case constraint of
+                        TypeVariableConstraintAppendable ->
+                            False
 
-                Just TypeVariableConstraintCompappend ->
-                    True
+                        TypeVariableConstraintCompappend ->
+                            True
 
-                Just TypeVariableConstraintComparable ->
-                    True
+                        TypeVariableConstraintComparable ->
+                            True
 
-                Just TypeVariableConstraintNumber ->
-                    True
+                        TypeVariableConstraintNumber ->
+                            True
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableIsComparable declarationTypes
@@ -2643,21 +2649,23 @@ typeIsCompappend :
 typeIsCompappend declarationTypes type_ =
     case type_ of
         TypeVariable typeVariable ->
-            case typeVariable |> .name |> typeVariableConstraint of
+            case typeVariable.name |> typeVariableConstraint of
                 Nothing ->
                     False
 
-                Just TypeVariableConstraintAppendable ->
-                    False
+                Just constraint ->
+                    case constraint of
+                        TypeVariableConstraintAppendable ->
+                            False
 
-                Just TypeVariableConstraintCompappend ->
-                    True
+                        TypeVariableConstraintCompappend ->
+                            True
 
-                Just TypeVariableConstraintComparable ->
-                    False
+                        TypeVariableConstraintComparable ->
+                            False
 
-                Just TypeVariableConstraintNumber ->
-                    False
+                        TypeVariableConstraintNumber ->
+                            False
 
         TypeNotVariable typeNotVariable ->
             typeNotVariableIsCompappend declarationTypes
@@ -6724,9 +6732,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         Elm.Syntax.Expression.LetFunction letValueOrFunctionDeclaration ->
                             let
                                 (Elm.Syntax.Node.Node _ name) =
-                                    letValueOrFunctionDeclaration.declaration
+                                    (letValueOrFunctionDeclaration.declaration
                                         |> Elm.Syntax.Node.value
-                                        |> .name
+                                    ).name
                             in
                             case letValueOrFunctionDeclaration.signature of
                                 Nothing ->
@@ -7051,8 +7059,8 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
                             (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
                                 { declarationTypes = context.declarationTypes
                                 , range =
-                                    { start = syntaxCasePattern |> Elm.Syntax.Node.range |> .start
-                                    , end = syntaxCaseResult |> Elm.Syntax.Node.range |> .end
+                                    { start = (syntaxCasePattern |> Elm.Syntax.Node.range).start
+                                    , end = (syntaxCaseResult |> Elm.Syntax.Node.range).end
                                     }
                                 }
                                 patternIntroducedVariables
@@ -7854,8 +7862,8 @@ expressionInfixOperationTypeInfer context infixOperation =
             , range =
                 infixOperationApproximateOperatorRange
                     { operator = infixOperation.operator
-                    , leftEnd = infixOperation.left |> Elm.Syntax.Node.range |> .end
-                    , rightStart = infixOperation.right |> Elm.Syntax.Node.range |> .start
+                    , leftEnd = (infixOperation.left |> Elm.Syntax.Node.range).end
+                    , rightStart = (infixOperation.right |> Elm.Syntax.Node.range).start
                     }
             }
             infixOperation.operator
@@ -8630,9 +8638,9 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                             (\valueOrFunctionDeclaration soFar ->
                                                                 soFar
                                                                     |> FastDict.insert
-                                                                        (valueOrFunctionDeclaration.declaration
+                                                                        ((valueOrFunctionDeclaration.declaration
                                                                             |> Elm.Syntax.Node.value
-                                                                            |> .name
+                                                                         ).name
                                                                             |> Elm.Syntax.Node.value
                                                                         )
                                                                         context.moduleName
@@ -8664,9 +8672,9 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                         let
                             name : String
                             name =
-                                syntaxValueOrFunctionDeclaration.declaration
+                                (syntaxValueOrFunctionDeclaration.declaration
                                     |> Elm.Syntax.Node.value
-                                    |> .name
+                                ).name
                                     |> Elm.Syntax.Node.value
                         in
                         case syntaxValueOrFunctionDeclaration.signature of
@@ -9080,13 +9088,13 @@ syntaxValueOrFunctionDeclarationRange syntaxValueOrFunctionDeclaration =
                         signatureRange.start
 
                     Nothing ->
-                        syntaxValueOrFunctionDeclaration.declaration
+                        (syntaxValueOrFunctionDeclaration.declaration
                             |> Elm.Syntax.Node.range
-                            |> .start
+                        ).start
     , end =
-        syntaxValueOrFunctionDeclaration.declaration
+        (syntaxValueOrFunctionDeclaration.declaration
             |> Elm.Syntax.Node.range
-            |> .end
+        ).end
     }
 
 
@@ -13918,9 +13926,9 @@ moduleDeclarationsToTypes context declarations =
                                 , references =
                                     soFar.references
                                         |> FastDict.insert
-                                            (declarationValueOrFunction.declaration
+                                            ((declarationValueOrFunction.declaration
                                                 |> Elm.Syntax.Node.value
-                                                |> .name
+                                             ).name
                                                 |> Elm.Syntax.Node.value
                                             )
                                             context.moduleName
