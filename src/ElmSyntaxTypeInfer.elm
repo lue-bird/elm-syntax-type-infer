@@ -1322,21 +1322,35 @@ exposesCombineFrom soFar syntaxExposes =
 
 
 syntaxToType :
-    ModuleOriginLookup
+    FastDict.Dict
+        -- qualification
+        String
+        (FastDict.Dict
+            -- name
+            String
+            String
+        )
     -> Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
     -> Result String Type
-syntaxToType moduleOriginLookup syntaxTypeNode =
-    syntaxToTypeInRootRange moduleOriginLookup
+syntaxToType typeConstructModuleOriginLookup syntaxTypeNode =
+    syntaxToTypeInRootRange typeConstructModuleOriginLookup
         (syntaxTypeNode |> Elm.Syntax.Node.range)
         syntaxTypeNode
 
 
 syntaxToTypeInRootRange :
-    ModuleOriginLookup
+    FastDict.Dict
+        -- qualification
+        String
+        (FastDict.Dict
+            -- name
+            String
+            String
+        )
     -> Elm.Syntax.Range.Range
     -> Elm.Syntax.Node.Node Elm.Syntax.TypeAnnotation.TypeAnnotation
     -> Result String Type
-syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
+syntaxToTypeInRootRange typeConstructModuleOriginLookup rootRange syntaxTypeNode =
     -- IGNORE TCO
     case syntaxTypeNode |> Elm.Syntax.Node.value of
         Elm.Syntax.TypeAnnotation.Unit ->
@@ -1357,7 +1371,7 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                     qualificationAsDotSeparated |> String.join "."
             in
             case
-                moduleOriginLookup.typeConstructs
+                typeConstructModuleOriginLookup
                     |> FastDict.get qualification
                     |> Maybe.andThen
                         (\lookupInModule ->
@@ -1393,7 +1407,9 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                         (argumentNodes
                             |> listMapAndCombineOk
                                 (\argument ->
-                                    argument |> syntaxToTypeInRootRange moduleOriginLookup rootRange
+                                    argument
+                                        |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                            rootRange
                                 )
                         )
 
@@ -1403,7 +1419,9 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                     okTypeUnit
 
                 [ inParens ] ->
-                    inParens |> syntaxToTypeInRootRange moduleOriginLookup rootRange
+                    inParens
+                        |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                            rootRange
 
                 [ syntaxPart0, syntaxPart1 ] ->
                     Result.map2
@@ -1411,8 +1429,14 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                             TypeNotVariable
                                 (TypeTuple { part0 = part0, part1 = part1 })
                         )
-                        (syntaxPart0 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
-                        (syntaxPart1 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                        (syntaxPart0
+                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                rootRange
+                        )
+                        (syntaxPart1
+                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                rootRange
+                        )
 
                 [ syntaxPart0, syntaxPart1, syntaxPart2 ] ->
                     Result.map3
@@ -1420,9 +1444,18 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                             TypeNotVariable
                                 (TypeTriple { part0 = part0, part1 = part1, part2 = part2 })
                         )
-                        (syntaxPart0 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
-                        (syntaxPart1 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
-                        (syntaxPart2 |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                        (syntaxPart0
+                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                rootRange
+                        )
+                        (syntaxPart1
+                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                rootRange
+                        )
+                        (syntaxPart2
+                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                rootRange
+                        )
 
                 _ :: _ :: _ :: _ :: _ ->
                     Err "too many tuple parts"
@@ -1437,7 +1470,10 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                                 (\fieldValueType ->
                                     soFar |> FastDict.insert fieldName fieldValueType
                                 )
-                                (fieldValue |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                                (fieldValue
+                                    |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                        rootRange
+                                )
                         )
                 )
 
@@ -1467,7 +1503,10 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                                         (\fieldValueType ->
                                             soFar |> FastDict.insert fieldName fieldValueType
                                         )
-                                        (fieldValue |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                                        (fieldValue
+                                            |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                                                rootRange
+                                        )
                                 )
                         )
 
@@ -1477,8 +1516,14 @@ syntaxToTypeInRootRange moduleOriginLookup rootRange syntaxTypeNode =
                     TypeNotVariable
                         (TypeFunction { input = input, output = output })
                 )
-                (syntaxInput |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
-                (syntaxOutput |> syntaxToTypeInRootRange moduleOriginLookup rootRange)
+                (syntaxInput
+                    |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                        rootRange
+                )
+                (syntaxOutput
+                    |> syntaxToTypeInRootRange typeConstructModuleOriginLookup
+                        rootRange
+                )
 
 
 qualifiedToString :
@@ -6774,7 +6819,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                             }
                                         )
                                         (signature.typeAnnotation
-                                            |> syntaxToType context.moduleOriginLookup
+                                            |> syntaxToType context.moduleOriginLookup.typeConstructs
                                         )
                 )
         )
@@ -7753,7 +7798,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 )
                         )
                         (letValueOrFunctionSignature.typeAnnotation
-                            |> syntaxToType context.moduleOriginLookup
+                            |> syntaxToType context.moduleOriginLookup.typeConstructs
                         )
         )
         (implementation.arguments
@@ -8702,7 +8747,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                             Just (Elm.Syntax.Node.Node _ signature) ->
                                 case
                                     signature.typeAnnotation
-                                        |> syntaxToType moduleOriginLookup
+                                        |> syntaxToType moduleOriginLookup.typeConstructs
                                 of
                                     Err _ ->
                                         -- error will be reported later
@@ -13909,49 +13954,52 @@ moduleDeclarationsToTypes :
     -> { types : ModuleTypes, errors : List String }
 moduleDeclarationsToTypes context declarations =
     let
-        moduleOriginLookup : ModuleOriginLookup
-        moduleOriginLookup =
-            { keepOperatorIsExposedFromParserAdvanced = {- dummy -} False
-            , ignoreOperatorIsExposedFromParserAdvanced = {- dummy -} False
-            , references = {- dummy -} FastDict.empty
-            , typeConstructs =
-                context.moduleOriginLookup.typeConstructs
-                    |> FastDict.update ""
-                        (\contextExposedTypeConstructsOrNothing ->
-                            declarations
-                                |> List.foldl
-                                    (\(Elm.Syntax.Node.Node _ declaration) soFar ->
-                                        case declaration of
-                                            Elm.Syntax.Declaration.InfixDeclaration _ ->
-                                                soFar
+        typeConstructModuleOriginLookup :
+            FastDict.Dict
+                -- qualification
+                String
+                (FastDict.Dict
+                    -- name
+                    String
+                    String
+                )
+        typeConstructModuleOriginLookup =
+            context.moduleOriginLookup.typeConstructs
+                |> FastDict.update ""
+                    (\contextExposedTypeConstructsOrNothing ->
+                        declarations
+                            |> List.foldl
+                                (\(Elm.Syntax.Node.Node _ declaration) soFar ->
+                                    case declaration of
+                                        Elm.Syntax.Declaration.InfixDeclaration _ ->
+                                            soFar
 
-                                            Elm.Syntax.Declaration.Destructuring _ _ ->
-                                                soFar
+                                        Elm.Syntax.Declaration.Destructuring _ _ ->
+                                            soFar
 
-                                            Elm.Syntax.Declaration.FunctionDeclaration _ ->
-                                                soFar
+                                        Elm.Syntax.Declaration.FunctionDeclaration _ ->
+                                            soFar
 
-                                            Elm.Syntax.Declaration.PortDeclaration _ ->
-                                                soFar
+                                        Elm.Syntax.Declaration.PortDeclaration _ ->
+                                            soFar
 
-                                            Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
-                                                soFar
-                                                    |> FastDict.insert
-                                                        (declarationTypeAlias.name |> Elm.Syntax.Node.value)
-                                                        context.moduleName
+                                        Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
+                                            soFar
+                                                |> FastDict.insert
+                                                    (declarationTypeAlias.name |> Elm.Syntax.Node.value)
+                                                    context.moduleName
 
-                                            Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
-                                                soFar
-                                                    |> FastDict.insert
-                                                        (declarationChoiceType.name |> Elm.Syntax.Node.value)
-                                                        context.moduleName
-                                    )
-                                    (contextExposedTypeConstructsOrNothing
-                                        |> Maybe.withDefault FastDict.empty
-                                    )
-                                |> Just
-                        )
-            }
+                                        Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
+                                            soFar
+                                                |> FastDict.insert
+                                                    (declarationChoiceType.name |> Elm.Syntax.Node.value)
+                                                    context.moduleName
+                                )
+                                (contextExposedTypeConstructsOrNothing
+                                    |> Maybe.withDefault FastDict.empty
+                                )
+                            |> Just
+                    )
     in
     declarations
         |> List.foldl
@@ -13975,7 +14023,7 @@ moduleDeclarationsToTypes context declarations =
                             Just (Elm.Syntax.Node.Node _ declarationValueOrFunctionSignature) ->
                                 case
                                     declarationValueOrFunctionSignature.typeAnnotation
-                                        |> syntaxToType moduleOriginLookup
+                                        |> syntaxToType typeConstructModuleOriginLookup
                                 of
                                     Err error ->
                                         { errors = error :: soFar.errors
@@ -13998,7 +14046,7 @@ moduleDeclarationsToTypes context declarations =
                     Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
                         case
                             declarationTypeAlias.typeAnnotation
-                                |> syntaxToType moduleOriginLookup
+                                |> syntaxToType typeConstructModuleOriginLookup
                         of
                             Err error ->
                                 { errors = error :: soFar.errors
@@ -14066,7 +14114,9 @@ moduleDeclarationsToTypes context declarations =
                                             (variant.arguments
                                                 |> listMapAndCombineOk
                                                     (\variantValue ->
-                                                        variantValue |> syntaxToType moduleOriginLookup
+                                                        variantValue
+                                                            |> syntaxToType
+                                                                typeConstructModuleOriginLookup
                                                     )
                                             )
                                     )
@@ -14096,7 +14146,7 @@ moduleDeclarationsToTypes context declarations =
                     Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
                         case
                             declarationPortSignature.typeAnnotation
-                                |> syntaxToType moduleOriginLookup
+                                |> syntaxToType typeConstructModuleOriginLookup
                         of
                             Err error ->
                                 { errors = error :: soFar.errors
