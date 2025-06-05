@@ -13909,71 +13909,6 @@ moduleDeclarationsToTypes :
     -> { types : ModuleTypes, errors : List String }
 moduleDeclarationsToTypes context declarations =
     let
-        localDeclarationsOriginLookup : { typeConstructs : FastDict.Dict String String, references : FastDict.Dict String String }
-        localDeclarationsOriginLookup =
-            declarations
-                |> List.foldl
-                    (\declaration soFar ->
-                        case declaration of
-                            Elm.Syntax.Declaration.InfixDeclaration _ ->
-                                soFar
-
-                            Elm.Syntax.Declaration.Destructuring _ _ ->
-                                soFar
-
-                            Elm.Syntax.Declaration.FunctionDeclaration declarationValueOrFunction ->
-                                { typeConstructs = soFar.typeConstructs
-                                , references =
-                                    soFar.references
-                                        |> FastDict.insert
-                                            ((declarationValueOrFunction.declaration
-                                                |> Elm.Syntax.Node.value
-                                             ).name
-                                                |> Elm.Syntax.Node.value
-                                            )
-                                            context.moduleName
-                                }
-
-                            Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
-                                { references = soFar.references
-                                , typeConstructs =
-                                    soFar.typeConstructs
-                                        |> FastDict.insert
-                                            (declarationTypeAlias.name |> Elm.Syntax.Node.value)
-                                            context.moduleName
-                                }
-
-                            Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
-                                { typeConstructs =
-                                    soFar.typeConstructs
-                                        |> FastDict.insert
-                                            (declarationChoiceType.name |> Elm.Syntax.Node.value)
-                                            context.moduleName
-                                , references =
-                                    declarationChoiceType.constructors
-                                        |> List.foldl
-                                            (\(Elm.Syntax.Node.Node _ variant) soFarReferencesIncludingVariantsSoFar ->
-                                                soFarReferencesIncludingVariantsSoFar
-                                                    |> FastDict.insert
-                                                        (variant.name |> Elm.Syntax.Node.value)
-                                                        context.moduleName
-                                            )
-                                            soFar.references
-                                }
-
-                            Elm.Syntax.Declaration.PortDeclaration declarationPortSignature ->
-                                { typeConstructs = soFar.typeConstructs
-                                , references =
-                                    soFar.references
-                                        |> FastDict.insert
-                                            (declarationPortSignature.name |> Elm.Syntax.Node.value)
-                                            context.moduleName
-                                }
-                    )
-                    { references = FastDict.empty
-                    , typeConstructs = FastDict.empty
-                    }
-
         moduleOriginLookup : ModuleOriginLookup
         moduleOriginLookup =
             { keepOperatorIsExposedFromParserAdvanced =
@@ -13982,31 +13917,42 @@ moduleDeclarationsToTypes context declarations =
                 context.moduleOriginLookup.ignoreOperatorIsExposedFromParserAdvanced
             , references =
                 context.moduleOriginLookup.references
-                    |> FastDict.update ""
-                        (\contextExposedReferencesOrNothing ->
-                            Just
-                                (case contextExposedReferencesOrNothing of
-                                    Nothing ->
-                                        localDeclarationsOriginLookup.references
-
-                                    Just contextReferences ->
-                                        FastDict.union contextReferences
-                                            localDeclarationsOriginLookup.references
-                                )
-                        )
             , typeConstructs =
                 context.moduleOriginLookup.typeConstructs
                     |> FastDict.update ""
                         (\contextExposedTypeConstructsOrNothing ->
-                            Just
-                                (case contextExposedTypeConstructsOrNothing of
-                                    Nothing ->
-                                        localDeclarationsOriginLookup.typeConstructs
+                            declarations
+                                |> List.foldl
+                                    (\declaration soFar ->
+                                        case declaration of
+                                            Elm.Syntax.Declaration.InfixDeclaration _ ->
+                                                soFar
 
-                                    Just contextReferences ->
-                                        FastDict.union contextReferences
-                                            localDeclarationsOriginLookup.typeConstructs
-                                )
+                                            Elm.Syntax.Declaration.Destructuring _ _ ->
+                                                soFar
+
+                                            Elm.Syntax.Declaration.FunctionDeclaration _ ->
+                                                soFar
+
+                                            Elm.Syntax.Declaration.PortDeclaration _ ->
+                                                soFar
+
+                                            Elm.Syntax.Declaration.AliasDeclaration declarationTypeAlias ->
+                                                soFar
+                                                    |> FastDict.insert
+                                                        (declarationTypeAlias.name |> Elm.Syntax.Node.value)
+                                                        context.moduleName
+
+                                            Elm.Syntax.Declaration.CustomTypeDeclaration declarationChoiceType ->
+                                                soFar
+                                                    |> FastDict.insert
+                                                        (declarationChoiceType.name |> Elm.Syntax.Node.value)
+                                                        context.moduleName
+                                    )
+                                    (contextExposedTypeConstructsOrNothing
+                                        |> Maybe.withDefault FastDict.empty
+                                    )
+                                |> Just
                         )
             }
     in
