@@ -661,7 +661,7 @@ removeHelp targetKey dict =
     -- IGNORE TCO
     case dict of
         Leaf ->
-            ( Leaf, False )
+            tupleLeafFalse
 
         InnerNode color key value left right ->
             if TypeVariableFromContext.lessThan targetKey key then
@@ -736,7 +736,7 @@ removeHelpEQGT targetKey dict =
                         ( balance color minKey minValue left (removeMin right), True )
 
                     Nothing ->
-                        ( Leaf, True )
+                        tupleLeafTrue
 
             else
                 let
@@ -746,7 +746,17 @@ removeHelpEQGT targetKey dict =
                 ( balance color key value left newRight, wasMember )
 
         Leaf ->
-            ( Leaf, False )
+            tupleLeafFalse
+
+
+tupleLeafTrue : ( InnerDictByTypeVariableFromContext v, Bool )
+tupleLeafTrue =
+    ( Leaf, True )
+
+
+tupleLeafFalse : ( InnerDictByTypeVariableFromContext v, Bool )
+tupleLeafFalse =
+    ( Leaf, False )
 
 
 removeMin : InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v

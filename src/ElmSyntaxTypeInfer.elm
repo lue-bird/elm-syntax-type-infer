@@ -1882,6 +1882,18 @@ typeNotVariableToInfoString typeNotVariable =
                 ++ " }"
 
 
+allUnchangedTrueArgumentsListEmptySubstitutionsEmpty :
+    { allUnchanged : Bool
+    , arguments : List Type
+    , substitutions : VariableSubstitutions
+    }
+allUnchangedTrueArgumentsListEmptySubstitutionsEmpty =
+    { allUnchanged = True
+    , arguments = []
+    , substitutions = variableSubstitutionsNone
+    }
+
+
 typeNotVariableSubstituteVariableByType :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
@@ -1935,10 +1947,7 @@ typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
                         )
                         ((argument0 :: argument1Up)
                             |> listFoldrWhileOkFrom
-                                { allUnchanged = True
-                                , arguments = []
-                                , substitutions = variableSubstitutionsNone
-                                }
+                                allUnchangedTrueArgumentsListEmptySubstitutionsEmpty
                                 (\argument soFar ->
                                     Result.andThen
                                         (\argumentSubstituted ->
@@ -3501,7 +3510,7 @@ typeUnifyWithBasicsBool context a =
                             _ ->
                                 False
                     then
-                        Ok variableSubstitutionsNone
+                        okVariableSubstitutionsNone
 
                     else
                         case typeUnifyWithTryToExpandTypeConstruct context aTypeConstruct typeNotVariableBasicsBool of
@@ -6711,7 +6720,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                     letInTypedNodeInferred
 
                              else
-                                Ok variableSubstitutionsNone
+                                okVariableSubstitutionsNone
                             )
                             (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
                                 typeContext
