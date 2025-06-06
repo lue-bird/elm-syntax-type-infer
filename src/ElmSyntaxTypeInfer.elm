@@ -482,7 +482,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     , output = outputMapped.type_
                     }
             , containedVariables =
-                DictByTypeVariableFromContext.union
+                DictByTypeVariableFromContext.setUnion
                     inputMapped.containedVariables
                     outputMapped.containedVariables
             }
@@ -503,7 +503,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     , part1 = part1Mapped.type_
                     }
             , containedVariables =
-                DictByTypeVariableFromContext.union
+                DictByTypeVariableFromContext.setUnion
                     part0Mapped.containedVariables
                     part1Mapped.containedVariables
             }
@@ -530,8 +530,8 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                     }
             , containedVariables =
                 part0Mapped.containedVariables
-                    |> DictByTypeVariableFromContext.union part1Mapped.containedVariables
-                    |> DictByTypeVariableFromContext.union part2Mapped.containedVariables
+                    |> DictByTypeVariableFromContext.setUnion part1Mapped.containedVariables
+                    |> DictByTypeVariableFromContext.setUnion part2Mapped.containedVariables
             }
 
         TypeConstruct typeConstruct ->
@@ -548,7 +548,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                                 in
                                 { types = argumentMapped.type_ :: soFar.types
                                 , containedVariables =
-                                    DictByTypeVariableFromContext.union
+                                    DictByTypeVariableFromContext.setUnion
                                         soFar.containedVariables
                                         argumentMapped.containedVariables
                                 }
@@ -579,7 +579,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                 fieldsMapped
                     |> FastDict.foldl
                         (\_ value soFar ->
-                            DictByTypeVariableFromContext.union soFar
+                            DictByTypeVariableFromContext.setUnion soFar
                                 (value |> typeContainedVariables)
                         )
                         DictByTypeVariableFromContext.empty
@@ -609,7 +609,7 @@ typeNotVariableMapVariablesAndCollectResultingVariables variableMap typeNotVaria
                 fieldsMapped
                     |> FastDict.foldl
                         (\_ value soFar ->
-                            DictByTypeVariableFromContext.union soFar
+                            DictByTypeVariableFromContext.setUnion soFar
                                 (value |> typeContainedVariables)
                         )
                         (DictByTypeVariableFromContext.singleton recordVariableMapped ())
@@ -647,20 +647,20 @@ typeNotVariableContainedVariables typeNotVariable =
             DictByTypeVariableFromContext.empty
 
         TypeFunction typeFunction ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (typeFunction.input |> typeContainedVariables)
                 (typeFunction.output |> typeContainedVariables)
 
         TypeTuple typeTuple ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (typeTuple.part0 |> typeContainedVariables)
                 (typeTuple.part1 |> typeContainedVariables)
 
         TypeTriple typeTriple ->
             (typeTriple.part0 |> typeContainedVariables)
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (typeTriple.part1 |> typeContainedVariables)
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (typeTriple.part2 |> typeContainedVariables)
 
         TypeConstruct typeConstruct ->
@@ -671,7 +671,7 @@ typeNotVariableContainedVariables typeNotVariable =
             typeRecordFields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        DictByTypeVariableFromContext.union soFar
+                        DictByTypeVariableFromContext.setUnion soFar
                             (value |> typeContainedVariables)
                     )
                     DictByTypeVariableFromContext.empty
@@ -680,7 +680,7 @@ typeNotVariableContainedVariables typeNotVariable =
             typeRecordExtension.fields
                 |> FastDict.foldl
                     (\_ value soFar ->
-                        DictByTypeVariableFromContext.union soFar
+                        DictByTypeVariableFromContext.setUnion soFar
                             (value |> typeContainedVariables)
                     )
                     (DictByTypeVariableFromContext.singleton typeRecordExtension.recordVariable ())
@@ -2836,7 +2836,7 @@ typeConstructFullyExpandIfAlias context typeConstructToExpand =
                                             { parameterToVariable = soFar.parameterToVariable
                                             , parameterToTypeNotVariable =
                                                 soFar.parameterToTypeNotVariable
-                                                    |> DictByTypeVariableFromContext.insert
+                                                    |> DictByTypeVariableFromContext.insertNoReplace
                                                         { useRange = Elm.Syntax.Range.empty
                                                         , name = parameterName
                                                         }
@@ -2963,7 +2963,7 @@ variableSubstitutionsMerge context a b =
                     (\soFar ->
                         { variableToType =
                             soFar.variableToType
-                                |> DictByTypeVariableFromContext.insert variable aType
+                                |> DictByTypeVariableFromContext.insertNoReplace variable aType
                         , equivalentVariables =
                             soFar.equivalentVariables
                         }
@@ -2997,7 +2997,7 @@ variableSubstitutionsMerge context a b =
                                                     { equivalentVariables = substitutionsWithAB.equivalentVariables
                                                     , variableToType =
                                                         substitutionsWithAB.variableToType
-                                                            |> DictByTypeVariableFromContext.insert variable abUnifiedNotVariable
+                                                            |> DictByTypeVariableFromContext.insertNoReplace variable abUnifiedNotVariable
                                                     }
                                     )
                                     (variableSubstitutionsMerge context
@@ -3014,7 +3014,7 @@ variableSubstitutionsMerge context a b =
                     (\soFar ->
                         { variableToType =
                             soFar.variableToType
-                                |> DictByTypeVariableFromContext.insert variable bType
+                                |> DictByTypeVariableFromContext.insertNoReplace variable bType
                         , equivalentVariables =
                             soFar.equivalentVariables
                         }
@@ -3120,7 +3120,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
-                                |> DictByTypeVariableFromContext.insert bEquivalentVariable ()
+                                |> DictByTypeVariableFromContext.insertNoReplace bEquivalentVariable ()
                         , constraint = unifiedConstraint
                         , overarchingUseRange =
                             rangeOverarching
@@ -3141,7 +3141,7 @@ equivalentVariablesMergeWithSetOf2Into soFar aEquivalentVariable bEquivalentVari
                     (\unifiedConstraint ->
                         { variables =
                             equivalentVariablesSet0.variables
-                                |> DictByTypeVariableFromContext.insert aEquivalentVariable ()
+                                |> DictByTypeVariableFromContext.insertNoReplace aEquivalentVariable ()
                         , constraint = unifiedConstraint
                         , overarchingUseRange =
                             rangeOverarching
@@ -3236,7 +3236,7 @@ equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType variableTo
                                                 (\unifiedConstraint ->
                                                     { sets =
                                                         { variables =
-                                                            DictByTypeVariableFromContext.union
+                                                            DictByTypeVariableFromContext.setUnion
                                                                 aEquivalentVariableSet.variables
                                                                 bEquivalentVariableSetAndRemaining.value.variables
                                                         , constraint = unifiedConstraint
@@ -9437,11 +9437,11 @@ valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction 
     declarationValueOrFunction.parameters
         |> listMapToTypeVariableFromContextSetsAndUnify
             patternTypedNodeContainedTypeVariables
-        |> DictByTypeVariableFromContext.union
+        |> DictByTypeVariableFromContext.setUnion
             (declarationValueOrFunction.type_
                 |> typeContainedVariables
             )
-        |> DictByTypeVariableFromContext.union
+        |> DictByTypeVariableFromContext.setUnion
             (declarationValueOrFunction.result
                 |> expressionTypedNodeContainedTypeVariables
             )
@@ -9451,7 +9451,7 @@ patternTypedNodeContainedTypeVariables :
     TypedNode Pattern
     -> TypeVariableFromContextSet
 patternTypedNodeContainedTypeVariables patternTypedNode =
-    DictByTypeVariableFromContext.union
+    DictByTypeVariableFromContext.setUnion
         (patternTypedNode.type_
             |> typeContainedVariables
         )
@@ -9488,7 +9488,7 @@ patternContainedTypeVariables pattern =
                 inParens
 
         PatternAs patternAs ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (patternAs.variable.type_
                     |> typeContainedVariables
                 )
@@ -9497,7 +9497,7 @@ patternContainedTypeVariables pattern =
                 )
 
         PatternTuple parts ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (parts.part0
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9508,17 +9508,17 @@ patternContainedTypeVariables pattern =
         PatternTriple parts ->
             parts.part0
                 |> patternTypedNodeContainedTypeVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (parts.part1
                         |> patternTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (parts.part2
                         |> patternTypedNodeContainedTypeVariables
                     )
 
         PatternListCons patternListCons ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (patternListCons.head
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -9553,7 +9553,7 @@ listMapToTypeVariableFromContextSetsAndUnify elementToSet elements =
     elements
         |> List.foldl
             (\element soFar ->
-                DictByTypeVariableFromContext.union soFar
+                DictByTypeVariableFromContext.setUnion soFar
                     (element |> elementToSet)
             )
             DictByTypeVariableFromContext.empty
@@ -9989,7 +9989,7 @@ expressionTypedNodeContainedTypeVariables :
     TypedNode Expression
     -> TypeVariableFromContextSet
 expressionTypedNodeContainedTypeVariables expressionTypedNode =
-    DictByTypeVariableFromContext.union
+    DictByTypeVariableFromContext.setUnion
         (expressionTypedNode.type_
             |> typeContainedVariables
         )
@@ -10046,7 +10046,7 @@ expressionContainedTypeVariables expression =
                 expressionRecordAccess.record
 
         ExpressionInfixOperation expressionInfixOperation ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (expressionInfixOperation.left
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -10055,7 +10055,7 @@ expressionContainedTypeVariables expression =
                 )
 
         ExpressionTuple parts ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (parts.part0
                     |> expressionTypedNodeContainedTypeVariables
                 )
@@ -10066,11 +10066,11 @@ expressionContainedTypeVariables expression =
         ExpressionTriple parts ->
             parts.part0
                 |> expressionTypedNodeContainedTypeVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (parts.part1
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (parts.part2
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10078,11 +10078,11 @@ expressionContainedTypeVariables expression =
         ExpressionIfThenElse expressionIfThenElse ->
             expressionIfThenElse.condition
                 |> expressionTypedNodeContainedTypeVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionIfThenElse.onTrue
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionIfThenElse.onFalse
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10103,11 +10103,11 @@ expressionContainedTypeVariables expression =
         ExpressionCall expressionCall ->
             expressionCall.called
                 |> expressionTypedNodeContainedTypeVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionCall.argument0
                         |> expressionTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionCall.argument1Up
                         |> listMapToTypeVariableFromContextSetsAndUnify
                             expressionTypedNodeContainedTypeVariables
@@ -10117,7 +10117,7 @@ expressionContainedTypeVariables expression =
             expressionLambda.parameter1Up
                 |> List.foldl
                     (\parameter soFar ->
-                        DictByTypeVariableFromContext.union
+                        DictByTypeVariableFromContext.setUnion
                             soFar
                             (parameter
                                 |> patternTypedNodeContainedTypeVariables
@@ -10126,7 +10126,7 @@ expressionContainedTypeVariables expression =
                     (expressionLambda.parameter0
                         |> patternTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionLambda.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10134,11 +10134,11 @@ expressionContainedTypeVariables expression =
         ExpressionRecordUpdate expressionRecordUpdate ->
             expressionRecordUpdate.recordVariable.type_
                 |> typeContainedVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionRecordUpdate.field1Up
                         |> List.foldl
                             (\field soFar ->
-                                DictByTypeVariableFromContext.union
+                                DictByTypeVariableFromContext.setUnion
                                     soFar
                                     (field.value
                                         |> expressionTypedNodeContainedTypeVariables
@@ -10152,11 +10152,11 @@ expressionContainedTypeVariables expression =
         ExpressionCaseOf expressionCaseOf ->
             expressionCaseOf.matched
                 |> expressionTypedNodeContainedTypeVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionCaseOf.case1Up
                         |> List.foldl
                             (\case_ soFar ->
-                                DictByTypeVariableFromContext.union
+                                DictByTypeVariableFromContext.setUnion
                                     soFar
                                     (case_ |> expressionCaseOfCaseContainedTypeVariables)
                             )
@@ -10169,7 +10169,7 @@ expressionContainedTypeVariables expression =
             expressionLetIn.declaration1Up
                 |> List.foldl
                     (\letDeclaration soFar ->
-                        DictByTypeVariableFromContext.union
+                        DictByTypeVariableFromContext.setUnion
                             soFar
                             (letDeclaration.declaration
                                 |> letDeclarationContainedTypeVariables
@@ -10178,7 +10178,7 @@ expressionContainedTypeVariables expression =
                     (expressionLetIn.declaration0.declaration
                         |> letDeclarationContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (expressionLetIn.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10190,7 +10190,7 @@ letDeclarationContainedTypeVariables :
 letDeclarationContainedTypeVariables letDeclaration =
     case letDeclaration of
         LetDestructuring letDestructuring ->
-            DictByTypeVariableFromContext.union
+            DictByTypeVariableFromContext.setUnion
                 (letDestructuring.pattern
                     |> patternTypedNodeContainedTypeVariables
                 )
@@ -10201,12 +10201,12 @@ letDeclarationContainedTypeVariables letDeclaration =
         LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
             letValueOrFunctionDeclaration.type_
                 |> typeContainedVariables
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (letValueOrFunctionDeclaration.parameters
                         |> listMapToTypeVariableFromContextSetsAndUnify
                             patternTypedNodeContainedTypeVariables
                     )
-                |> DictByTypeVariableFromContext.union
+                |> DictByTypeVariableFromContext.setUnion
                     (letValueOrFunctionDeclaration.result
                         |> expressionTypedNodeContainedTypeVariables
                     )
@@ -10218,7 +10218,7 @@ expressionCaseOfCaseContainedTypeVariables :
     }
     -> TypeVariableFromContextSet
 expressionCaseOfCaseContainedTypeVariables syntaxCase =
-    DictByTypeVariableFromContext.union
+    DictByTypeVariableFromContext.setUnion
         (syntaxCase.pattern
             |> patternTypedNodeContainedTypeVariables
         )
@@ -10241,7 +10241,9 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
                             |> DictByTypeVariableFromContext.foldl
                                 (\variable () soFarInSet ->
                                     soFarInSet
-                                        |> DictByTypeVariableFromContext.insert variable unifiedVariable
+                                        |> DictByTypeVariableFromContext.insertNoReplace
+                                            variable
+                                            unifiedVariable
                                 )
                                 soFar
                     )
@@ -10436,7 +10438,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                             { equivalentVariables = soFar.equivalentVariables
                             , variableToType =
                                 soFar.variableToType
-                                    |> DictByTypeVariableFromContext.insert uncondensedVariable
+                                    |> DictByTypeVariableFromContext.insertNoReplace uncondensedVariable
                                         replacementTypeUsingCondensedVariables
                             }
 
@@ -10447,7 +10449,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                                     { equivalentVariables = soFar.equivalentVariables
                                     , variableToType =
                                         soFar.variableToType
-                                            |> DictByTypeVariableFromContext.insert condensedVariable
+                                            |> DictByTypeVariableFromContext.insertNoReplace condensedVariable
                                                 replacementTypeUsingCondensedVariables
                                     }
 
@@ -10474,7 +10476,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
                                                     (\substitutionsSoFarAndFromUnifying ->
                                                         { variableToType =
                                                             substitutionsSoFarAndFromUnifying.variableToType
-                                                                |> DictByTypeVariableFromContext.insert condensedVariable
+                                                                |> DictByTypeVariableFromContext.insertNoReplace condensedVariable
                                                                     replacementTypeNotVariableForCondensedVariable
                                                         , equivalentVariables =
                                                             substitutionsSoFarAndFromUnifying.equivalentVariables
@@ -12930,7 +12932,7 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
                     Result.map
                         (\replacementTypeSubstituted ->
                             soFar
-                                |> DictByTypeVariableFromContext.insert variable
+                                |> DictByTypeVariableFromContext.insertNoReplace variable
                                     replacementTypeSubstituted
                         )
                         (replacementTypeNotVariable
@@ -14483,7 +14485,7 @@ typeVariablesFromContextToDisambiguationLookup variables =
                         variable.name |> nameDisambiguateBy alreadyExists
                 in
                 soFar
-                    |> DictByTypeVariableFromContext.insert variable
+                    |> DictByTypeVariableFromContext.insertNoReplace variable
                         variableAsDisambiguatedString
             )
             DictByTypeVariableFromContext.empty

@@ -1,11 +1,11 @@
 module DictByTypeVariableFromContext exposing
     ( DictByTypeVariableFromContext
-    , empty, singleton, twoDistinct, insert, update, remove
+    , empty, singleton, twoDistinct, insert, insertNoReplace, update, remove
     , isEmpty, member, get, size, equals, any
     , getMinKey, getMin, getMaxKey, getMax
     , keys, values, toList, fromList
     , map, foldl, foldr, foldlWhileOkFrom, filter
-    , union, intersect, diff, merge
+    , union, setUnion, intersect, diff, merge
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any TypeVariableFromContext
@@ -20,7 +20,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Build
 
-@docs empty, singleton, twoDistinct, insert, update, remove
+@docs empty, singleton, twoDistinct, insert, insertNoReplace, update, remove
 
 
 # Query
@@ -45,7 +45,7 @@ Insert, remove, and query operations all take _O(log n)_ time.
 
 # Combine
 
-@docs union, intersect, diff, merge
+@docs union, setUnion, intersect, diff, merge
 
 -}
 
@@ -486,6 +486,10 @@ isEmpty (DictByTypeVariableFromContext dictSize _) =
 
 {-| Insert a key-value pair into a dictionary. Replaces value when there is
 a collision.
+
+Prefer [`insertNoReplace`](#insertNoReplace) when semantically possible
+because it's faster
+
 -}
 insert : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
 insert key value (DictByTypeVariableFromContext sz dict) =
@@ -500,34 +504,70 @@ insert key value (DictByTypeVariableFromContext sz dict) =
         DictByTypeVariableFromContext sz result
 
 
-insertNoReplace : TypeVariableFromContext -> v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
-insertNoReplace key value (DictByTypeVariableFromContext sz dict) =
-    let
-        ( result, isNew ) =
-            insertInnerNoReplace key value dict
-    in
-    if isNew then
-        DictByTypeVariableFromContext (sz + 1) result
+insertNoReplace :
+    TypeVariableFromContext
+    -> v
+    -> DictByTypeVariableFromContext v
+    -> DictByTypeVariableFromContext v
+insertNoReplace key value ((DictByTypeVariableFromContext sz dict) as orig) =
+    case insertHelpNoReplace key value dict of
+        Just result ->
+            DictByTypeVariableFromContext (sz + 1) (setRootBlack result)
 
-    else
-        DictByTypeVariableFromContext sz result
+        Nothing ->
+            orig
+
+
+setRootBlack : InnerDictByTypeVariableFromContext v -> InnerDictByTypeVariableFromContext v
+setRootBlack dict =
+    case dict of
+        InnerNode True k v l r ->
+            InnerNode False k v l r
+
+        x ->
+            x
+
+
+insertHelpNoReplace :
+    TypeVariableFromContext
+    -> v
+    -> InnerDictByTypeVariableFromContext v
+    -> Maybe (InnerDictByTypeVariableFromContext v)
+insertHelpNoReplace key value dict =
+    case dict of
+        Leaf ->
+            -- New nodes are always red. If it violates the rules, it will be fixed
+            -- when balancing.
+            Just (InnerNode True key value Leaf Leaf)
+
+        InnerNode nColor nKey nValue nLeft nRight ->
+            case TypeVariableFromContext.compare key nKey of
+                LT ->
+                    case insertHelpNoReplace key value nLeft of
+                        Just newLeft ->
+                            balance nColor nKey nValue newLeft nRight
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+
+                EQ ->
+                    Nothing
+
+                GT ->
+                    case insertHelpNoReplace key value nRight of
+                        Just newRight ->
+                            balance nColor nKey nValue nLeft newRight
+                                |> Just
+
+                        Nothing ->
+                            Nothing
 
 
 insertInner : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
 insertInner key value dict =
     -- Root node is always False
     case insertHelp key value dict of
-        ( InnerNode True k v l r, isNew ) ->
-            ( InnerNode False k v l r, isNew )
-
-        x ->
-            x
-
-
-insertInnerNoReplace : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
-insertInnerNoReplace key value dict =
-    -- Root node is always False
-    case insertHelpNoReplace key value dict of
         ( InnerNode True k v l r, isNew ) ->
             ( InnerNode False k v l r, isNew )
 
@@ -560,35 +600,6 @@ insertHelp key value dict =
                     let
                         ( newRight, isNew ) =
                             insertHelp key value nRight
-                    in
-                    ( balance nColor nKey nValue nLeft newRight, isNew )
-
-
-insertHelpNoReplace : TypeVariableFromContext -> v -> InnerDictByTypeVariableFromContext v -> ( InnerDictByTypeVariableFromContext v, Bool )
-insertHelpNoReplace key value dict =
-    -- IGNORE TCO
-    case dict of
-        Leaf ->
-            -- New nodes are always red. If it violates the rules, it will be fixed
-            -- when balancing.
-            ( InnerNode True key value Leaf Leaf, True )
-
-        InnerNode nColor nKey nValue nLeft nRight ->
-            case TypeVariableFromContext.compare key nKey of
-                LT ->
-                    let
-                        ( newLeft, isNew ) =
-                            insertHelpNoReplace key value nLeft
-                    in
-                    ( balance nColor nKey nValue newLeft nRight, isNew )
-
-                EQ ->
-                    ( dict, False )
-
-                GT ->
-                    let
-                        ( newRight, isNew ) =
-                            insertHelpNoReplace key value nRight
                     in
                     ( balance nColor nKey nValue nLeft newRight, isNew )
 
@@ -966,18 +977,22 @@ to the first dictionary.
 -}
 union : DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v -> DictByTypeVariableFromContext v
 union ((DictByTypeVariableFromContext s1 _) as t1) ((DictByTypeVariableFromContext s2 _) as t2) =
-    -- -- TODO: Find a data-based heuristic instead of the vibe-based "2 *"
-    -- if s1 > 2 * s2 then
-    --     foldl insertNoReplace t1 t2
-    -- else if s2 > 2 * s1 then
-    --     foldl insert t2 t1
-    -- else
-    --     Union.union t1 t2
     if s1 - s2 > 0 then
         foldl insertNoReplace t1 t2
 
     else
         foldl insert t2 t1
+
+
+{-| Like [`union`](#union) but not guaranteeing which of both values is chosen on key collision
+-}
+setUnion : DictByTypeVariableFromContext () -> DictByTypeVariableFromContext () -> DictByTypeVariableFromContext ()
+setUnion ((DictByTypeVariableFromContext s1 _) as t1) ((DictByTypeVariableFromContext s2 _) as t2) =
+    if s1 - s2 > 0 then
+        foldl insertNoReplace t1 t2
+
+    else
+        foldl insertNoReplace t2 t1
 
 
 {-| Keep a key-value pair when its key appears in the second dictionary.
