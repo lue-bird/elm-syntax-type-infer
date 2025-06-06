@@ -5125,10 +5125,13 @@ patternTypedNodeIntroducedVariables patternTypedNode =
 
         PatternRecord fieldVariables ->
             fieldVariables
-                |> listMapToFastDict
-                    (\fieldVariable ->
-                        { key = fieldVariable.value, value = fieldVariable.type_ }
+                |> List.foldl
+                    (\fieldVariable soFar ->
+                        soFar
+                            |> FastDict.insert fieldVariable.value
+                                fieldVariable.type_
                     )
+                    FastDict.empty
 
         PatternAs patternAs ->
             FastDict.insert patternAs.variable.value
@@ -5365,12 +5368,13 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                                 { useRange = fullRange, name = "record" }
                             , fields =
                                 fieldTypedNodes
-                                    |> listMapToFastDict
-                                        (\fieldVariable ->
-                                            { key = fieldVariable.value
-                                            , value = fieldVariable.type_
-                                            }
+                                    |> List.foldl
+                                        (\fieldVariable soFar ->
+                                            soFar
+                                                |> FastDict.insert fieldVariable.value
+                                                    fieldVariable.type_
                                         )
+                                        FastDict.empty
                             }
                         )
                 }
@@ -14524,24 +14528,6 @@ fastDictAny valueIsFound dict =
                     || state.left ()
                     || state.right ()
             )
-
-
-listMapToFastDict :
-    (a -> { key : comparableKey, value : value })
-    -> List a
-    -> FastDict.Dict comparableKey value
-listMapToFastDict elementToKeyValue list =
-    list
-        |> List.foldl
-            (\element soFar ->
-                let
-                    keyValue : { key : comparableKey, value : value }
-                    keyValue =
-                        element |> elementToKeyValue
-                in
-                soFar |> FastDict.insert keyValue.key keyValue.value
-            )
-            FastDict.empty
 
 
 listFoldl2From :
