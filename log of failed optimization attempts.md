@@ -8,3 +8,4 @@
 - always use the unified type when available because it can potentially avoid duplicate  work and allocation
 - change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (Dict String value)` (roughly equal)
 - change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (List { name : String, value : value })` (about 50% slower)
+- make ropeFoldlWhileOkFrom TCO (pretty much equal, just maybe a tiny bit slower)

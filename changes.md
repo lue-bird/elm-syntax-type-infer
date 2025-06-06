@@ -15,7 +15,6 @@ optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
-- make ropeFoldlWhileOkFrom TCO
 - specialized Set instead of DictBy... () to avoid extra memory for unit fields
 - typeVariablesFromContextToDisambiguationLookup use DictByTypeVariableFromContext.mapAccum
 
