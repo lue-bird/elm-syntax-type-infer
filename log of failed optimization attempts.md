@@ -6,3 +6,5 @@
 - skip substitutions when range does not include variable-to-replace' use range
   (was way too slow and ineffective, as most substitutions were already local or covered a wide range)
 - always use the unified type when available because it can potentially avoid duplicate  work and allocation
+- change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (Dict String value)` (roughly equal)
+- change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (List { name : String, value : value })` (about 50% slower)
