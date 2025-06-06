@@ -12322,24 +12322,44 @@ expressionTypedNodeMapTypes typeChange expressionTypedNode =
             }
 
         ExpressionInfixOperation expressionInfixOperation ->
+            let
+                fullTypeMapped : Type
+                fullTypeMapped =
+                    expressionTypedNode.type_ |> typeChange
+
+                leftMapped : TypedNode Expression
+                leftMapped =
+                    expressionInfixOperation.left
+                        |> expressionTypedNodeMapTypes typeChange
+
+                rightMapped : TypedNode Expression
+                rightMapped =
+                    expressionInfixOperation.right
+                        |> expressionTypedNodeMapTypes typeChange
+            in
             { range = expressionTypedNode.range
-            , type_ = expressionTypedNode.type_ |> typeChange
+            , type_ = fullTypeMapped
             , value =
                 ExpressionInfixOperation
                     { operator =
                         { symbol = expressionInfixOperation.operator.symbol
                         , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
                         , type_ =
-                            -- TODO instead reconstruct
-                            expressionInfixOperation.operator.type_
-                                |> typeChange
+                            TypeNotVariable
+                                (TypeFunction
+                                    { input = leftMapped.type_
+                                    , output =
+                                        TypeNotVariable
+                                            (TypeFunction
+                                                { input = rightMapped.type_
+                                                , output = fullTypeMapped
+                                                }
+                                            )
+                                    }
+                                )
                         }
-                    , left =
-                        expressionInfixOperation.left
-                            |> expressionTypedNodeMapTypes typeChange
-                    , right =
-                        expressionInfixOperation.right
-                            |> expressionTypedNodeMapTypes typeChange
+                    , left = leftMapped
+                    , right = rightMapped
                     }
             }
 
@@ -12541,24 +12561,61 @@ expressionTypedNodeMapTypes typeChange expressionTypedNode =
             }
 
         ExpressionLambda expressionLambda ->
+            let
+                parameter0Mapped : TypedNode Pattern
+                parameter0Mapped =
+                    expressionLambda.parameter0
+                        |> patternTypedNodeMapTypes typeChange
+
+                resultMapped : TypedNode Expression
+                resultMapped =
+                    expressionLambda.result
+                        |> expressionTypedNodeMapTypes typeChange
+
+                withParameter1UpMapped :
+                    { parameters1UpMapped : List (TypedNode Pattern)
+                    , fullTypeAfterParameter0 : Type
+                    }
+                withParameter1UpMapped =
+                    expressionLambda.parameter1Up
+                        |> List.foldr
+                            (\argument soFar ->
+                                let
+                                    parameterMapped : TypedNode Pattern
+                                    parameterMapped =
+                                        argument |> patternTypedNodeMapTypes typeChange
+                                in
+                                { parameters1UpMapped =
+                                    parameterMapped
+                                        :: soFar.parameters1UpMapped
+                                , fullTypeAfterParameter0 =
+                                    TypeNotVariable
+                                        (TypeFunction
+                                            { input = parameterMapped.type_
+                                            , output = soFar.fullTypeAfterParameter0
+                                            }
+                                        )
+                                }
+                            )
+                            { parameters1UpMapped = []
+                            , fullTypeAfterParameter0 =
+                                resultMapped.type_
+                            }
+            in
             { range = expressionTypedNode.range
             , type_ =
-                -- TODO reconstruct
-                expressionTypedNode.type_ |> typeChange
+                TypeNotVariable
+                    (TypeFunction
+                        { input = parameter0Mapped.type_
+                        , output =
+                            withParameter1UpMapped.fullTypeAfterParameter0
+                        }
+                    )
             , value =
                 ExpressionLambda
-                    { parameter0 =
-                        expressionLambda.parameter0
-                            |> patternTypedNodeMapTypes typeChange
-                    , parameter1Up =
-                        expressionLambda.parameter1Up
-                            |> List.map
-                                (\argument ->
-                                    argument |> patternTypedNodeMapTypes typeChange
-                                )
-                    , result =
-                        expressionLambda.result
-                            |> expressionTypedNodeMapTypes typeChange
+                    { parameter0 = parameter0Mapped
+                    , parameter1Up = withParameter1UpMapped.parameters1UpMapped
+                    , result = resultMapped
                     }
             }
 
