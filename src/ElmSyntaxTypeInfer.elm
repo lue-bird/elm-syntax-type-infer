@@ -12230,189 +12230,261 @@ expressionTypedNodeMapTypes :
     -> TypedNode Expression
     -> TypedNode Expression
 expressionTypedNodeMapTypes typeChange expressionTypedNode =
-    { range = expressionTypedNode.range
-    , value =
-        expressionTypedNode.value
-            |> expressionMapTypes typeChange
-    , type_ =
-        expressionTypedNode.type_
-            |> typeChange
-    }
-
-
-expressionMapTypes : (Type -> Type) -> Expression -> Expression
-expressionMapTypes typeChange expression =
     -- IGNORE TCO
-    case expression of
+    case expressionTypedNode.value of
         ExpressionUnit ->
-            ExpressionUnit
+            expressionTypedNode
 
         ExpressionFloat _ ->
-            expression
+            expressionTypedNode
 
         ExpressionChar _ ->
-            expression
+            expressionTypedNode
 
         ExpressionString _ ->
-            expression
+            expressionTypedNode
 
         ExpressionInteger _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionReferenceVariant _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionReference _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionOperatorFunction _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionRecordAccessFunction _ ->
-            expression
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value = expressionTypedNode.value
+            }
 
         ExpressionNegation inNegation ->
-            ExpressionNegation
-                (inNegation
-                    |> expressionTypedNodeMapTypes typeChange
-                )
+            let
+                inNegationMapped : TypedNode Expression
+                inNegationMapped =
+                    inNegation
+                        |> expressionTypedNodeMapTypes typeChange
+            in
+            { range = expressionTypedNode.range
+            , type_ = inNegationMapped.type_
+            , value =
+                ExpressionNegation
+                    inNegationMapped
+            }
 
         ExpressionParenthesized inParens ->
-            ExpressionParenthesized
-                (inParens
-                    |> expressionTypedNodeMapTypes typeChange
-                )
+            let
+                inParensMapped : TypedNode Expression
+                inParensMapped =
+                    inParens
+                        |> expressionTypedNodeMapTypes typeChange
+            in
+            { range = expressionTypedNode.range
+            , type_ = inParensMapped.type_
+            , value =
+                ExpressionParenthesized
+                    inParensMapped
+            }
 
         ExpressionRecordAccess expressionRecordAccess ->
-            ExpressionRecordAccess
-                { record =
-                    expressionRecordAccess.record
-                        |> expressionTypedNodeMapTypes typeChange
-                , fieldName = expressionRecordAccess.fieldName
-                , fieldNameRange = expressionRecordAccess.fieldNameRange
-                }
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value =
+                ExpressionRecordAccess
+                    { record =
+                        expressionRecordAccess.record
+                            |> expressionTypedNodeMapTypes typeChange
+                    , fieldName = expressionRecordAccess.fieldName
+                    , fieldNameRange = expressionRecordAccess.fieldNameRange
+                    }
+            }
 
         ExpressionInfixOperation expressionInfixOperation ->
-            ExpressionInfixOperation
-                { operator =
-                    { symbol = expressionInfixOperation.operator.symbol
-                    , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
-                    , type_ =
-                        expressionInfixOperation.operator.type_
-                            |> typeChange
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value =
+                ExpressionInfixOperation
+                    { operator =
+                        { symbol = expressionInfixOperation.operator.symbol
+                        , moduleOrigin = expressionInfixOperation.operator.moduleOrigin
+                        , type_ =
+                            -- TODO instead reconstruct
+                            expressionInfixOperation.operator.type_
+                                |> typeChange
+                        }
+                    , left =
+                        expressionInfixOperation.left
+                            |> expressionTypedNodeMapTypes typeChange
+                    , right =
+                        expressionInfixOperation.right
+                            |> expressionTypedNodeMapTypes typeChange
                     }
-                , left =
-                    expressionInfixOperation.left
-                        |> expressionTypedNodeMapTypes typeChange
-                , right =
-                    expressionInfixOperation.right
-                        |> expressionTypedNodeMapTypes typeChange
-                }
+            }
 
         ExpressionTuple expressionTuple ->
-            ExpressionTuple
-                { part0 =
+            let
+                part0Mapped : TypedNode Expression
+                part0Mapped =
                     expressionTuple.part0
                         |> expressionTypedNodeMapTypes typeChange
-                , part1 =
+
+                part1Mapped : TypedNode Expression
+                part1Mapped =
                     expressionTuple.part1
                         |> expressionTypedNodeMapTypes typeChange
-                }
+            in
+            { range = expressionTypedNode.range
+            , type_ =
+                TypeNotVariable
+                    (TypeTuple
+                        { part0 = part0Mapped.type_
+                        , part1 = part1Mapped.type_
+                        }
+                    )
+            , value =
+                ExpressionTuple
+                    { part0 = part0Mapped
+                    , part1 = part1Mapped
+                    }
+            }
 
         ExpressionTriple expressionTriple ->
-            ExpressionTriple
-                { part0 =
+            let
+                part0Mapped : TypedNode Expression
+                part0Mapped =
                     expressionTriple.part0
                         |> expressionTypedNodeMapTypes typeChange
-                , part1 =
+
+                part1Mapped : TypedNode Expression
+                part1Mapped =
                     expressionTriple.part1
                         |> expressionTypedNodeMapTypes typeChange
-                , part2 =
+
+                part2Mapped : TypedNode Expression
+                part2Mapped =
                     expressionTriple.part2
                         |> expressionTypedNodeMapTypes typeChange
-                }
+            in
+            { range = expressionTypedNode.range
+            , type_ =
+                TypeNotVariable
+                    (TypeTriple
+                        { part0 = part0Mapped.type_
+                        , part1 = part1Mapped.type_
+                        , part2 = part2Mapped.type_
+                        }
+                    )
+            , value =
+                ExpressionTriple
+                    { part0 = part0Mapped
+                    , part1 = part1Mapped
+                    , part2 = part2Mapped
+                    }
+            }
 
         ExpressionIfThenElse expressionIfThenElse ->
-            ExpressionIfThenElse
-                { condition =
-                    expressionIfThenElse.condition
-                        |> expressionTypedNodeMapTypes typeChange
-                , onTrue =
+            let
+                onTrueMapped : TypedNode Expression
+                onTrueMapped =
                     expressionIfThenElse.onTrue
                         |> expressionTypedNodeMapTypes typeChange
-                , onFalse =
-                    expressionIfThenElse.onFalse
-                        |> expressionTypedNodeMapTypes typeChange
-                }
+            in
+            { range = expressionTypedNode.range
+            , type_ = onTrueMapped.type_
+            , value =
+                ExpressionIfThenElse
+                    { condition =
+                        expressionIfThenElse.condition
+                            |> expressionTypedNodeMapTypes typeChange
+                    , onTrue = onTrueMapped
+                    , onFalse =
+                        expressionIfThenElse.onFalse
+                            |> expressionTypedNodeMapTypes typeChange
+                    }
+            }
 
         ExpressionList expressionListElements ->
-            ExpressionList
-                (expressionListElements
-                    |> List.map
-                        (\element ->
-                            element
+            case expressionListElements of
+                [] ->
+                    { range = expressionTypedNode.range
+                    , type_ = expressionTypedNode.type_ |> typeChange
+                    , value = expressionListEmpty
+                    }
+
+                head :: tail ->
+                    let
+                        headMapped : TypedNode Expression
+                        headMapped =
+                            head
                                 |> expressionTypedNodeMapTypes
                                     typeChange
-                        )
-                )
+                    in
+                    { range = expressionTypedNode.range
+                    , type_ = typeListList headMapped.type_
+                    , value =
+                        ExpressionList
+                            (headMapped
+                                :: (tail
+                                        |> List.map
+                                            (\element ->
+                                                element
+                                                    |> expressionTypedNodeMapTypes
+                                                        typeChange
+                                            )
+                                   )
+                            )
+                    }
 
         ExpressionCall expressionCall ->
-            ExpressionCall
-                { called =
-                    expressionCall.called
-                        |> expressionTypedNodeMapTypes typeChange
-                , argument0 =
-                    expressionCall.argument0
-                        |> expressionTypedNodeMapTypes typeChange
-                , argument1Up =
-                    expressionCall.argument1Up
-                        |> List.map
-                            (\argument ->
-                                argument
-                                    |> expressionTypedNodeMapTypes
-                                        typeChange
-                            )
-                }
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value =
+                ExpressionCall
+                    { called =
+                        expressionCall.called
+                            |> expressionTypedNodeMapTypes typeChange
+                    , argument0 =
+                        expressionCall.argument0
+                            |> expressionTypedNodeMapTypes typeChange
+                    , argument1Up =
+                        expressionCall.argument1Up
+                            |> List.map
+                                (\argument ->
+                                    argument
+                                        |> expressionTypedNodeMapTypes
+                                            typeChange
+                                )
+                    }
+            }
 
         ExpressionRecord expressionRecordFields ->
-            ExpressionRecord
-                (expressionRecordFields
-                    |> List.map
-                        (\field ->
-                            { range = field.range
-                            , name = field.name
-                            , nameRange = field.nameRange
-                            , value =
-                                field.value
-                                    |> expressionTypedNodeMapTypes
-                                        typeChange
-                            }
-                        )
-                )
-
-        ExpressionRecordUpdate expressionRecordUpdate ->
-            ExpressionRecordUpdate
-                { recordVariable =
-                    { range = expressionRecordUpdate.recordVariable.range
-                    , value = expressionRecordUpdate.recordVariable.value
-                    , type_ =
-                        expressionRecordUpdate.recordVariable.type_
-                            |> typeChange
-                    }
-                , field0 =
-                    { range = expressionRecordUpdate.field0.range
-                    , name = expressionRecordUpdate.field0.name
-                    , nameRange = expressionRecordUpdate.field0.nameRange
-                    , value =
-                        expressionRecordUpdate.field0.value
-                            |> expressionTypedNodeMapTypes
-                                typeChange
-                    }
-                , field1Up =
-                    expressionRecordUpdate.field1Up
+            { range = expressionTypedNode.range
+            , type_ = expressionTypedNode.type_ |> typeChange
+            , value =
+                ExpressionRecord
+                    (expressionRecordFields
                         |> List.map
                             (\field ->
                                 { range = field.range
@@ -12424,73 +12496,137 @@ expressionMapTypes typeChange expression =
                                             typeChange
                                 }
                             )
-                }
+                    )
+            }
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            let
+                recordVariableTypeMapped : Type
+                recordVariableTypeMapped =
+                    expressionRecordUpdate.recordVariable.type_
+                        |> typeChange
+            in
+            { range = expressionTypedNode.range
+            , type_ = recordVariableTypeMapped
+            , value =
+                ExpressionRecordUpdate
+                    { recordVariable =
+                        { range = expressionRecordUpdate.recordVariable.range
+                        , value = expressionRecordUpdate.recordVariable.value
+                        , type_ = recordVariableTypeMapped
+                        }
+                    , field0 =
+                        { range = expressionRecordUpdate.field0.range
+                        , name = expressionRecordUpdate.field0.name
+                        , nameRange = expressionRecordUpdate.field0.nameRange
+                        , value =
+                            expressionRecordUpdate.field0.value
+                                |> expressionTypedNodeMapTypes
+                                    typeChange
+                        }
+                    , field1Up =
+                        expressionRecordUpdate.field1Up
+                            |> List.map
+                                (\field ->
+                                    { range = field.range
+                                    , name = field.name
+                                    , nameRange = field.nameRange
+                                    , value =
+                                        field.value
+                                            |> expressionTypedNodeMapTypes
+                                                typeChange
+                                    }
+                                )
+                    }
+            }
 
         ExpressionLambda expressionLambda ->
-            ExpressionLambda
-                { parameter0 =
-                    expressionLambda.parameter0
-                        |> patternTypedNodeMapTypes typeChange
-                , parameter1Up =
-                    expressionLambda.parameter1Up
-                        |> List.map
-                            (\argument ->
-                                argument |> patternTypedNodeMapTypes typeChange
-                            )
-                , result =
-                    expressionLambda.result
-                        |> expressionTypedNodeMapTypes typeChange
-                }
-
-        ExpressionCaseOf expressionCaseOf ->
-            ExpressionCaseOf
-                { matched =
-                    expressionCaseOf.matched
-                        |> expressionTypedNodeMapTypes typeChange
-                , case0 =
-                    { pattern =
-                        expressionCaseOf.case0.pattern
+            { range = expressionTypedNode.range
+            , type_ =
+                -- TODO reconstruct
+                expressionTypedNode.type_ |> typeChange
+            , value =
+                ExpressionLambda
+                    { parameter0 =
+                        expressionLambda.parameter0
                             |> patternTypedNodeMapTypes typeChange
+                    , parameter1Up =
+                        expressionLambda.parameter1Up
+                            |> List.map
+                                (\argument ->
+                                    argument |> patternTypedNodeMapTypes typeChange
+                                )
                     , result =
-                        expressionCaseOf.case0.result
+                        expressionLambda.result
                             |> expressionTypedNodeMapTypes typeChange
                     }
-                , case1Up =
-                    expressionCaseOf.case1Up
-                        |> List.map
-                            (\case_ ->
-                                { pattern =
-                                    case_.pattern
-                                        |> patternTypedNodeMapTypes typeChange
-                                , result =
-                                    case_.result
-                                        |> expressionTypedNodeMapTypes typeChange
-                                }
-                            )
-                }
+            }
+
+        ExpressionCaseOf expressionCaseOf ->
+            let
+                case0ResultMapped : TypedNode Expression
+                case0ResultMapped =
+                    expressionCaseOf.case0.result
+                        |> expressionTypedNodeMapTypes typeChange
+            in
+            { range = expressionTypedNode.range
+            , type_ = case0ResultMapped.type_
+            , value =
+                ExpressionCaseOf
+                    { matched =
+                        expressionCaseOf.matched
+                            |> expressionTypedNodeMapTypes typeChange
+                    , case0 =
+                        { pattern =
+                            expressionCaseOf.case0.pattern
+                                |> patternTypedNodeMapTypes typeChange
+                        , result = case0ResultMapped
+                        }
+                    , case1Up =
+                        expressionCaseOf.case1Up
+                            |> List.map
+                                (\case_ ->
+                                    { pattern =
+                                        case_.pattern
+                                            |> patternTypedNodeMapTypes typeChange
+                                    , result =
+                                        case_.result
+                                            |> expressionTypedNodeMapTypes typeChange
+                                    }
+                                )
+                    }
+            }
 
         ExpressionLetIn expressionLetIn ->
-            ExpressionLetIn
-                { declaration0 =
-                    { range = expressionLetIn.declaration0.range
-                    , declaration =
-                        expressionLetIn.declaration0.declaration
-                            |> letDeclarationMapTypes typeChange
-                    }
-                , declaration1Up =
-                    expressionLetIn.declaration1Up
-                        |> List.map
-                            (\letDeclarationAndRange ->
-                                { range = letDeclarationAndRange.range
-                                , declaration =
-                                    letDeclarationAndRange.declaration
-                                        |> letDeclarationMapTypes typeChange
-                                }
-                            )
-                , result =
+            let
+                resultMapped : TypedNode Expression
+                resultMapped =
                     expressionLetIn.result
                         |> expressionTypedNodeMapTypes typeChange
-                }
+            in
+            { range = expressionTypedNode.range
+            , type_ = resultMapped.type_
+            , value =
+                ExpressionLetIn
+                    { declaration0 =
+                        { range = expressionLetIn.declaration0.range
+                        , declaration =
+                            expressionLetIn.declaration0.declaration
+                                |> letDeclarationMapTypes typeChange
+                        }
+                    , declaration1Up =
+                        expressionLetIn.declaration1Up
+                            |> List.map
+                                (\letDeclarationAndRange ->
+                                    { range = letDeclarationAndRange.range
+                                    , declaration =
+                                        letDeclarationAndRange.declaration
+                                            |> letDeclarationMapTypes typeChange
+                                    }
+                                )
+                    , result = resultMapped
+                    }
+            }
 
 
 letDeclarationMapTypes :
@@ -13386,131 +13522,210 @@ patternTypedNodeMapTypes :
     -> TypedNode Pattern
     -> TypedNode Pattern
 patternTypedNodeMapTypes typeChange patternTypedNode =
-    { range = patternTypedNode.range
-    , type_ =
-        patternTypedNode.type_
-            |> typeChange
-    , value =
-        patternTypedNode.value
-            |> patternMapTypes typeChange
-    }
-
-
-patternMapTypes : (Type -> Type) -> Pattern -> Pattern
-patternMapTypes typeChange pattern =
     -- IGNORE TCO
-    case pattern of
+    case patternTypedNode.value of
         PatternUnit ->
-            PatternUnit
+            patternTypedNode
 
         PatternChar _ ->
-            pattern
+            patternTypedNode
 
         PatternString _ ->
-            pattern
+            patternTypedNode
 
         PatternInt _ ->
-            pattern
+            patternTypedNode
 
         PatternIgnored ->
-            PatternIgnored
+            { range = patternTypedNode.range
+            , type_ = patternTypedNode.type_ |> typeChange
+            , value = PatternIgnored
+            }
 
         PatternVariable _ ->
-            pattern
+            { range = patternTypedNode.range
+            , type_ = patternTypedNode.type_ |> typeChange
+            , value = patternTypedNode.value
+            }
 
         PatternParenthesized inParens ->
-            PatternParenthesized
-                (inParens
-                    |> patternTypedNodeMapTypes typeChange
-                )
+            let
+                inParensMapped : TypedNode Pattern
+                inParensMapped =
+                    inParens
+                        |> patternTypedNodeMapTypes typeChange
+            in
+            { range = patternTypedNode.range
+            , type_ = inParensMapped.type_
+            , value = PatternParenthesized inParensMapped
+            }
 
         PatternAs patternAs ->
             let
-                patternWithTypeWithVariablesChanged : TypedNode Pattern
-                patternWithTypeWithVariablesChanged =
+                aliasedPatternMapped : TypedNode Pattern
+                aliasedPatternMapped =
                     patternAs.pattern
                         |> patternTypedNodeMapTypes typeChange
             in
-            PatternAs
-                { pattern = patternWithTypeWithVariablesChanged
-                , variable =
-                    { range = patternAs.variable.range
-                    , value = patternAs.variable.value
-                    , type_ = patternWithTypeWithVariablesChanged.type_
+            { range = patternTypedNode.range
+            , type_ = aliasedPatternMapped.type_
+            , value =
+                PatternAs
+                    { pattern = aliasedPatternMapped
+                    , variable =
+                        { range = patternAs.variable.range
+                        , value = patternAs.variable.value
+                        , type_ = aliasedPatternMapped.type_
+                        }
                     }
-                }
+            }
 
         PatternListCons patternListCons ->
-            PatternListCons
-                { head =
+            let
+                headMapped : TypedNode Pattern
+                headMapped =
                     patternListCons.head
                         |> patternTypedNodeMapTypes typeChange
-                , tail =
-                    patternListCons.tail
-                        |> patternTypedNodeMapTypes typeChange
-                }
+            in
+            { range = patternTypedNode.range
+            , type_ = typeListList headMapped.type_
+            , value =
+                PatternListCons
+                    { head = headMapped
+                    , tail =
+                        patternListCons.tail
+                            |> patternTypedNodeMapTypes typeChange
+                    }
+            }
 
         PatternTuple patternTuple ->
-            PatternTuple
-                { part0 =
+            let
+                part0Mapped : TypedNode Pattern
+                part0Mapped =
                     patternTuple.part0
                         |> patternTypedNodeMapTypes typeChange
-                , part1 =
+
+                part1Mapped : TypedNode Pattern
+                part1Mapped =
                     patternTuple.part1
                         |> patternTypedNodeMapTypes typeChange
-                }
+            in
+            { range = patternTypedNode.range
+            , type_ =
+                TypeNotVariable
+                    (TypeTuple
+                        { part0 = part0Mapped.type_
+                        , part1 = part1Mapped.type_
+                        }
+                    )
+            , value =
+                PatternTuple
+                    { part0 = part0Mapped
+                    , part1 = part1Mapped
+                    }
+            }
 
         PatternTriple patternTriple ->
-            PatternTriple
-                { part0 =
+            let
+                part0Mapped : TypedNode Pattern
+                part0Mapped =
                     patternTriple.part0
                         |> patternTypedNodeMapTypes typeChange
-                , part1 =
+
+                part1Mapped : TypedNode Pattern
+                part1Mapped =
                     patternTriple.part1
                         |> patternTypedNodeMapTypes typeChange
-                , part2 =
+
+                part2Mapped : TypedNode Pattern
+                part2Mapped =
                     patternTriple.part2
                         |> patternTypedNodeMapTypes typeChange
-                }
+            in
+            { range = patternTypedNode.range
+            , type_ =
+                TypeNotVariable
+                    (TypeTriple
+                        { part0 = part0Mapped.type_
+                        , part1 = part1Mapped.type_
+                        , part2 = part2Mapped.type_
+                        }
+                    )
+            , value =
+                PatternTriple
+                    { part0 = part0Mapped
+                    , part1 = part1Mapped
+                    , part2 = part2Mapped
+                    }
+            }
 
         PatternRecord patternRecordFields ->
-            PatternRecord
-                (patternRecordFields
-                    |> List.map
-                        (\field ->
-                            { value = field.value
-                            , range = field.range
-                            , type_ = field.type_ |> typeChange
-                            }
-                        )
-                )
+            { range = patternTypedNode.range
+            , type_ = patternTypedNode.type_ |> typeChange
+            , value =
+                PatternRecord
+                    (patternRecordFields
+                        |> List.map
+                            (\field ->
+                                { value = field.value
+                                , range = field.range
+                                , type_ = field.type_ |> typeChange
+                                }
+                            )
+                    )
+            }
 
-        PatternListExact patternListElement ->
-            PatternListExact
-                (patternListElement
-                    |> List.map
-                        (\element ->
-                            element
+        PatternListExact patternListElements ->
+            case patternListElements of
+                [] ->
+                    { range = patternTypedNode.range
+                    , type_ = patternTypedNode.type_ |> typeChange
+                    , value = patternListExactEmpty
+                    }
+
+                head :: tail ->
+                    let
+                        headMapped : TypedNode Pattern
+                        headMapped =
+                            head
                                 |> patternTypedNodeMapTypes
                                     typeChange
-                        )
-                )
+                    in
+                    { range = patternTypedNode.range
+                    , type_ = typeListList headMapped.type_
+                    , value =
+                        PatternListExact
+                            (headMapped
+                                :: (tail
+                                        |> List.map
+                                            (\element ->
+                                                element
+                                                    |> patternTypedNodeMapTypes
+                                                        typeChange
+                                            )
+                                   )
+                            )
+                    }
 
         PatternVariant patternVariant ->
-            PatternVariant
-                { moduleOrigin = patternVariant.moduleOrigin
-                , choiceTypeName = patternVariant.choiceTypeName
-                , qualification = patternVariant.qualification
-                , name = patternVariant.name
-                , values =
-                    patternVariant.values
-                        |> List.map
-                            (\argument ->
-                                argument
-                                    |> patternTypedNodeMapTypes
-                                        typeChange
-                            )
-                }
+            { range = patternTypedNode.range
+            , type_ = patternTypedNode.type_ |> typeChange
+            , value =
+                PatternVariant
+                    { moduleOrigin = patternVariant.moduleOrigin
+                    , choiceTypeName = patternVariant.choiceTypeName
+                    , qualification = patternVariant.qualification
+                    , name = patternVariant.name
+                    , values =
+                        patternVariant.values
+                            |> List.map
+                                (\argument ->
+                                    argument
+                                        |> patternTypedNodeMapTypes
+                                            typeChange
+                                )
+                    }
+            }
 
 
 equivalentVariablesCreateCondensedVariable : EquivalentTypeVariableSet -> Result String TypeVariableFromContext
