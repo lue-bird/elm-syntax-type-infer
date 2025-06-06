@@ -280,8 +280,8 @@ This is different from [`Elm.Syntax.TypeAnnotation.TypeAnnotation`](https://dark
 in that it doesn't contain
 information unrelated to type inference like ranges, qualification levels or parens.
 
-Importantly, it also contains the overarching ranges
-of all places where the specific type variables are used.
+Importantly, it also contains the overarching range
+of all places where each specific type variable is used.
 This is useful to for example find out whether a variable in a let declaration type
 is "forall" or inherited from the surrounding context
 (if the use range is fully included in the let declaration range it's forall, otherwise inherited).
