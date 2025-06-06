@@ -15,15 +15,9 @@ optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
 - go through typeUnify and add e.g. typeUnifyWithFunction
-- try when collecting uses not from FastDict.Dict String _ but regular List { String }
-  since introduced variables are usually few
 - make ropeFoldlWhileOkFrom TCO
-- (breaking) lookup by qualification ++ "." ++ name, List String tuple might be slow to compare
 - specialized Set instead of DictBy... () to avoid extra memory for unit fields
-- check for equivalent variable set overarching use range
-- convert Result to { ok, List error }
 - typeVariablesFromContextToDisambiguationLookup use DictByTypeVariableFromContext.mapAccum
-- split DictByTypeVariableFromContext into first by Range dict, then by string dict
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration
