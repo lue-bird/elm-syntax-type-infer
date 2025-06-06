@@ -12247,32 +12247,32 @@ expressionMapTypes typeChange expression =
         ExpressionUnit ->
             ExpressionUnit
 
-        ExpressionFloat floatValue ->
-            ExpressionFloat floatValue
+        ExpressionFloat _ ->
+            expression
 
-        ExpressionChar charValue ->
-            ExpressionChar charValue
+        ExpressionChar _ ->
+            expression
 
-        ExpressionString stringValue ->
-            ExpressionString stringValue
+        ExpressionString _ ->
+            expression
 
-        ExpressionInteger expressionNumber ->
-            ExpressionInteger expressionNumber
+        ExpressionInteger _ ->
+            expression
 
-        ExpressionReferenceVariant reference ->
-            ExpressionReferenceVariant reference
+        ExpressionReferenceVariant _ ->
+            expression
 
-        ExpressionReferenceRecordTypeAliasConstructorFunction reference ->
-            ExpressionReferenceRecordTypeAliasConstructorFunction reference
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
+            expression
 
-        ExpressionReference reference ->
-            ExpressionReference reference
+        ExpressionReference _ ->
+            expression
 
-        ExpressionOperatorFunction expressionOperatorFunction ->
-            ExpressionOperatorFunction expressionOperatorFunction
+        ExpressionOperatorFunction _ ->
+            expression
 
-        ExpressionRecordAccessFunction fieldName ->
-            ExpressionRecordAccessFunction fieldName
+        ExpressionRecordAccessFunction _ ->
+            expression
 
         ExpressionNegation inNegation ->
             ExpressionNegation
@@ -13387,39 +13387,36 @@ patternTypedNodeMapTypes :
     -> TypedNode Pattern
 patternTypedNodeMapTypes typeChange patternTypedNode =
     { range = patternTypedNode.range
-    , value =
-        patternTypedNode.value
-            |> patternMapTypes typeChange
     , type_ =
         patternTypedNode.type_
             |> typeChange
+    , value =
+        patternTypedNode.value
+            |> patternMapTypes typeChange
     }
 
 
-patternMapTypes :
-    (Type -> Type)
-    -> Pattern
-    -> Pattern
+patternMapTypes : (Type -> Type) -> Pattern -> Pattern
 patternMapTypes typeChange pattern =
     -- IGNORE TCO
     case pattern of
         PatternUnit ->
             PatternUnit
 
-        PatternChar charValue ->
-            PatternChar charValue
+        PatternChar _ ->
+            pattern
 
-        PatternString stringValue ->
-            PatternString stringValue
+        PatternString _ ->
+            pattern
 
-        PatternInt patternInt ->
-            PatternInt patternInt
+        PatternInt _ ->
+            pattern
 
         PatternIgnored ->
             PatternIgnored
 
-        PatternVariable variable ->
-            PatternVariable variable
+        PatternVariable _ ->
+            pattern
 
         PatternParenthesized inParens ->
             PatternParenthesized
