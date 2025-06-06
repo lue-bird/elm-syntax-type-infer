@@ -49,7 +49,9 @@ Ok
                     { moduleOrigin = [ "List" ]
                     , name = "List"
                     , arguments =
-                        [ ElmSyntaxTypeInfer.TypeVariable "number" ]
+                        [ ElmSyntaxTypeInfer.TypeVariable
+                            { name = "number", useRange = Elm.Syntax.Range.empty }
+                        ]
                     }
                 )
         ...
