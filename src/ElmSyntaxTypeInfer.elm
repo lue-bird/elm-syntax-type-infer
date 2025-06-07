@@ -957,7 +957,7 @@ importsToModuleOriginLookup modulesTypes imports =
 
 
 importToNormal :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Elm.Syntax.Import.Import
     ->
         { moduleName : String
@@ -1542,7 +1542,7 @@ qualifiedToString reference =
 
 typeSubstituteVariable :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { variable : TypeVariableFromContext
@@ -1592,7 +1592,7 @@ typeSubstituteVariable context replacement type_ =
 
 typeApplyVariableSubstitutions :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> VariableSubstitutions
     -> Type
@@ -1645,7 +1645,7 @@ typeApplyVariableSubstitutions context substitutions originalType =
 
 typeSubstituteVariableByType :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         (TypeVariableFromContext
@@ -1896,7 +1896,7 @@ allUnchangedTrueArgumentsListEmptySubstitutionsEmpty =
 
 typeNotVariableSubstituteVariableByType :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         (TypeVariableFromContext
@@ -2404,7 +2404,7 @@ substitutionsNoneTypesDictEmptyAllUnchangedTrue =
 
 
 typeIsNumber :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Type
     -> Bool
 typeIsNumber declarationTypes type_ =
@@ -2434,7 +2434,7 @@ typeIsNumber declarationTypes type_ =
 
 
 typeNotVariableIsNumber :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeNotVariable
     -> Bool
 typeNotVariableIsNumber declarationTypes type_ =
@@ -2489,7 +2489,7 @@ typeNotVariableIsNumber declarationTypes type_ =
 
 
 typeIsAppendable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Type
     -> Bool
 typeIsAppendable declarationTypes type_ =
@@ -2519,7 +2519,7 @@ typeIsAppendable declarationTypes type_ =
 
 
 typeNotVariableIsAppendable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeNotVariable
     -> Bool
 typeNotVariableIsAppendable declarationTypes type_ =
@@ -2579,7 +2579,7 @@ typeNotVariableIsAppendable declarationTypes type_ =
 
 
 typeIsComparable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Type
     -> Bool
 typeIsComparable declarationTypes type_ =
@@ -2609,7 +2609,7 @@ typeIsComparable declarationTypes type_ =
 
 
 typeNotVariableIsComparable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeNotVariable
     -> Bool
 typeNotVariableIsComparable declarationTypes typeNotVariable =
@@ -2697,7 +2697,7 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
 
 
 typeIsCompappend :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Type
     -> Bool
 typeIsCompappend declarationTypes type_ =
@@ -2727,7 +2727,7 @@ typeIsCompappend declarationTypes type_ =
 
 
 typeNotVariableIsCompappend :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeNotVariable
     -> Bool
 typeNotVariableIsCompappend declarationTypes type_ =
@@ -2794,7 +2794,7 @@ typeNotVariableIsCompappend declarationTypes type_ =
 
 typeConstructFullyExpandIfAlias :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { name : String
@@ -2926,7 +2926,7 @@ variableSubstitutionsNone =
 
 variableSubstitutionsMerge :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> VariableSubstitutions
     -> VariableSubstitutions
@@ -3032,7 +3032,7 @@ variableSubstitutionsMerge context a b =
 
 variableSubstitutionsMerge3 :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> VariableSubstitutions
     -> VariableSubstitutions
@@ -3050,7 +3050,7 @@ variableSubstitutionsMerge3 context a b c =
 
 variableSubstitutionsMerge4 :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> VariableSubstitutions
     -> VariableSubstitutions
@@ -3344,7 +3344,7 @@ listMapAndFirstJustAndRemainingAndOrderWithBefore elementsBeforeReverse elementT
 
 typeUnify :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> Type
     -> Type
@@ -3408,7 +3408,7 @@ typeUnify context a b =
 
 typeNotVariableUnifyWithType :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> TypeNotVariable
     -> Type
@@ -3441,7 +3441,7 @@ typeNotVariableUnifyWithType context aTypeNotVariable b =
 
 typeUnifyWithTypeConstruct :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> Type
     ->
@@ -3485,7 +3485,7 @@ typeUnifyWithTypeConstruct context a bTypeConstruct =
 
 typeUnifyWithBasicsBool :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> Type
     ->
@@ -3587,7 +3587,7 @@ typeUnifyWithBasicsBool context a =
 
 typeNotVariableUnifyWithTypeConstruct :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> TypeNotVariable
     ->
@@ -3790,7 +3790,7 @@ typeNotVariableUnifyWithTypeConstruct context aTypeNotVariable bTypeConstruct =
 
 
 variableSubstitutionsFromVariableToTypeNotVariableOrError :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeVariableFromContext
     -> TypeNotVariable
     -> Result String VariableSubstitutions
@@ -3825,7 +3825,7 @@ okVariableSubstitutionsNone =
 
 typeNotVariableUnify :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> TypeNotVariable
     -> TypeNotVariable
@@ -4318,7 +4318,7 @@ okTypeUnitSubstitutionsNone =
 
 typeUnifyWithTryToExpandTypeConstruct :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { moduleOrigin : String
@@ -4426,7 +4426,7 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
 
 typeRecordUnify :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> FastDict.Dict String Type
     -> FastDict.Dict String Type
@@ -4493,7 +4493,7 @@ typeRecordUnify context aFields bFields =
 
 typeRecordExtensionUnifyWithRecord :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { recordVariable : TypeVariableFromContext
@@ -4580,7 +4580,7 @@ typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
 
 typeRecordExtensionUnifyWithRecordExtension :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { recordVariable : TypeVariableFromContext
@@ -5167,7 +5167,7 @@ patternTypedNodeIntroducedVariables patternTypedNode =
 
 patternTypeInfer :
     { moduleOriginLookup : ModuleOriginLookup
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern
     -> Result String (TypedNode Pattern)
@@ -5435,7 +5435,7 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
                     Result.andThen
                         (\headInferred ->
                             let
-                                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                                 typeContext =
                                     { declarationTypes = context.declarationTypes
                                     , range = fullRange
@@ -5611,7 +5611,7 @@ patternListExactEmpty =
 
 patternVariantTypeInfer :
     { moduleOriginLookup : ModuleOriginLookup
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         { fullRange : Elm.Syntax.Range.Range
@@ -5666,7 +5666,7 @@ patternVariantTypeInfer context patternVariant =
                 Result.andThen
                     (\valueInferred ->
                         let
-                            typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                            typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                             typeContext =
                                 { declarationTypes = context.declarationTypes
                                 , range = patternVariant.fullRange
@@ -5725,7 +5725,7 @@ locationToInfoString location =
 
 
 expressionTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -5962,7 +5962,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
             resultAndThen3
                 (\conditionInferred onTrueInferred onFalseInferred ->
                     let
-                        typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                        typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                         typeContext =
                             { declarationTypes = context.declarationTypes
                             , range = fullRange
@@ -6095,7 +6095,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     Result.andThen
                         (\headInferred ->
                             let
-                                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                                 typeContext =
                                     { declarationTypes = context.declarationTypes
                                     , range = fullRange
@@ -6483,7 +6483,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                     resultAndThen3
                         (\matchedInferred case0Inferred case1UpInferred ->
                             let
-                                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                                 typeContext =
                                     { declarationTypes = context.declarationTypes
                                     , range = fullRange
@@ -6600,7 +6600,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
 
 
 expressionLetInTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , moduleOriginLookup : ModuleOriginLookup
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
@@ -6624,7 +6624,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
         (\acrossLetInIncludingContextSoFar ->
             let
                 inferContextAcrossLetIn :
-                    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+                    { declarationTypes : ProjectModuleDeclaredTypes
                     , locallyIntroducedExpressionVariables : FastDict.Dict String Type
                     , locallyIntroducedDeclarationTypes :
                         FastDict.Dict
@@ -6660,7 +6660,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                     }
                             }
 
-                        typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                        typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                         typeContext =
                             { declarationTypes = context.declarationTypes
                             , range = syntaxExpressionLetIn.fullRange
@@ -6840,58 +6840,22 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
 
 substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> FastDict.Dict String Type
     -> TypedNode Expression
     -> Result String VariableSubstitutions
 substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context introducedVariables expressionTypedNode =
     expressionTypedNode
-        |> expressionTypedNodeUsesOfLocalReferences
+        |> expressionTypedNodeUnifyUsesOfLocalReferences
+            context
             introducedVariables
-        |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
-            (\variableName usesInLambdaResult soFar ->
-                case introducedVariables |> FastDict.get variableName of
-                    Nothing ->
-                        Err
-                            ("("
-                                ++ (context.range |> rangeToInfoString)
-                                ++ ") "
-                                ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
-                            )
-
-                    Just variableParameterType ->
-                        usesInLambdaResult
-                            |> ropeFoldlWhileOkFrom
-                                { substitutions = soFar
-                                , type_ = variableParameterType
-                                }
-                                (\_ useInLambdaResultType unifiedAcrossUsesSoFar ->
-                                    Result.andThen
-                                        (\unifiedSoFarWithUse ->
-                                            Result.map
-                                                (\unificationWithSoFarSubstitutions ->
-                                                    { type_ = unifiedSoFarWithUse.type_
-                                                    , substitutions = unificationWithSoFarSubstitutions
-                                                    }
-                                                )
-                                                (variableSubstitutionsMerge context
-                                                    unifiedAcrossUsesSoFar.substitutions
-                                                    unifiedSoFarWithUse.substitutions
-                                                )
-                                        )
-                                        (typeUnify context
-                                            useInLambdaResultType
-                                            unifiedAcrossUsesSoFar.type_
-                                        )
-                                )
-                            |> Result.map .substitutions
-            )
+        |> Result.map .substitutions
 
 
 substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         FastDict.Dict
@@ -6974,7 +6938,7 @@ substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression c
 
 substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         FastDict.Dict
@@ -7058,7 +7022,7 @@ expressionListEmpty =
 
 
 expressionCaseTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -7146,7 +7110,7 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
 
 
 expressionReferenceTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -7491,7 +7455,7 @@ locationMax aLocation bLocation =
 
 
 letDeclarationTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -7562,7 +7526,7 @@ letDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarationRange letDec
 
 
 letFunctionOrValueDeclarationTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -7590,7 +7554,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
     Result.andThen
         (\parametersInferred ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = context.declarationTypes
                     , range = letDeclarationRange
@@ -7838,7 +7802,7 @@ stringFirstCharToUpper string =
 
 
 expressionInfixOperationTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , locallyIntroducedExpressionVariables :
         FastDict.Dict String Type
     , locallyIntroducedDeclarationTypes :
@@ -7861,7 +7825,7 @@ expressionInfixOperationTypeInfer context infixOperation =
     resultAndThen3
         (\operatorAsFunctionType leftInferred rightInferred ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = context.declarationTypes
                     , range = infixOperation.fullRange
@@ -8776,7 +8740,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                     )
                     unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty
 
-        declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+        declarationTypes : ProjectModuleDeclaredTypes
         declarationTypes =
             context.importedTypes
                 |> FastDict.insert context.moduleName
@@ -8789,7 +8753,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                     }
 
         parameterPatternsContext :
-            { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+            { declarationTypes : ProjectModuleDeclaredTypes
             , moduleOriginLookup : ModuleOriginLookup
             }
         parameterPatternsContext =
@@ -8831,7 +8795,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                             , content = documentationContent
                                             }
 
-                            typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                            typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                             typeContext =
                                 { declarationTypes = declarationTypes
                                 , range = valueOrFunctionDeclarationToInferRange
@@ -9157,7 +9121,7 @@ syntaxValueOrFunctionDeclarationRange syntaxValueOrFunctionDeclaration =
 
 
 valueAndFunctionDeclarationsApplyVariableSubstitutions :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> VariableSubstitutions
     ->
         FastDict.Dict
@@ -9179,7 +9143,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
 
     else
         let
-            everywhereTypeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+            everywhereTypeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
             everywhereTypeContext =
                 { declarationTypes = declarationTypes
                 , range = everywhereRange
@@ -9335,7 +9299,7 @@ unannotatedInferredDeclarationTypesEmptyAndAnnotatedEmpty =
 
 
 variableSubstitutionsFromVariableToType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeVariableFromContext
     -> Type
     -> Result String VariableSubstitutions
@@ -9405,7 +9369,7 @@ type alias ValueOrFunctionDeclarationInfo type_ =
     }
 
 
-type alias ModuleLevelDeclarationTypesAvailableInModule =
+type alias ProjectModuleDeclaredTypes =
     FastDict.Dict String ModuleTypes
 
 
@@ -9630,6 +9594,361 @@ valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect infer
                     )
             )
             FastDict.empty
+
+
+andExpressionTypedNodeUnifyUsesOfLocalReferences :
+    { range : Elm.Syntax.Range.Range, declarationTypes : ProjectModuleDeclaredTypes }
+    -> TypedNode Expression
+    ->
+        { substitutions : VariableSubstitutions
+        , unifiedTypes : FastDict.Dict String Type
+        }
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , unifiedTypes : FastDict.Dict String Type
+            }
+andExpressionTypedNodeUnifyUsesOfLocalReferences context nextExpressionTypedNode soFarUsesUnified =
+    Result.andThen
+        (\withNextUsesUnified ->
+            Result.map
+                (\withNextSubstitutions ->
+                    { substitutions = withNextSubstitutions
+                    , unifiedTypes = withNextUsesUnified.unifiedTypes
+                    }
+                )
+                (variableSubstitutionsMerge context
+                    soFarUsesUnified.substitutions
+                    withNextUsesUnified.substitutions
+                )
+        )
+        (nextExpressionTypedNode
+            |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                soFarUsesUnified.unifiedTypes
+        )
+
+
+resultAndExpressionTypedNodeUnifyUsesOfLocalReferences :
+    { range : Elm.Syntax.Range.Range, declarationTypes : ProjectModuleDeclaredTypes }
+    -> TypedNode Expression
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , unifiedTypes : FastDict.Dict String Type
+            }
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , unifiedTypes : FastDict.Dict String Type
+            }
+resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context nextExpressionTypedNode soFarUsesUnifiedOrError =
+    soFarUsesUnifiedOrError
+        |> Result.andThen
+            (\soFarUsesUnified ->
+                andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    nextExpressionTypedNode
+                    soFarUsesUnified
+            )
+
+
+expressionTypedNodeUnifyUsesOfLocalReferences :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ProjectModuleDeclaredTypes
+    }
+    -> FastDict.Dict String Type
+    -> TypedNode Expression
+    ->
+        Result
+            String
+            { substitutions : VariableSubstitutions
+            , unifiedTypes : FastDict.Dict String Type
+            }
+expressionTypedNodeUnifyUsesOfLocalReferences context unifiedTypesSoFar expressionTypedNode =
+    -- IGNORE TCO
+    case expressionTypedNode.value of
+        ExpressionUnit ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionInteger _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionFloat _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionString _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionChar _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionReferenceVariant _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionOperatorFunction _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionRecordAccessFunction _ ->
+            Ok
+                { substitutions = variableSubstitutionsNone
+                , unifiedTypes = unifiedTypesSoFar
+                }
+
+        ExpressionReference reference ->
+            case reference.moduleOrigin of
+                "" ->
+                    case unifiedTypesSoFar |> FastDict.get reference.name of
+                        Nothing ->
+                            Ok
+                                { substitutions = variableSubstitutionsNone
+                                , unifiedTypes = unifiedTypesSoFar
+                                }
+
+                        Just unifiedTypeWithSameNameSoFar ->
+                            Result.map
+                                (\unifiedTypeSoFarWithReference ->
+                                    { substitutions = unifiedTypeSoFarWithReference.substitutions
+                                    , unifiedTypes =
+                                        FastDict.insert reference.name
+                                            unifiedTypeSoFarWithReference.type_
+                                            unifiedTypesSoFar
+                                    }
+                                )
+                                (typeUnify context
+                                    unifiedTypeWithSameNameSoFar
+                                    expressionTypedNode.type_
+                                )
+
+                _ ->
+                    Ok
+                        { substitutions = variableSubstitutionsNone
+                        , unifiedTypes = unifiedTypesSoFar
+                        }
+
+        ExpressionNegation negated ->
+            expressionTypedNodeUnifyUsesOfLocalReferences context
+                unifiedTypesSoFar
+                negated
+
+        ExpressionParenthesized inParens ->
+            expressionTypedNodeUnifyUsesOfLocalReferences context
+                unifiedTypesSoFar
+                inParens
+
+        ExpressionRecordAccess expressionRecordAccess ->
+            expressionTypedNodeUnifyUsesOfLocalReferences context
+                unifiedTypesSoFar
+                expressionRecordAccess.record
+
+        ExpressionLambda expressionLambda ->
+            expressionTypedNodeUnifyUsesOfLocalReferences context
+                unifiedTypesSoFar
+                expressionLambda.result
+
+        ExpressionInfixOperation expressionInfixOperation ->
+            expressionInfixOperation.left
+                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                    unifiedTypesSoFar
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences
+                    context
+                    expressionInfixOperation.right
+
+        ExpressionTuple parts ->
+            parts.part0
+                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                    unifiedTypesSoFar
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences
+                    context
+                    parts.part1
+
+        ExpressionTriple parts ->
+            parts.part0
+                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                    unifiedTypesSoFar
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    parts.part1
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    parts.part2
+
+        ExpressionIfThenElse expressionIfThenElse ->
+            expressionIfThenElse.condition
+                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                    unifiedTypesSoFar
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    expressionIfThenElse.onTrue
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    expressionIfThenElse.onFalse
+
+        ExpressionList elements ->
+            case elements of
+                [] ->
+                    Ok
+                        { substitutions = variableSubstitutionsNone
+                        , unifiedTypes = unifiedTypesSoFar
+                        }
+
+                head :: tail ->
+                    tail
+                        |> listFoldlWhileOkFromResult
+                            (head
+                                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                                    unifiedTypesSoFar
+                            )
+                            (\element soFar ->
+                                soFar
+                                    |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                        element
+                            )
+
+        ExpressionRecord fields ->
+            case fields of
+                [] ->
+                    Ok
+                        { substitutions = variableSubstitutionsNone
+                        , unifiedTypes = unifiedTypesSoFar
+                        }
+
+                field0 :: field1Up ->
+                    field1Up
+                        |> listFoldlWhileOkFromResult
+                            (field0.value
+                                |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                                    unifiedTypesSoFar
+                            )
+                            (\field soFar ->
+                                soFar
+                                    |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                        field.value
+                            )
+
+        ExpressionCall expressionCall ->
+            expressionCall.argument1Up
+                |> listFoldlWhileOkFromResult
+                    (expressionCall.called
+                        |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                            unifiedTypesSoFar
+                        |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                            expressionCall.argument0
+                    )
+                    (\argument soFar ->
+                        soFar
+                            |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                argument
+                    )
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            expressionRecordUpdate.field1Up
+                |> listFoldlWhileOkFromResult
+                    ((case expressionRecordUpdate.recordVariable.value.moduleOrigin of
+                        "" ->
+                            case unifiedTypesSoFar |> FastDict.get expressionRecordUpdate.recordVariable.value.name of
+                                Nothing ->
+                                    Ok
+                                        { substitutions = variableSubstitutionsNone
+                                        , unifiedTypes = unifiedTypesSoFar
+                                        }
+
+                                Just unifiedTypeWithSameNameSoFar ->
+                                    Result.map
+                                        (\unifiedTypeSoFarWithReference ->
+                                            { substitutions = unifiedTypeSoFarWithReference.substitutions
+                                            , unifiedTypes =
+                                                FastDict.insert expressionRecordUpdate.recordVariable.value.name
+                                                    unifiedTypeSoFarWithReference.type_
+                                                    unifiedTypesSoFar
+                                            }
+                                        )
+                                        (typeUnify context
+                                            unifiedTypeWithSameNameSoFar
+                                            expressionTypedNode.type_
+                                        )
+
+                        _ ->
+                            Ok
+                                { substitutions = variableSubstitutionsNone
+                                , unifiedTypes = unifiedTypesSoFar
+                                }
+                     )
+                        |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                            expressionRecordUpdate.field0.value
+                    )
+                    (\field soFar ->
+                        soFar
+                            |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                field.value
+                    )
+
+        ExpressionCaseOf expressionCaseOf ->
+            expressionCaseOf.case1Up
+                |> listFoldlWhileOkFromResult
+                    (expressionCaseOf.matched
+                        |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                            unifiedTypesSoFar
+                        |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                            expressionCaseOf.case0.result
+                    )
+                    (\case_ soFar ->
+                        soFar
+                            |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                case_.result
+                    )
+
+        ExpressionLetIn expressionLetIn ->
+            expressionLetIn.declaration1Up
+                |> listFoldlWhileOkFromResult
+                    (expressionLetIn.declaration0.declaration
+                        |> letDestructuringExpressionRightOfEquals
+                        |> expressionTypedNodeUnifyUsesOfLocalReferences context
+                            unifiedTypesSoFar
+                    )
+                    (\declarationNode soFar ->
+                        soFar
+                            |> andExpressionTypedNodeUnifyUsesOfLocalReferences context
+                                (declarationNode.declaration
+                                    |> letDestructuringExpressionRightOfEquals
+                                )
+                    )
+                |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
+                    expressionLetIn.result
+
+
+letDestructuringExpressionRightOfEquals : LetDeclaration -> TypedNode Expression
+letDestructuringExpressionRightOfEquals letDeclaration =
+    case letDeclaration of
+        LetDestructuring letDestructuring ->
+            letDestructuring.expression
+
+        LetValueOrFunctionDeclaration letValueOrFunctionDeclaration ->
+            letValueOrFunctionDeclaration.result
 
 
 {-| Figure out why changing the order can lead to type check failures (self-referential type variable substitution: r -> { r | field })
@@ -10318,7 +10637,7 @@ typeVariableFromContextSetToListHighestToLowestAndMap setElementToListElement ty
 
 
 valueAndFunctionDeclarationsSubstituteVariableByType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
@@ -10415,7 +10734,7 @@ substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty =
 
 variableToTypeSubstitutionsCondenseVariables :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> DictByTypeVariableFromContext TypeVariableFromContext
     -> DictByTypeVariableFromContext TypeNotVariable
@@ -10499,7 +10818,7 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
 
 
 valueOrFunctionDeclarationInfoSubstituteVariableByType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
@@ -10514,7 +10833,7 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType :
             }
 valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacement declarationValueOrFunctionSoFar =
     let
-        typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+        typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
         typeContext =
             { declarationTypes = declarationTypes
             , range = declarationValueOrFunctionSoFar |> valueOrFunctionDeclarationInfoRange
@@ -10596,7 +10915,7 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacem
 
 
 typeNotVariableIsEquivalentToTypeVariable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> TypeNotVariable
     -> Bool
 typeNotVariableIsEquivalentToTypeVariable declarationTypes typeNotVariable =
@@ -10634,7 +10953,7 @@ typeNotVariableIsEquivalentToTypeVariable declarationTypes typeNotVariable =
 
 
 typeIsEquivalentToTypeVariable :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> Type
     -> Bool
 typeIsEquivalentToTypeVariable declarationTypes type_ =
@@ -10671,7 +10990,7 @@ declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOr
 
 
 expressionTypedNodeSubstituteVariableByType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
@@ -10927,7 +11246,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionRecordAccess recordAccess ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -10977,7 +11296,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionInfixOperation expressionInfixOperation ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11200,7 +11519,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionList expressionListElements ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11277,7 +11596,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionCall expressionCall ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11369,7 +11688,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionRecord expressionRecordFields ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11448,7 +11767,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionRecordUpdate expressionRecordUpdate ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11561,7 +11880,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionLambda expressionLambda ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11663,7 +11982,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionCaseOf expressionCaseOf ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11789,7 +12108,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
         ExpressionLetIn expressionLetIn ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = expressionTypedNode.range
@@ -11989,7 +12308,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
 
 
 letDeclarationSubstituteVariableByType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
@@ -12062,7 +12381,7 @@ letDeclarationSubstituteVariableByType declarationTypes replacement letDeclarati
 
         LetValueOrFunctionDeclaration letValueOrFunction ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = letDeclarationAndRange.range
@@ -12729,7 +13048,7 @@ letDeclarationMapTypes typeChange expressionLetDeclaration =
 
 
 expressionTypedNodeApplyVariableSubstitutions :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> VariableSubstitutions
     -> TypedNode Expression
     -> Result String (TypedNode Expression)
@@ -12784,7 +13103,7 @@ expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions exp
 {-| Always remember to use the resulting `newEquivalentVariables`!
 -}
 createBatchOfSubstitutionsToApply :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , range : Elm.Syntax.Range.Range
     }
     -> VariableSubstitutions
@@ -12857,7 +13176,7 @@ createBatchOfSubstitutionsToApply context substitutions =
 
 
 patternTypedNodeApplyVariableSubstitutions :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     -> VariableSubstitutions
     -> TypedNode Pattern
     -> Result String (TypedNode Pattern)
@@ -12911,7 +13230,7 @@ patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patter
 
 substitutionsVariableToTypeApplyOverItself :
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         DictByTypeVariableFromContext
@@ -12955,7 +13274,7 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
 typeNotVariableFullyApplyVariableToTypeSubstitutions :
     -- TODO do new substitutions need be tracked?
     { range : Elm.Syntax.Range.Range
-    , declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    , declarationTypes : ProjectModuleDeclaredTypes
     }
     ->
         (TypeVariableFromContext
@@ -12984,7 +13303,7 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToAppl
 
 
 patternTypedNodeSubstituteVariableByType :
-    ModuleLevelDeclarationTypesAvailableInModule
+    ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
@@ -13285,7 +13604,7 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
         PatternRecord patternRecordFields ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = patternTypedNode.range
@@ -13379,7 +13698,7 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
         PatternListExact patternListElements ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = patternTypedNode.range
@@ -13457,7 +13776,7 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
         PatternVariant patternVariant ->
             let
-                typeContext : { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule, range : Elm.Syntax.Range.Range }
+                typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
                 typeContext =
                     { declarationTypes = declarationTypes
                     , range = patternTypedNode.range
@@ -13875,7 +14194,7 @@ fastDictContinueNothing =
 
 
 parameterPatternsTypeInfer :
-    { declarationTypes : ModuleLevelDeclarationTypesAvailableInModule
+    { declarationTypes : ProjectModuleDeclaredTypes
     , moduleOriginLookup : ModuleOriginLookup
     }
     -> List (Elm.Syntax.Node.Node Elm.Syntax.Pattern.Pattern)
