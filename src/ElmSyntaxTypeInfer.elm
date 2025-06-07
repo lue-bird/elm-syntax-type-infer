@@ -1590,6 +1590,17 @@ typeSubstituteVariable context replacement type_ =
                     )
 
 
+variableSubstitutionsIsNone : VariableSubstitutions -> Bool
+variableSubstitutionsIsNone substitutions =
+    case substitutions.equivalentVariables of
+        _ :: _ ->
+            False
+
+        [] ->
+            substitutions.variableToType
+                |> DictByTypeVariableFromContext.isEmpty
+
+
 typeApplyVariableSubstitutions :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ProjectModuleDeclaredTypes
@@ -1598,26 +1609,18 @@ typeApplyVariableSubstitutions :
     -> Type
     -> Result String Type
 typeApplyVariableSubstitutions context substitutions originalType =
-    if
-        (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
-            && (substitutions.equivalentVariables |> List.isEmpty)
-    then
+    if substitutions |> variableSubstitutionsIsNone then
         Ok originalType
 
     else
-        case
-            createBatchOfSubstitutionsToApply
-                context
-                substitutions
-        of
+        case createBatchOfSubstitutionsToApply context substitutions of
             Err error ->
                 Err error
 
             Ok batchOfSubstitutionsToApply ->
                 case
                     originalType
-                        |> typeSubstituteVariableByType
-                            context
+                        |> typeSubstituteVariableByType context
                             batchOfSubstitutionsToApply.substituteVariableByType
                 of
                     Err error ->
@@ -9050,10 +9053,7 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions :
                 (ValueOrFunctionDeclarationInfo Type)
             )
 valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
-    if
-        (substitutionsToApply.variableToType |> DictByTypeVariableFromContext.isEmpty)
-            && (substitutionsToApply.equivalentVariables |> List.isEmpty)
-    then
+    if substitutionsToApply |> variableSubstitutionsIsNone then
         Ok valueAndFunctionDeclarationsSoFar
 
     else
@@ -13366,10 +13366,7 @@ expressionTypedNodeApplyVariableSubstitutions :
     -> TypedNode Expression
     -> Result String (TypedNode Expression)
 expressionTypedNodeApplyVariableSubstitutions declarationTypes substitutions expressionTypedNode =
-    if
-        (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
-            && (substitutions.equivalentVariables |> List.isEmpty)
-    then
+    if substitutions |> variableSubstitutionsIsNone then
         Ok expressionTypedNode
 
     else
@@ -13494,10 +13491,7 @@ patternTypedNodeApplyVariableSubstitutions :
     -> TypedNode Pattern
     -> Result String (TypedNode Pattern)
 patternTypedNodeApplyVariableSubstitutions declarationTypes substitutions patternTypedNode =
-    if
-        (substitutions.variableToType |> DictByTypeVariableFromContext.isEmpty)
-            && (substitutions.equivalentVariables |> List.isEmpty)
-    then
+    if substitutions |> variableSubstitutionsIsNone then
         Ok patternTypedNode
 
     else
