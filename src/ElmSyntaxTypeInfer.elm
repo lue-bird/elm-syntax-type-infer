@@ -8797,7 +8797,7 @@ moduleLevelValueOrFunctionDeclarationTypeInfer :
         , annotated : FastDict.Dict String Type
         }
     -> Elm.Syntax.Expression.Function
-    -> Result String (ValueOrFunctionDeclarationInfo Type)
+    -> Result String ValueOrFunctionDeclarationInfo
 moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDeclarationsToInfer valueOrFunctionDeclarationToInfer =
     let
         implementation : Elm.Syntax.Expression.FunctionImplementation
@@ -9070,13 +9070,13 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions :
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo Type)
+            ValueOrFunctionDeclarationInfo
     ->
         Result
             String
             (FastDict.Dict
                 String
-                (ValueOrFunctionDeclarationInfo Type)
+                ValueOrFunctionDeclarationInfo
             )
 valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
     if substitutionsToApply |> variableSubstitutionsIsNone then
@@ -9287,7 +9287,7 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
             )
 
 
-type alias ValueOrFunctionDeclarationInfo type_ =
+type alias ValueOrFunctionDeclarationInfo =
     { nameRange : Elm.Syntax.Range.Range
     , documentation :
         Maybe
@@ -9306,7 +9306,7 @@ type alias ValueOrFunctionDeclarationInfo type_ =
     , parameters :
         List (TypedNode Pattern)
     , result : TypedNode Expression
-    , type_ : type_
+    , type_ : Type
     }
 
 
@@ -9315,8 +9315,8 @@ type alias ProjectModuleDeclaredTypes =
 
 
 declarationValueOrFunctionInfoDisambiguateTypeVariables :
-    ValueOrFunctionDeclarationInfo Type
-    -> ValueOrFunctionDeclarationInfo Type
+    ValueOrFunctionDeclarationInfo
+    -> ValueOrFunctionDeclarationInfo
 declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
@@ -9340,7 +9340,7 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
 
 
 valueOrFunctionDeclarationInfoContainedTypeVariables :
-    ValueOrFunctionDeclarationInfo Type
+    ValueOrFunctionDeclarationInfo
     -> TypeVariableFromContextSet
 valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
     declarationValueOrFunction.parameters
@@ -9515,7 +9515,7 @@ valueAndFunctionDeclarationsUsesOfLocalReferences :
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo Type)
+            ValueOrFunctionDeclarationInfo
     ->
         FastDict.Dict
             String
@@ -10916,7 +10916,7 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
 valueAndFunctionDeclarationsGetPartiallyInferred :
     FastDict.Dict
         String
-        (ValueOrFunctionDeclarationInfo Type)
+        ValueOrFunctionDeclarationInfo
     ->
         FastDict.Dict
             String
@@ -10942,9 +10942,7 @@ valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoF
             FastDict.empty
 
 
-valueOrFunctionDeclarationInfoRange :
-    ValueOrFunctionDeclarationInfo typeVariable_
-    -> Elm.Syntax.Range.Range
+valueOrFunctionDeclarationInfoRange : ValueOrFunctionDeclarationInfo -> Elm.Syntax.Range.Range
 valueOrFunctionDeclarationInfoRange valueOrFunctionDeclarationInfo =
     { start =
         case valueOrFunctionDeclarationInfo.documentation of
@@ -10984,14 +10982,14 @@ valueAndFunctionDeclarationsSubstituteVariableByType :
     ->
         FastDict.Dict
             String
-            (ValueOrFunctionDeclarationInfo Type)
+            ValueOrFunctionDeclarationInfo
     ->
         Result
             String
             { declarations :
                 FastDict.Dict
                     String
-                    (ValueOrFunctionDeclarationInfo Type)
+                    ValueOrFunctionDeclarationInfo
             , unchangedDeclarations : Set.Set String
             , substitutions : VariableSubstitutions
             }
@@ -11162,12 +11160,12 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType :
         (TypeVariableFromContext
          -> Maybe Type
         )
-    -> ValueOrFunctionDeclarationInfo Type
+    -> ValueOrFunctionDeclarationInfo
     ->
         Result
             String
             { unchanged : Bool
-            , declaration : ValueOrFunctionDeclarationInfo Type
+            , declaration : ValueOrFunctionDeclarationInfo
             , substitutions : VariableSubstitutions
             }
 valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacement declarationValueOrFunctionSoFar =
@@ -11307,8 +11305,8 @@ typeIsEquivalentToTypeVariable declarationTypes type_ =
 
 declarationValueOrFunctionInfoMapTypeVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
-    -> ValueOrFunctionDeclarationInfo Type
-    -> ValueOrFunctionDeclarationInfo Type
+    -> ValueOrFunctionDeclarationInfo
+    -> ValueOrFunctionDeclarationInfo
 declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOrFunctionSoFar =
     { nameRange = declarationValueOrFunctionSoFar.nameRange
     , documentation = declarationValueOrFunctionSoFar.documentation
