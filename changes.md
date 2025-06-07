@@ -13,7 +13,7 @@
 - a bit faster
 
 TODO
-- `valueAndFunctionDeclarations` only returns the inferred parts and nothing unrelated like original signature or name range
+- `valueAndFunctionDeclarations` only returns the inferred parts and nothing unrelated like original signature or name range / alternatively returns a list
 - for substituting let value/function declaration parameters with uses, introduce letValueOrFunctionDeclarationApplyVariableSubstitutions
 
 optimization ideas

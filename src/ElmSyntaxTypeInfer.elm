@@ -1606,8 +1606,8 @@ annotatedValueOrFunctionDeclarationApplyVariableSubstitutions :
     , declarationTypes : ProjectModuleDeclaredTypes
     }
     -> VariableSubstitutions
-    -> ValueOrFunctionDeclarationInfo
-    -> Result String ValueOrFunctionDeclarationInfo
+    -> ValueOrFunctionDeclaration
+    -> Result String ValueOrFunctionDeclaration
 annotatedValueOrFunctionDeclarationApplyVariableSubstitutions context substitutionsToApply valueOrFunctionDeclarationInfoOriginal =
     if substitutionsToApply |> variableSubstitutionsIsNone then
         Ok valueOrFunctionDeclarationInfoOriginal
@@ -1714,7 +1714,8 @@ annotatedValueOrFunctionDeclarationApplyVariableSubstitutions context substituti
                                                         Ok newSubstitutions ->
                                                             annotatedValueOrFunctionDeclarationApplyVariableSubstitutions context
                                                                 newSubstitutions
-                                                                { nameRange = valueOrFunctionDeclarationInfoOriginal.nameRange
+                                                                { name = valueOrFunctionDeclarationInfoOriginal.name
+                                                                , nameRange = valueOrFunctionDeclarationInfoOriginal.nameRange
                                                                 , documentation = valueOrFunctionDeclarationInfoOriginal.documentation
                                                                 , signature = valueOrFunctionDeclarationInfoOriginal.signature
                                                                 , result = resultSubstituted.node
@@ -8799,7 +8800,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
     in
     syntaxValueAndFunctionDeclarations
         |> listFoldlWhileOkFrom
-            FastDict.empty
+            []
             (\valueOrFunctionDeclarationToInfer soFar ->
                 let
                     implementation : Elm.Syntax.Expression.FunctionImplementation
@@ -8818,7 +8819,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                         valueOrFunctionDeclarationToInfer
                 of
                     Ok inferred ->
-                        Ok (soFar |> FastDict.insert name inferred)
+                        Ok (inferred :: soFar)
 
                     Err inferError ->
                         Err
@@ -8846,19 +8847,19 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                 }
                         unannotatedDeclarationTypes =
                             declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                                |> FastDict.foldl
-                                    (\declarationName declaration soFar ->
+                                |> List.foldl
+                                    (\declaration soFar ->
                                         case declaration.signature of
                                             Just _ ->
                                                 soFar
 
                                             Nothing ->
                                                 soFar
-                                                    |> FastDict.insert declarationName
+                                                    |> FastDict.insert declaration.name
                                                         { type_ = declaration.type_
                                                         , range =
                                                             declaration
-                                                                |> valueOrFunctionDeclarationInfoRange
+                                                                |> valueOrFunctionDeclarationRange
                                                         }
                                     )
                                     FastDict.empty
@@ -8872,9 +8873,9 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                     substitutionsForInstanceUnifyingUnannotatedDeclarationTypesWithUses
                         )
                         (declarationsInferredIndependentOfOtherLocalUnannotatedDeclarations
-                            |> fastDictFoldlWhileOkFrom
+                            |> listFoldlWhileOkFrom
                                 variableSubstitutionsNone
-                                (\_ declarationInfo soFar ->
+                                (\declaration soFar ->
                                     Result.andThen
                                         (\resultSubstitutions ->
                                             variableSubstitutionsMerge
@@ -8884,10 +8885,10 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                 soFar
                                                 resultSubstitutions
                                         )
-                                        (declarationInfo.result
+                                        (declaration.result
                                             |> substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression
                                                 { declarationTypes = declarationTypes
-                                                , range = declarationInfo |> valueOrFunctionDeclarationInfoRange
+                                                , range = declaration |> valueOrFunctionDeclarationRange
                                                 }
                                                 unannotatedDeclarationTypes
                                         )
@@ -8897,10 +8898,15 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
                 fullySubstitutedDeclarationsTypedWithContext
-                    |> FastDict.map
-                        (\_ declaration ->
-                            declaration |> declarationValueOrFunctionInfoDisambiguateTypeVariables
+                    |> List.foldl
+                        (\declaration soFar ->
+                            soFar
+                                |> FastDict.insert declaration.name
+                                    (declaration
+                                        |> declarationValueOrFunctionDisambiguateTypeVariables
+                                    )
                         )
+                        FastDict.empty
             )
 
 
@@ -8919,7 +8925,7 @@ moduleLevelValueOrFunctionDeclarationTypeInfer :
         , annotated : FastDict.Dict String Type
         }
     -> Elm.Syntax.Expression.Function
-    -> Result String ValueOrFunctionDeclarationInfo
+    -> Result String ValueOrFunctionDeclaration
 moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDeclarationsToInfer valueOrFunctionDeclarationToInfer =
     let
         implementation : Elm.Syntax.Expression.FunctionImplementation
@@ -8964,7 +8970,8 @@ moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDec
                             case parametersInferred.nodes of
                                 [] ->
                                     Ok
-                                        { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                        { name = name
+                                        , nameRange = implementation.name |> Elm.Syntax.Node.range
                                         , documentation = maybeDocumentationAndRange
                                         , signature = Nothing
                                         , result = resultInferred
@@ -8988,7 +8995,8 @@ moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDec
                                         (\parameterPatternVariablesAndUsesUnification ->
                                             Result.map2
                                                 (\resultSubstituted parametersSubstituted ->
-                                                    { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                    { name = name
+                                                    , nameRange = implementation.name |> Elm.Syntax.Node.range
                                                     , documentation = maybeDocumentationAndRange
                                                     , signature = Nothing
                                                     , result = resultSubstituted
@@ -9091,7 +9099,8 @@ moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDec
                                             -- throw an error: annotation too loose
                                             Result.andThen
                                                 (\fullSubstitutions ->
-                                                    { nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                    { name = name
+                                                    , nameRange = implementation.name |> Elm.Syntax.Node.range
                                                     , documentation = maybeDocumentationAndRange
                                                     , signature =
                                                         Just
@@ -9165,17 +9174,8 @@ syntaxValueOrFunctionDeclarationRange syntaxValueOrFunctionDeclaration =
 valueAndFunctionDeclarationsApplyVariableSubstitutions :
     ProjectModuleDeclaredTypes
     -> VariableSubstitutions
-    ->
-        FastDict.Dict
-            String
-            ValueOrFunctionDeclarationInfo
-    ->
-        Result
-            String
-            (FastDict.Dict
-                String
-                ValueOrFunctionDeclarationInfo
-            )
+    -> List ValueOrFunctionDeclaration
+    -> Result String (List ValueOrFunctionDeclaration)
 valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitutionsToApply valueAndFunctionDeclarationsSoFar =
     if substitutionsToApply |> variableSubstitutionsIsNone then
         Ok valueAndFunctionDeclarationsSoFar
@@ -9239,17 +9239,20 @@ valueAndFunctionDeclarationsApplyVariableSubstitutions declarationTypes substitu
                                     , partiallyInferredDeclarationType : Type
                                     }
                             substitutionsOfPartiallyInferredDeclarationUses =
-                                allPartiallyInferredDeclarationsAndUsesAfterSubstitution
-                                    |> FastDict.foldl
-                                        (\unannotatedInferredDeclarationName uses soFar ->
-                                            case valueAndFunctionDeclarationsSubstituted.declarations |> FastDict.get unannotatedInferredDeclarationName of
+                                valueAndFunctionDeclarationsSubstituted.declarations
+                                    |> List.foldl
+                                        (\inferredDeclarationAfterSubstituting soFar ->
+                                            case
+                                                allPartiallyInferredDeclarationsAndUsesAfterSubstitution
+                                                    |> FastDict.get inferredDeclarationAfterSubstituting.name
+                                            of
                                                 Nothing ->
                                                     soFar
 
-                                                Just inferredDeclarationAfterSubstituting ->
+                                                Just uses ->
                                                     if
                                                         valueAndFunctionDeclarationsSubstituted.unchangedDeclarations
-                                                            |> Set.member unannotatedInferredDeclarationName
+                                                            |> Set.member inferredDeclarationAfterSubstituting.name
                                                     then
                                                         { uses = uses
                                                         , partiallyInferredDeclarationType =
@@ -9385,6 +9388,30 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
             )
 
 
+type alias ValueOrFunctionDeclaration =
+    { name : String
+    , nameRange : Elm.Syntax.Range.Range
+    , documentation :
+        Maybe
+            { content : String
+            , range : Elm.Syntax.Range.Range
+            }
+    , signature :
+        Maybe
+            { range : Elm.Syntax.Range.Range
+            , nameRange : Elm.Syntax.Range.Range
+            , -- variables names in here might not correspond
+              -- with those in .type_
+              annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
+            , annotationTypeRange : Elm.Syntax.Range.Range
+            }
+    , parameters :
+        List (TypedNode Pattern)
+    , result : TypedNode Expression
+    , type_ : Type
+    }
+
+
 type alias ValueOrFunctionDeclarationInfo =
     { nameRange : Elm.Syntax.Range.Range
     , documentation :
@@ -9412,20 +9439,20 @@ type alias ProjectModuleDeclaredTypes =
     FastDict.Dict String ModuleTypes
 
 
-declarationValueOrFunctionInfoDisambiguateTypeVariables :
-    ValueOrFunctionDeclarationInfo
+declarationValueOrFunctionDisambiguateTypeVariables :
+    ValueOrFunctionDeclaration
     -> ValueOrFunctionDeclarationInfo
-declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFunctionInfo =
+declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
         globalTypeVariableDisambiguationLookup =
             typeVariablesFromContextToDisambiguationLookup
                 (declarationValueOrFunctionInfo
-                    |> valueOrFunctionDeclarationInfoContainedTypeVariables
+                    |> valueOrFunctionDeclarationContainedTypeVariables
                 )
     in
     declarationValueOrFunctionInfo
-        |> declarationValueOrFunctionInfoMapTypeVariables
+        |> declarationValueOrFunctionInfoMapTypeVariablesToInfo
             (\variable ->
                 { useRange = variable.useRange
                 , name =
@@ -9437,10 +9464,10 @@ declarationValueOrFunctionInfoDisambiguateTypeVariables declarationValueOrFuncti
             )
 
 
-valueOrFunctionDeclarationInfoContainedTypeVariables :
-    ValueOrFunctionDeclarationInfo
+valueOrFunctionDeclarationContainedTypeVariables :
+    ValueOrFunctionDeclaration
     -> TypeVariableFromContextSet
-valueOrFunctionDeclarationInfoContainedTypeVariables declarationValueOrFunction =
+valueOrFunctionDeclarationContainedTypeVariables declarationValueOrFunction =
     declarationValueOrFunction.parameters
         |> listMapToTypeVariableFromContextSetsAndUnify
             patternTypedNodeContainedTypeVariables
@@ -9610,10 +9637,7 @@ ropeFoldlWhileOkFrom initialState reduceToResult rope =
 
 valueAndFunctionDeclarationsUsesOfLocalReferences :
     FastDict.Dict String whatever_
-    ->
-        FastDict.Dict
-            String
-            ValueOrFunctionDeclarationInfo
+    -> List ValueOrFunctionDeclaration
     ->
         FastDict.Dict
             String
@@ -9623,11 +9647,11 @@ valueAndFunctionDeclarationsUsesOfLocalReferences :
             )
 valueAndFunctionDeclarationsUsesOfLocalReferences localReferencesToCollect inferredValueAndFunctionDeclarations =
     inferredValueAndFunctionDeclarations
-        |> FastDict.foldl
-            (\_ declarationValueOrFunction usesSoFar ->
+        |> List.foldl
+            (\valueOrFunctionDeclaration usesSoFar ->
                 collectedLocalReferenceUsesMerge
                     usesSoFar
-                    (declarationValueOrFunction.result
+                    (valueOrFunctionDeclaration.result
                         |> expressionTypedNodeUsesOfLocalReferences
                             localReferencesToCollect
                     )
@@ -11012,9 +11036,7 @@ createEquivalentVariablesToCondensedVariableLookup equivalentVariables =
 
 
 valueAndFunctionDeclarationsGetPartiallyInferred :
-    FastDict.Dict
-        String
-        ValueOrFunctionDeclarationInfo
+    List ValueOrFunctionDeclaration
     ->
         FastDict.Dict
             String
@@ -11023,21 +11045,40 @@ valueAndFunctionDeclarationsGetPartiallyInferred :
             }
 valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoFar =
     valueAndFunctionDeclarationsSoFar
-        |> FastDict.foldl
-            (\name declarationValueOrFunction moduleLevelPartiallyInferredDeclarationsSoFar ->
-                case declarationValueOrFunction.signature of
+        |> List.foldl
+            (\valueOrFunctionDeclaration moduleLevelPartiallyInferredDeclarationsSoFar ->
+                case valueOrFunctionDeclaration.signature of
                     Just _ ->
                         moduleLevelPartiallyInferredDeclarationsSoFar
 
                     Nothing ->
                         moduleLevelPartiallyInferredDeclarationsSoFar
-                            |> FastDict.insert name
+                            |> FastDict.insert valueOrFunctionDeclaration.name
                                 { range =
-                                    declarationValueOrFunction |> valueOrFunctionDeclarationInfoRange
-                                , type_ = declarationValueOrFunction.type_
+                                    valueOrFunctionDeclaration
+                                        |> valueOrFunctionDeclarationRange
+                                , type_ = valueOrFunctionDeclaration.type_
                                 }
             )
             FastDict.empty
+
+
+valueOrFunctionDeclarationRange : ValueOrFunctionDeclaration -> Elm.Syntax.Range.Range
+valueOrFunctionDeclarationRange valueOrFunctionDeclarationInfo =
+    { start =
+        case valueOrFunctionDeclarationInfo.documentation of
+            Just documentation ->
+                documentation.range.start
+
+            Nothing ->
+                case valueOrFunctionDeclarationInfo.signature of
+                    Just signature ->
+                        signature.range.start
+
+                    Nothing ->
+                        valueOrFunctionDeclarationInfo.nameRange.start
+    , end = valueOrFunctionDeclarationInfo.result.range.end
+    }
 
 
 valueOrFunctionDeclarationInfoRange : ValueOrFunctionDeclarationInfo -> Elm.Syntax.Range.Range
@@ -11077,25 +11118,19 @@ valueAndFunctionDeclarationsSubstituteVariableByType :
         (TypeVariableFromContext
          -> Maybe Type
         )
-    ->
-        FastDict.Dict
-            String
-            ValueOrFunctionDeclarationInfo
+    -> List ValueOrFunctionDeclaration
     ->
         Result
             String
-            { declarations :
-                FastDict.Dict
-                    String
-                    ValueOrFunctionDeclarationInfo
+            { declarations : List ValueOrFunctionDeclaration
             , unchangedDeclarations : Set.Set String
             , substitutions : VariableSubstitutions
             }
 valueAndFunctionDeclarationsSubstituteVariableByType declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     valueAndFunctionDeclarationsToApplySubstitutionTo
-        |> fastDictFoldlWhileOkFrom
-            substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty
-            (\declarationName declarationToSubstituteIn soFar ->
+        |> listFoldlWhileOkFrom
+            substitutionsNoneDeclarationsListEmptyUnchangedDeclarationsSetEmpty
+            (\declarationToSubstituteIn soFar ->
                 Result.andThen
                     (\declarationSubstituted ->
                         if declarationSubstituted.unchanged then
@@ -11103,11 +11138,10 @@ valueAndFunctionDeclarationsSubstituteVariableByType declarationTypes substituti
                                 { substitutions = soFar.substitutions
                                 , unchangedDeclarations =
                                     soFar.unchangedDeclarations
-                                        |> Set.insert declarationName
+                                        |> Set.insert declarationToSubstituteIn.name
                                 , declarations =
-                                    FastDict.insert declarationName
-                                        declarationToSubstituteIn
-                                        soFar.declarations
+                                    declarationToSubstituteIn
+                                        :: soFar.declarations
                                 }
 
                         else
@@ -11117,9 +11151,8 @@ valueAndFunctionDeclarationsSubstituteVariableByType declarationTypes substituti
                                     , unchangedDeclarations =
                                         soFar.unchangedDeclarations
                                     , declarations =
-                                        FastDict.insert declarationName
-                                            declarationSubstituted.declaration
-                                            soFar.declarations
+                                        declarationSubstituted.declaration
+                                            :: soFar.declarations
                                     }
                                 )
                                 (variableSubstitutionsMerge
@@ -11131,14 +11164,14 @@ valueAndFunctionDeclarationsSubstituteVariableByType declarationTypes substituti
                                 )
                     )
                     (declarationToSubstituteIn
-                        |> valueOrFunctionDeclarationInfoSubstituteVariableByType
+                        |> valueOrFunctionDeclarationSubstituteVariableByType
                             declarationTypes
                             substitutionToApply
                     )
                     |> Result.mapError
                         (\substitutionError ->
                             "I inferred various parts of the value/function declaration "
-                                ++ declarationName
+                                ++ declarationToSubstituteIn.name
                                 ++ " but there was a problem after substituting pieces of knowledge: "
                                 ++ substitutionError
                         )
@@ -11155,14 +11188,14 @@ everywhereRange =
     }
 
 
-substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty :
+substitutionsNoneDeclarationsListEmptyUnchangedDeclarationsSetEmpty :
     { substitutions : VariableSubstitutions
-    , declarations : FastDict.Dict String declarationInfo_
+    , declarations : List ValueOrFunctionDeclaration
     , unchangedDeclarations : Set String
     }
-substitutionsNoneDeclarationsDictEmptyUnchangedDeclarationsSetEmpty =
+substitutionsNoneDeclarationsListEmptyUnchangedDeclarationsSetEmpty =
     { substitutions = variableSubstitutionsNone
-    , declarations = FastDict.empty
+    , declarations = []
     , unchangedDeclarations = Set.empty
     }
 
@@ -11252,26 +11285,26 @@ variableToTypeSubstitutionsCondenseVariables context variableToCondensedLookup v
             )
 
 
-valueOrFunctionDeclarationInfoSubstituteVariableByType :
+valueOrFunctionDeclarationSubstituteVariableByType :
     ProjectModuleDeclaredTypes
     ->
         (TypeVariableFromContext
          -> Maybe Type
         )
-    -> ValueOrFunctionDeclarationInfo
+    -> ValueOrFunctionDeclaration
     ->
         Result
             String
             { unchanged : Bool
-            , declaration : ValueOrFunctionDeclarationInfo
+            , declaration : ValueOrFunctionDeclaration
             , substitutions : VariableSubstitutions
             }
-valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacement declarationValueOrFunctionSoFar =
+valueOrFunctionDeclarationSubstituteVariableByType declarationTypes replacement declarationValueOrFunctionSoFar =
     let
         typeContext : { declarationTypes : ProjectModuleDeclaredTypes, range : Elm.Syntax.Range.Range }
         typeContext =
             { declarationTypes = declarationTypes
-            , range = declarationValueOrFunctionSoFar |> valueOrFunctionDeclarationInfoRange
+            , range = declarationValueOrFunctionSoFar |> valueOrFunctionDeclarationRange
             }
     in
     resultAndThen3
@@ -11288,7 +11321,8 @@ valueOrFunctionDeclarationInfoSubstituteVariableByType declarationTypes replacem
                     (\fullSubstitutions ->
                         { unchanged = False
                         , declaration =
-                            { nameRange = declarationValueOrFunctionSoFar.nameRange
+                            { name = declarationValueOrFunctionSoFar.name
+                            , nameRange = declarationValueOrFunctionSoFar.nameRange
                             , documentation = declarationValueOrFunctionSoFar.documentation
                             , signature = declarationValueOrFunctionSoFar.signature
                             , parameters = parametersSubstituted.nodes
@@ -11401,11 +11435,11 @@ typeIsEquivalentToTypeVariable declarationTypes type_ =
                 |> typeNotVariableIsEquivalentToTypeVariable declarationTypes
 
 
-declarationValueOrFunctionInfoMapTypeVariables :
+declarationValueOrFunctionInfoMapTypeVariablesToInfo :
     (TypeVariableFromContext -> TypeVariableFromContext)
+    -> ValueOrFunctionDeclaration
     -> ValueOrFunctionDeclarationInfo
-    -> ValueOrFunctionDeclarationInfo
-declarationValueOrFunctionInfoMapTypeVariables variableChange declarationValueOrFunctionSoFar =
+declarationValueOrFunctionInfoMapTypeVariablesToInfo variableChange declarationValueOrFunctionSoFar =
     { nameRange = declarationValueOrFunctionSoFar.nameRange
     , documentation = declarationValueOrFunctionSoFar.documentation
     , signature = declarationValueOrFunctionSoFar.signature
