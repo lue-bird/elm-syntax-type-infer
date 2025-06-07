@@ -51,7 +51,7 @@ suite =
                         }
                     |> Result.andThen
                         (\declarationsTyped ->
-                            case declarationsTyped |> FastDict.get "majorVersions" of
+                            case declarationsTyped |> List.head of
                                 Nothing ->
                                     Err "typed declaration not found"
 
@@ -97,7 +97,7 @@ suite =
                         }
                     |> Result.andThen
                         (\declarationsTyped ->
-                            case declarationsTyped |> FastDict.get "hello" of
+                            case declarationsTyped |> List.head of
                                 Nothing ->
                                     Err "typed declaration not found"
 
@@ -960,12 +960,12 @@ doubleTrouble =
                     |> typeInferModuleFromSource
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "doubleTrouble"
-                                { type_ = typeFloat
-                                , documentation = Nothing
-                                , nameRange = { end = { column = 14, row = 2 }, start = { column = 1, row = 2 } }
-                                , parameters = []
-                                , result =
+                            [ { name = "doubleTrouble"
+                              , type_ = typeFloat
+                              , documentation = Nothing
+                              , nameRange = { end = { column = 14, row = 2 }, start = { column = 1, row = 2 } }
+                              , parameters = []
+                              , result =
                                     { range = { end = { column = 6, row = 7 }, start = { column = 5, row = 3 } }
                                     , type_ = typeFloat
                                     , value =
@@ -1020,9 +1020,9 @@ doubleTrouble =
                                                 }
                                             }
                                     }
-                                , signature = Nothing
-                                }
-                            )
+                              , signature = Nothing
+                              }
+                            ]
                         )
             )
         , Test.test "curried call: Tuple.pair \"\""
@@ -2963,8 +2963,10 @@ b = a
                     |> Result.map
                         (\declarationsTyped ->
                             declarationsTyped
-                                |> FastDict.map (\_ -> .type_)
-                                |> FastDict.toList
+                                |> List.map
+                                    (\inferred ->
+                                        ( inferred.name, inferred.type_ )
+                                    )
                         )
                     |> Expect.equal
                         (Ok
@@ -2983,8 +2985,10 @@ b = a
                     |> Result.map
                         (\declarationsTyped ->
                             declarationsTyped
-                                |> FastDict.map (\_ -> .result)
-                                |> FastDict.toList
+                                |> List.map
+                                    (\inferred ->
+                                        ( inferred.name, inferred.result )
+                                    )
                         )
                     |> Expect.equal
                         (Ok
@@ -3015,8 +3019,10 @@ b = a
                     |> Result.map
                         (\declarationsTyped ->
                             declarationsTyped
-                                |> FastDict.map (\_ -> .type_)
-                                |> FastDict.toList
+                                |> List.map
+                                    (\inferred ->
+                                        ( inferred.name, inferred.type_ )
+                                    )
                         )
                     |> Expect.equal
                         (Ok
@@ -3049,10 +3055,14 @@ impossible = \\a -> [ a, [ a ] ]
 majorVersions = List.map (\\a -> a) [ 2.2 ]
 """
                     |> typeInferModuleFromSource
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map
+                        (\declarationsInferred ->
+                            declarationsInferred
+                                |> List.map .result
+                        )
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "majorVersions"
+                            (List.singleton
                                 { range = { end = { column = 43, row = 2 }, start = { column = 17, row = 2 } }
                                 , type_ = typeList typeFloat
                                 , value =
@@ -3139,10 +3149,10 @@ eat yum = ()
                     |> typeInferModuleFromSource
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "eat"
-                                { documentation = Nothing
-                                , nameRange = { end = { column = 4, row = 3 }, start = { column = 1, row = 3 } }
-                                , signature =
+                            [ { name = "eat"
+                              , documentation = Nothing
+                              , nameRange = { end = { column = 4, row = 3 }, start = { column = 1, row = 3 } }
+                              , signature =
                                     Just
                                         { annotationType =
                                             Elm.Syntax.TypeAnnotation.FunctionTypeAnnotation
@@ -3159,14 +3169,14 @@ eat yum = ()
                                         , nameRange = { end = { column = 4, row = 2 }, start = { column = 1, row = 2 } }
                                         , range = { end = { column = 19, row = 2 }, start = { column = 1, row = 2 } }
                                         }
-                                , parameters =
+                              , parameters =
                                     [ { range = { end = { column = 8, row = 3 }, start = { column = 5, row = 3 } }
                                       , type_ = typeString
                                       , value =
                                             ElmSyntaxTypeInfer.PatternVariable "yum"
                                       }
                                     ]
-                                , type_ =
+                              , type_ =
                                     ElmSyntaxTypeInfer.TypeNotVariable
                                         (ElmSyntaxTypeInfer.TypeFunction
                                             { input = typeString
@@ -3175,7 +3185,7 @@ eat yum = ()
                                                     ElmSyntaxTypeInfer.TypeUnit
                                             }
                                         )
-                                , result =
+                              , result =
                                     { range = { end = { column = 13, row = 3 }, start = { column = 11, row = 3 } }
                                     , type_ =
                                         ElmSyntaxTypeInfer.TypeNotVariable
@@ -3183,8 +3193,8 @@ eat yum = ()
                                     , value =
                                         ElmSyntaxTypeInfer.ExpressionUnit
                                     }
-                                }
-                            )
+                              }
+                            ]
                         )
             )
         , Test.test "inner types are consistent in listFloatIdentity : List Float -> List Float ; listFloatIdentity listFloat = List.map (\\a -> a) listFloat"
@@ -3266,10 +3276,17 @@ eat yum = ()
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map
+                        (\declarationsInferred ->
+                            declarationsInferred
+                                |> List.map
+                                    (\inferred ->
+                                        inferred.result
+                                    )
+                        )
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "listFloatIdentity"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeFloat
                                 , value =
@@ -3431,10 +3448,14 @@ eat yum = ()
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map
+                        (\declarationsInferred ->
+                            declarationsInferred
+                                |> List.map .result
+                        )
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeString
                                 , value =
@@ -3644,10 +3665,10 @@ eat yum = ()
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeString
                                 , value =
@@ -3903,10 +3924,10 @@ eat yum = ()
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeString
                                 , value =
@@ -4094,8 +4115,8 @@ unindent lines = lines |> List.map identity
 """
                     |> typeInferModuleFromSource
                     |> Result.map
-                        (FastDict.map
-                            (\_ inferred ->
+                        (List.map
+                            (\inferred ->
                                 { result = inferred.result
                                 , parameters = inferred.parameters
                                 }
@@ -4103,15 +4124,14 @@ unindent lines = lines |> List.map identity
                         )
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
-                                { parameters =
+                            [ { parameters =
                                     [ { range = { end = { column = 15, row = 3 }, start = { column = 10, row = 3 } }
                                       , type_ = typeList typeString
                                       , value =
                                             ElmSyntaxTypeInfer.PatternVariable "lines"
                                       }
                                     ]
-                                , result =
+                              , result =
                                     { range = { end = { column = 44, row = 3 }, start = { column = 18, row = 3 } }
                                     , type_ = typeList typeString
                                     , value =
@@ -4195,8 +4215,8 @@ unindent lines = lines |> List.map identity
                                                 }
                                             }
                                     }
-                                }
-                            )
+                              }
+                            ]
                         )
             )
         , Test.test "inner types are consistent in unindent : List String -> List String ; unindent lines = lines |> List.map (\\line -> line)"
@@ -4206,10 +4226,10 @@ unindent : List String -> List String
 unindent lines = lines |> List.map (\\line -> line)
 """
                     |> typeInferModuleFromSource
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = { end = { column = 51, row = 3 }, start = { column = 18, row = 3 } }
                                 , type_ = typeList typeString
                                 , value =
@@ -4418,10 +4438,10 @@ unindent lines = lines |> List.map (\\line -> line)
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeString
                                 , value =
@@ -4718,10 +4738,10 @@ unindent lines = lines |> List.map (\\line -> line)
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "unindent"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ = typeList typeString
                                 , value =
@@ -5020,10 +5040,10 @@ unindent lines = lines |> List.map (\\line -> line)
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "tupleFirstInt"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ =
                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -5151,10 +5171,10 @@ unindent lines = lines |> List.map (\\line -> line)
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "waste"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ =
                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -5213,10 +5233,10 @@ waste =
     ()
 """
                     |> typeInferModuleFromSource
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "waste"
+                            (List.singleton
                                 { range = { end = { column = 7, row = 7 }, start = { column = 5, row = 3 } }
                                 , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                 , value =
@@ -5303,10 +5323,10 @@ waste =
     ()
 """
                     |> typeInferModuleFromSource
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "waste"
+                            (List.singleton
                                 { range = { end = { column = 7, row = 7 }, start = { column = 5, row = 3 } }
                                 , type_ = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
                                 , value =
@@ -5467,10 +5487,10 @@ waste =
                                     }
                                 |> .types
                         }
-                    |> Result.map (FastDict.map (\_ -> .result))
+                    |> Result.map (List.map .result)
                     |> Expect.equal
                         (Ok
-                            (FastDict.singleton "waste"
+                            (List.singleton
                                 { range = Elm.Syntax.Range.empty
                                 , type_ =
                                     ElmSyntaxTypeInfer.TypeNotVariable
@@ -5752,13 +5772,13 @@ expressionToInferredType expression =
         |> Result.andThen toSingleInferredDeclaration
 
 
-toSingleInferredDeclaration : FastDict.Dict String { inferred_ | type_ : type_ } -> Result String type_
+toSingleInferredDeclaration : List { inferred_ | type_ : type_ } -> Result String type_
 toSingleInferredDeclaration declarationsInferred =
-    case declarationsInferred |> FastDict.getMin of
+    case declarationsInferred |> List.head of
         Nothing ->
             Err "no typed declarations found"
 
-        Just ( _, declarationTyped ) ->
+        Just declarationTyped ->
             Ok declarationTyped.type_
 
 
@@ -5798,9 +5818,9 @@ typeInferModuleFromSource :
     ->
         Result
             String
-            (FastDict.Dict
-                String
-                { parameters :
+            (List
+                { name : String
+                , parameters :
                     List (ElmSyntaxTypeInfer.TypedNode ElmSyntaxTypeInfer.Pattern)
                 , result :
                     ElmSyntaxTypeInfer.TypedNode ElmSyntaxTypeInfer.Expression

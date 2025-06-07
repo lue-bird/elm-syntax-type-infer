@@ -42,21 +42,20 @@ import ElmSyntaxTypeInfer
         }
 -->
 Ok
-    (FastDict.singleton "majorVersions"
-        { type_ =
-            ElmSyntaxTypeInfer.TypeNotVariable
-                (ElmSyntaxTypeInfer.TypeConstruct
-                    { moduleOrigin = [ "List" ]
-                    , name = "List"
-                    , arguments =
-                        [ ElmSyntaxTypeInfer.TypeVariable
-                            { name = "number", useRange = Elm.Syntax.Range.empty }
-                        ]
-                    }
-                )
-        ...
-        }
-    )
+    [ { type_ =
+        ElmSyntaxTypeInfer.TypeNotVariable
+            (ElmSyntaxTypeInfer.TypeConstruct
+                { moduleOrigin = [ "List" ]
+                , name = "List"
+                , arguments =
+                    [ ElmSyntaxTypeInfer.TypeVariable
+                        { name = "number", useRange = Elm.Syntax.Range.empty }
+                    ]
+                }
+            )
+      ...
+      }
+    ]
 
 
 exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup

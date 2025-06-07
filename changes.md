@@ -5,6 +5,7 @@
 - in variant `ExpressionCaseOf`, rename `matchedExpression` to `matched`
 - in variant `PatternVariant`, add field `choiceTypeName`
 - `valueAndFunctionDeclarations` and `moduleDeclarationsToTypes` now additionally require the module name. In return, references to things declared in the current module will have the current module name as their origin
+- `valueAndFunctionDeclarations` now returns a list with the declaration name included instead of a dict by name
 - `moduleDeclarationsToTypes` now accepts declaration nodes instead of just declarations
   This is usually more convenient and can avoid a List.map Node.value
 - keep use ranges at resulting type variables for the output
@@ -13,7 +14,6 @@
 - a bit faster
 
 TODO
-- `valueAndFunctionDeclarations` only returns the inferred parts and nothing unrelated like original signature or name range / alternatively returns a list
 - for substituting let value/function declaration parameters with uses, introduce letValueOrFunctionDeclarationApplyVariableSubstitutions
 
 optimization ideas

@@ -8571,15 +8571,15 @@ in a module.
             }
     -->
     Ok
-        (FastDict.singleton "hello"
-            { type_ =
+        [ { name = "hello"
+          , type_ =
                 ElmSyntaxTypeInfer.TypeNotVariable
                     (ElmSyntaxTypeInfer.TypeConstruct
                         { moduleOrigin = [ "String" ], name = "String", arguments = [] }
                     )
-            ...
-            }
-        )
+          ...
+          }
+        ]
 
 
     exampleModuleOriginLookup : ElmSyntaxTypeInfer.ModuleOriginLookup
@@ -8605,12 +8605,12 @@ valueAndFunctionDeclarations :
     ->
         Result
             String
-            (FastDict.Dict
-                String
+            (List
                 { parameters :
                     List (TypedNode Pattern)
                 , result : TypedNode Expression
                 , type_ : Type
+                , name : String
                 , nameRange : Elm.Syntax.Range.Range
                 , documentation :
                     Maybe
@@ -8898,15 +8898,11 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
                 fullySubstitutedDeclarationsTypedWithContext
-                    |> List.foldl
-                        (\declaration soFar ->
-                            soFar
-                                |> FastDict.insert declaration.name
-                                    (declaration
-                                        |> declarationValueOrFunctionDisambiguateTypeVariables
-                                    )
+                    |> List.map
+                        (\declaration ->
+                            declaration
+                                |> declarationValueOrFunctionDisambiguateTypeVariables
                         )
-                        FastDict.empty
             )
 
 
@@ -9441,7 +9437,7 @@ type alias ProjectModuleDeclaredTypes =
 
 declarationValueOrFunctionDisambiguateTypeVariables :
     ValueOrFunctionDeclaration
-    -> ValueOrFunctionDeclarationInfo
+    -> ValueOrFunctionDeclaration
 declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunctionInfo =
     let
         globalTypeVariableDisambiguationLookup : DictByTypeVariableFromContext String
@@ -9452,7 +9448,7 @@ declarationValueOrFunctionDisambiguateTypeVariables declarationValueOrFunctionIn
                 )
     in
     declarationValueOrFunctionInfo
-        |> declarationValueOrFunctionInfoMapTypeVariablesToInfo
+        |> declarationValueOrFunctionInfoMapTypeVariables
             (\variable ->
                 { useRange = variable.useRange
                 , name =
@@ -11435,25 +11431,26 @@ typeIsEquivalentToTypeVariable declarationTypes type_ =
                 |> typeNotVariableIsEquivalentToTypeVariable declarationTypes
 
 
-declarationValueOrFunctionInfoMapTypeVariablesToInfo :
+declarationValueOrFunctionInfoMapTypeVariables :
     (TypeVariableFromContext -> TypeVariableFromContext)
     -> ValueOrFunctionDeclaration
-    -> ValueOrFunctionDeclarationInfo
-declarationValueOrFunctionInfoMapTypeVariablesToInfo variableChange declarationValueOrFunctionSoFar =
-    { nameRange = declarationValueOrFunctionSoFar.nameRange
-    , documentation = declarationValueOrFunctionSoFar.documentation
-    , signature = declarationValueOrFunctionSoFar.signature
+    -> ValueOrFunctionDeclaration
+declarationValueOrFunctionInfoMapTypeVariables variableChange valueOrFunctionDeclaration =
+    { name = valueOrFunctionDeclaration.name
+    , nameRange = valueOrFunctionDeclaration.nameRange
+    , documentation = valueOrFunctionDeclaration.documentation
+    , signature = valueOrFunctionDeclaration.signature
     , parameters =
-        declarationValueOrFunctionSoFar.parameters
+        valueOrFunctionDeclaration.parameters
             |> List.map
                 (\argument ->
                     argument |> patternTypedNodeMapTypeVariables variableChange
                 )
     , result =
-        declarationValueOrFunctionSoFar.result
+        valueOrFunctionDeclaration.result
             |> expressionTypedNodeMapTypeVariables variableChange
     , type_ =
-        declarationValueOrFunctionSoFar.type_
+        valueOrFunctionDeclaration.type_
             |> typeMapVariables variableChange
     }
 
