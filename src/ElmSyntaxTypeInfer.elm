@@ -3823,6 +3823,19 @@ okVariableSubstitutionsNone =
     Ok variableSubstitutionsNone
 
 
+okVariableSubstitutionsNoneUnifiedTypesDictEmpty :
+    Result
+        String
+        { substitutions : VariableSubstitutions
+        , unifiedTypes : FastDict.Dict String Type
+        }
+okVariableSubstitutionsNoneUnifiedTypesDictEmpty =
+    Ok
+        { substitutions = variableSubstitutionsNone
+        , unifiedTypes = FastDict.empty
+        }
+
+
 typeNotVariableUnify :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ProjectModuleDeclaredTypes
@@ -6384,7 +6397,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             Result.andThen
                                 (\resultInferred ->
                                     Result.andThen
-                                        (\parameterPatternVariablesAndUsesUnificationSubstitutions ->
+                                        (\parameterPatternVariablesAndUsesUnification ->
                                             { range = fullRange
                                             , value =
                                                 ExpressionLambda
@@ -6413,9 +6426,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             }
                                                 |> expressionTypedNodeApplyVariableSubstitutions
                                                     context.declarationTypes
-                                                    parameterPatternVariablesAndUsesUnificationSubstitutions
+                                                    parameterPatternVariablesAndUsesUnification.substitutions
                                         )
-                                        (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                        (expressionTypedNodeUnifyUsesOfLocalReferences
                                             { declarationTypes = context.declarationTypes
                                             , range = fullRange
                                             }
@@ -6700,14 +6713,14 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                     fullSubstitutions
                         )
                         (resultAndThen2
-                            (\destructuringUseUnificationSubstitutions declarationUseUnificationSubstitutions ->
+                            (\destructuringUseUnification declarationUseUnificationSubstitutions ->
                                 variableSubstitutionsMerge
                                     typeContext
-                                    destructuringUseUnificationSubstitutions
+                                    destructuringUseUnification.substitutions
                                     declarationUseUnificationSubstitutions
                             )
                             (if acrossLetInIncludingContextSoFar.destructuringExists then
-                                substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                expressionTypedNodeUnifyUsesOfLocalReferences
                                     typeContext
                                     ((declaration0Inferred :: declaration1UpInferred)
                                         |> listMapToFastDictsAndUnify
@@ -6724,9 +6737,9 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                     letInTypedNodeInferred
 
                              else
-                                okVariableSubstitutionsNone
+                                okVariableSubstitutionsNoneUnifiedTypesDictEmpty
                             )
-                            (substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression
+                            (expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions
                                 typeContext
                                 inferredUnannotatedDeclarationTypes
                                 letInTypedNodeInferred
@@ -6836,104 +6849,6 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                                         )
                 )
         )
-
-
-substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression :
-    { range : Elm.Syntax.Range.Range
-    , declarationTypes : ProjectModuleDeclaredTypes
-    }
-    -> FastDict.Dict String Type
-    -> TypedNode Expression
-    -> Result String VariableSubstitutions
-substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression context introducedVariables expressionTypedNode =
-    expressionTypedNode
-        |> expressionTypedNodeUnifyUsesOfLocalReferences
-            context
-            introducedVariables
-        |> Result.map .substitutions
-
-
-substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression :
-    { range : Elm.Syntax.Range.Range
-    , declarationTypes : ProjectModuleDeclaredTypes
-    }
-    ->
-        FastDict.Dict
-            String
-            { range : Elm.Syntax.Range.Range
-            , type_ : Type
-            }
-    -> TypedNode Expression
-    -> Result String VariableSubstitutions
-substitutionsForInstanceUnifyingIntroducedLetDeclaredTypesWithUsesInExpression context introducedDeclarations expressionTypedNode =
-    expressionTypedNode
-        |> expressionTypedNodeUsesOfLocalReferences
-            introducedDeclarations
-        |> fastDictFoldlWhileOkFrom variableSubstitutionsNone
-            (\declarationName usesInLambdaResult soFar ->
-                case introducedDeclarations |> FastDict.get declarationName of
-                    Nothing ->
-                        Err
-                            ("("
-                                ++ (context.range |> rangeToInfoString)
-                                ++ ") "
-                                ++ "bug in elm-syntax-type-infer: collected uses of variable that wasn't asked for"
-                            )
-
-                    Just inferredDeclarationType ->
-                        usesInLambdaResult
-                            |> ropeFoldlWhileOkFrom
-                                soFar
-                                (\useRange useType soFarWithUses ->
-                                    let
-                                        newDeclarationTypeInstanceForUse : Type
-                                        newDeclarationTypeInstanceForUse =
-                                            inferredDeclarationType.type_
-                                                |> typeMapVariables
-                                                    (\inferredDeclarationTypeVariable ->
-                                                        if
-                                                            inferredDeclarationType.range
-                                                                |> rangeIncludesRange
-                                                                    inferredDeclarationTypeVariable.useRange
-                                                        then
-                                                            { useRange = useRange
-                                                            , name = inferredDeclarationTypeVariable.name
-                                                            }
-
-                                                        else
-                                                            inferredDeclarationTypeVariable
-                                                    )
-                                    in
-                                    Result.andThen
-                                        (\useUnifiedWithNewLetTypeInstance ->
-                                            -- we need to check if the partialTpeNewInstance
-                                            -- is actually more strict then the already existing use type.
-                                            -- If we don't, this would run indefinitely: E.g.
-                                            -- a : number
-                                            -- b = round a
-                                            -- where a is already known as Float
-                                            -- when it is unified with the let `number`
-                                            if
-                                                typesAreEquallyStrict
-                                                    (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
-                                                    (useType |> typeContainedVariables)
-                                            then
-                                                equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
-                                                    soFarWithUses.variableToType
-                                                    soFarWithUses.equivalentVariables
-                                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
-
-                                            else
-                                                variableSubstitutionsMerge context
-                                                    soFarWithUses
-                                                    useUnifiedWithNewLetTypeInstance.substitutions
-                                        )
-                                        (typeUnify context
-                                            useType
-                                            newDeclarationTypeInstanceForUse
-                                        )
-                                )
-            )
 
 
 substitutionsForInstanceUnifyingModuleDeclaredTypesWithUsesInExpression :
@@ -7062,7 +6977,7 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
 
                     else
                         Result.andThen
-                            (\substitutionsFromUnifyingPatternVariablesWithUses ->
+                            (\patternVariablesWithUsesUnification ->
                                 Result.map2
                                     (\patternInferredSubstituted resultInferredSubstituted ->
                                         { pattern = patternInferredSubstituted
@@ -7071,14 +6986,14 @@ expressionCaseTypeInfer context ( syntaxCasePattern, syntaxCaseResult ) =
                                     )
                                     (patternInferred
                                         |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                            substitutionsFromUnifyingPatternVariablesWithUses
+                                            patternVariablesWithUsesUnification.substitutions
                                     )
                                     (resultInferred
                                         |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                            substitutionsFromUnifyingPatternVariablesWithUses
+                                            patternVariablesWithUsesUnification.substitutions
                                     )
                             )
-                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                            (expressionTypedNodeUnifyUsesOfLocalReferences
                                 { declarationTypes = context.declarationTypes
                                 , range =
                                     { start = (syntaxCasePattern |> Elm.Syntax.Node.range).start
@@ -7585,7 +7500,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
 
                                 _ :: _ ->
                                     Result.andThen
-                                        (\substitutionsFromUnifyingParameterVariablesWithUses ->
+                                        (\parameterVariablesWithUsesUnification ->
                                             Result.map2
                                                 (\parametersSubstituted resultSubstituted ->
                                                     { range = letDeclarationRange
@@ -7620,16 +7535,16 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                 )
                                                                 (parameterInferred
                                                                     |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                                        substitutionsFromUnifyingParameterVariablesWithUses
+                                                                        parameterVariablesWithUsesUnification.substitutions
                                                                 )
                                                         )
                                                 )
                                                 (resultInferred
                                                     |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                        substitutionsFromUnifyingParameterVariablesWithUses
+                                                        parameterVariablesWithUsesUnification.substitutions
                                                 )
                                         )
-                                        (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                        (expressionTypedNodeUnifyUsesOfLocalReferences
                                             typeContext
                                             parametersInferred.introducedExpressionVariables
                                             resultInferred
@@ -7726,12 +7641,12 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
 
                                                     _ :: _ ->
                                                         Result.andThen
-                                                            (\substitutionsFromUnifyingParameterVariablesWithUses ->
+                                                            (\parameterVariablesWithUsesUnification ->
                                                                 variableSubstitutionsMerge typeContext
-                                                                    substitutionsFromUnifyingParameterVariablesWithUses
+                                                                    parameterVariablesWithUsesUnification.substitutions
                                                                     typeUnifiedWithAnnotation.substitutions
                                                             )
-                                                            (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                                            (expressionTypedNodeUnifyUsesOfLocalReferences
                                                                 typeContext
                                                                 parametersInferred.introducedExpressionVariables
                                                                 resultInferred
@@ -8832,7 +8747,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
 
                                             _ :: _ ->
                                                 Result.andThen
-                                                    (\parameterPatternVariablesAndUsesUnificationSubstitutions ->
+                                                    (\parameterPatternVariablesAndUsesUnification ->
                                                         Result.map2
                                                             (\resultSubstituted parametersSubstituted ->
                                                                 soFar
@@ -8858,7 +8773,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                             )
                                                             (resultInferred
                                                                 |> expressionTypedNodeApplyVariableSubstitutions declarationTypes
-                                                                    parameterPatternVariablesAndUsesUnificationSubstitutions
+                                                                    parameterPatternVariablesAndUsesUnification.substitutions
                                                             )
                                                             (parametersInferred.nodes
                                                                 |> listFoldrWhileOkFrom []
@@ -8869,12 +8784,12 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                                             )
                                                                             (parameterInferred
                                                                                 |> patternTypedNodeApplyVariableSubstitutions declarationTypes
-                                                                                    parameterPatternVariablesAndUsesUnificationSubstitutions
+                                                                                    parameterPatternVariablesAndUsesUnification.substitutions
                                                                             )
                                                                     )
                                                             )
                                                     )
-                                                    (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                                    (expressionTypedNodeUnifyUsesOfLocalReferences
                                                         typeContext
                                                         (parametersInferred.nodes
                                                             |> listMapToFastDictsAndUnify
@@ -8935,7 +8850,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                                 resultInferred.type_
                                                 in
                                                 resultAndThen2
-                                                    (\inferredDeclarationTypeUnifiedWithAnnotation substitutionsFromUnifyingParameterVariablesWithUses ->
+                                                    (\inferredDeclarationTypeUnifiedWithAnnotation parameterVariablesWithUsesUnification ->
                                                         -- TODO when the substituted type is more strict
                                                         -- throw an error: annotation too loose
                                                         Result.andThen
@@ -8983,7 +8898,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                             )
                                                             (variableSubstitutionsMerge
                                                                 typeContext
-                                                                substitutionsFromUnifyingParameterVariablesWithUses
+                                                                parameterVariablesWithUsesUnification.substitutions
                                                                 inferredDeclarationTypeUnifiedWithAnnotation.substitutions
                                                             )
                                                     )
@@ -8991,7 +8906,7 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                                                         annotationType
                                                         inferredFullType
                                                     )
-                                                    (substitutionsForUnifyingIntroducedVariableTypesWithUsesInExpression
+                                                    (expressionTypedNodeUnifyUsesOfLocalReferences
                                                         typeContext
                                                         parametersInferred.introducedExpressionVariables
                                                         resultInferred
@@ -9939,6 +9854,404 @@ expressionTypedNodeUnifyUsesOfLocalReferences context unifiedTypesSoFar expressi
                     )
                 |> resultAndExpressionTypedNodeUnifyUsesOfLocalReferences context
                     expressionLetIn.result
+
+
+expressionReferenceLetDeclaredUnifyWithTypeInstanceSubstitutions :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ProjectModuleDeclaredTypes
+    }
+    ->
+        FastDict.Dict
+            String
+            { range : Elm.Syntax.Range.Range
+            , type_ : Type
+            }
+    ->
+        { range : Elm.Syntax.Range.Range
+        , moduleOrigin : String
+        , name : String
+        , type_ : Type
+        }
+    -> Result String VariableSubstitutions
+expressionReferenceLetDeclaredUnifyWithTypeInstanceSubstitutions context newLetDeclaredTypes expressionReferenceLetDeclared =
+    case expressionReferenceLetDeclared.moduleOrigin of
+        "" ->
+            case newLetDeclaredTypes |> FastDict.get expressionReferenceLetDeclared.name of
+                Nothing ->
+                    okVariableSubstitutionsNone
+
+                Just newLetDeclared ->
+                    Result.map
+                        (\useUnifiedWithNewLetTypeInstance ->
+                            -- we need to check if the partialTpeNewInstance
+                            -- is actually more strict then the already existing use type.
+                            -- If we don't, this would run indefinitely: E.g.
+                            -- a : number
+                            -- b = round a
+                            -- where a is already known as Float
+                            -- when it is unified with the let `number`
+                            if
+                                typesAreEquallyStrict
+                                    (useUnifiedWithNewLetTypeInstance.type_ |> typeContainedVariables)
+                                    (expressionReferenceLetDeclared.type_ |> typeContainedVariables)
+                            then
+                                -- TODO is this correct?
+                                { variableToType = DictByTypeVariableFromContext.empty
+                                , equivalentVariables =
+                                    useUnifiedWithNewLetTypeInstance.substitutions.equivalentVariables
+                                }
+
+                            else
+                                useUnifiedWithNewLetTypeInstance.substitutions
+                        )
+                        (typeUnify context
+                            expressionReferenceLetDeclared.type_
+                            (newLetDeclared.type_
+                                |> typeMapVariables
+                                    (\letDeclaredTypeVariable ->
+                                        if
+                                            newLetDeclared.range
+                                                |> rangeIncludesRange
+                                                    letDeclaredTypeVariable.useRange
+                                        then
+                                            { useRange = expressionReferenceLetDeclared.range
+                                            , name = letDeclaredTypeVariable.name
+                                            }
+
+                                        else
+                                            letDeclaredTypeVariable
+                                    )
+                            )
+                        )
+
+        _ ->
+            okVariableSubstitutionsNone
+
+
+expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ProjectModuleDeclaredTypes
+    }
+    ->
+        FastDict.Dict
+            String
+            { range : Elm.Syntax.Range.Range
+            , type_ : Type
+            }
+    -> TypedNode Expression
+    -> Result String VariableSubstitutions
+expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context newLetDeclaredTypes expressionTypedNode =
+    -- IGNORE TCO
+    case expressionTypedNode.value of
+        ExpressionUnit ->
+            okVariableSubstitutionsNone
+
+        ExpressionInteger _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionFloat _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionString _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionChar _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionReferenceVariant _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionOperatorFunction _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionRecordAccessFunction _ ->
+            okVariableSubstitutionsNone
+
+        ExpressionReference reference ->
+            expressionReferenceLetDeclaredUnifyWithTypeInstanceSubstitutions context
+                newLetDeclaredTypes
+                { range = expressionTypedNode.range
+                , type_ = expressionTypedNode.type_
+                , moduleOrigin = reference.moduleOrigin
+                , name = reference.name
+                }
+
+        ExpressionNegation negated ->
+            expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                newLetDeclaredTypes
+                negated
+
+        ExpressionParenthesized inParens ->
+            expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                newLetDeclaredTypes
+                inParens
+
+        ExpressionRecordAccess expressionRecordAccess ->
+            expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                newLetDeclaredTypes
+                expressionRecordAccess.record
+
+        ExpressionLambda expressionLambda ->
+            expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                newLetDeclaredTypes
+                expressionLambda.result
+
+        ExpressionInfixOperation expressionInfixOperation ->
+            resultAndThen2
+                (\leftSubstitutions rightSubstitutions ->
+                    variableSubstitutionsMerge context
+                        leftSubstitutions
+                        rightSubstitutions
+                )
+                (expressionInfixOperation.left
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (expressionInfixOperation.right
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionTuple parts ->
+            resultAndThen2
+                (\part0Substitutions part1Substitutions ->
+                    variableSubstitutionsMerge context
+                        part0Substitutions
+                        part1Substitutions
+                )
+                (parts.part0
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (parts.part1
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionTriple parts ->
+            resultAndThen3
+                (\part0Substitutions part1Substitutions part2Substitutions ->
+                    variableSubstitutionsMerge3 context
+                        part0Substitutions
+                        part1Substitutions
+                        part2Substitutions
+                )
+                (parts.part0
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (parts.part1
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (parts.part2
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionIfThenElse expressionIfThenElse ->
+            resultAndThen3
+                (\part0Substitutions part1Substitutions part2Substitutions ->
+                    variableSubstitutionsMerge3 context
+                        part0Substitutions
+                        part1Substitutions
+                        part2Substitutions
+                )
+                (expressionIfThenElse.condition
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (expressionIfThenElse.onTrue
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (expressionIfThenElse.onFalse
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionList elements ->
+            case elements of
+                [] ->
+                    okVariableSubstitutionsNone
+
+                head :: tail ->
+                    tail
+                        |> listFoldlWhileOkFromResult
+                            (head
+                                |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                    newLetDeclaredTypes
+                            )
+                            (\element soFar ->
+                                Result.andThen
+                                    (\elementSubstitutions ->
+                                        variableSubstitutionsMerge context
+                                            soFar
+                                            elementSubstitutions
+                                    )
+                                    (element
+                                        |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                            newLetDeclaredTypes
+                                    )
+                            )
+
+        ExpressionRecord fields ->
+            case fields of
+                [] ->
+                    okVariableSubstitutionsNone
+
+                field0 :: field1Up ->
+                    field1Up
+                        |> listFoldlWhileOkFromResult
+                            (field0.value
+                                |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                    newLetDeclaredTypes
+                            )
+                            (\field soFar ->
+                                Result.andThen
+                                    (\fieldValueSubstitutions ->
+                                        variableSubstitutionsMerge context
+                                            soFar
+                                            fieldValueSubstitutions
+                                    )
+                                    (field.value
+                                        |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                            newLetDeclaredTypes
+                                    )
+                            )
+
+        ExpressionCall expressionCall ->
+            resultAndThen2
+                (\calledSubstitutions argument0Substitutions ->
+                    expressionCall.argument1Up
+                        |> listFoldlWhileOkFromResult
+                            (variableSubstitutionsMerge context
+                                calledSubstitutions
+                                argument0Substitutions
+                            )
+                            (\argument soFar ->
+                                Result.andThen
+                                    (\argumentSubstitutions ->
+                                        variableSubstitutionsMerge context
+                                            soFar
+                                            argumentSubstitutions
+                                    )
+                                    (argument
+                                        |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                            newLetDeclaredTypes
+                                    )
+                            )
+                )
+                (expressionCall.called
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (expressionCall.argument0
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionRecordUpdate expressionRecordUpdate ->
+            resultAndThen2
+                (\recordVariableSubstitutions fieldValue0Substitutions ->
+                    expressionRecordUpdate.field1Up
+                        |> listFoldlWhileOkFromResult
+                            (variableSubstitutionsMerge context
+                                recordVariableSubstitutions
+                                fieldValue0Substitutions
+                            )
+                            (\field soFar ->
+                                Result.andThen
+                                    (\fieldValueSubstitutions ->
+                                        variableSubstitutionsMerge context
+                                            soFar
+                                            fieldValueSubstitutions
+                                    )
+                                    (field.value
+                                        |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                            newLetDeclaredTypes
+                                    )
+                            )
+                )
+                (expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                    newLetDeclaredTypes
+                    expressionRecordUpdate.field0.value
+                )
+                (expressionReferenceLetDeclaredUnifyWithTypeInstanceSubstitutions context
+                    newLetDeclaredTypes
+                    { range = expressionRecordUpdate.recordVariable.range
+                    , type_ = expressionRecordUpdate.recordVariable.type_
+                    , moduleOrigin = expressionRecordUpdate.recordVariable.value.moduleOrigin
+                    , name = expressionRecordUpdate.recordVariable.value.name
+                    }
+                )
+
+        ExpressionCaseOf expressionCaseOf ->
+            resultAndThen2
+                (\matchedSubstitutions case0ResultSubstitutions ->
+                    expressionCaseOf.case1Up
+                        |> listFoldlWhileOkFromResult
+                            (variableSubstitutionsMerge context
+                                matchedSubstitutions
+                                case0ResultSubstitutions
+                            )
+                            (\case_ soFar ->
+                                Result.andThen
+                                    (\caseResultSubstitutions ->
+                                        variableSubstitutionsMerge context
+                                            soFar
+                                            caseResultSubstitutions
+                                    )
+                                    (case_.result
+                                        |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                            newLetDeclaredTypes
+                                    )
+                            )
+                )
+                (expressionCaseOf.matched
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+                (expressionCaseOf.case0.result
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
+
+        ExpressionLetIn expressionLetIn ->
+            resultAndThen2
+                (\declarationsSubstitutions resultSubstitutions ->
+                    variableSubstitutionsMerge context
+                        declarationsSubstitutions
+                        resultSubstitutions
+                )
+                (expressionLetIn.declaration1Up
+                    |> listFoldlWhileOkFromResult
+                        (expressionLetIn.declaration0.declaration
+                            |> letDestructuringExpressionRightOfEquals
+                            |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                newLetDeclaredTypes
+                        )
+                        (\declarationNode soFar ->
+                            Result.andThen
+                                (\declarationSubstitutions ->
+                                    variableSubstitutionsMerge context
+                                        soFar
+                                        declarationSubstitutions
+                                )
+                                (declarationNode.declaration
+                                    |> letDestructuringExpressionRightOfEquals
+                                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                                        newLetDeclaredTypes
+                                )
+                        )
+                )
+                (expressionLetIn.result
+                    |> expressionTypedNodeUnifyUsesOfLetDeclaredWithTypeInstancesSubstitutions context
+                        newLetDeclaredTypes
+                )
 
 
 letDestructuringExpressionRightOfEquals : LetDeclaration -> TypedNode Expression
