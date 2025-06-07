@@ -9,11 +9,12 @@
   This is usually more convenient and can avoid a List.map Node.value
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let
+- correct very rare edge cases where type variables that should be the same were independent
 - a bit faster
 
 TODO
-- for substituting let value/function declaration parameters with uses, introduce letFunctionOrValueDeclarationApplyVariableSubstitutions
-- for substituting module-level value/function declaration parameters with uses, introduce letFunctionOrValueDeclarationApplyVariableSubstitutions
+- `valueAndFunctionDeclarations` only returns the inferred parts and nothing unrelated like original signature or name range
+- for substituting let value/function declaration parameters with uses, introduce letValueOrFunctionDeclarationApplyVariableSubstitutions
 
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
