@@ -11,6 +11,10 @@
   to determine which variables are introduced by a let
 - a bit faster
 
+TODO
+- for substituting let value/function declaration parameters with uses, introduce letFunctionOrValueDeclarationApplyVariableSubstitutions
+- for substituting module-level value/function declaration parameters with uses, introduce letFunctionOrValueDeclarationApplyVariableSubstitutions
+
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters
