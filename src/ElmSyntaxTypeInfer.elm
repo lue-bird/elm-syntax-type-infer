@@ -15043,22 +15043,22 @@ interfaceToType typeInterface =
                     Err "too many tuple parts"
 
         Elm.Type.Type reference argumentInterfaces ->
-            case reference |> splitIntoBeforeAndAfterLastDot of
-                Just beforeAndAfterLastDot ->
-                    Result.map
-                        (\arguments ->
-                            TypeNotVariable
-                                (TypeConstruct
-                                    { moduleOrigin = beforeAndAfterLastDot.beforeLastDot
-                                    , name = beforeAndAfterLastDot.afterLastDot
-                                    , arguments = arguments
-                                    }
-                                )
+            let
+                beforeAndAfterLastDot : { beforeLastDot : String, afterLastDot : String }
+                beforeAndAfterLastDot =
+                    reference |> splitIntoBeforeAndAfterLastDot
+            in
+            Result.map
+                (\arguments ->
+                    TypeNotVariable
+                        (TypeConstruct
+                            { moduleOrigin = beforeAndAfterLastDot.beforeLastDot
+                            , name = beforeAndAfterLastDot.afterLastDot
+                            , arguments = arguments
+                            }
                         )
-                        (argumentInterfaces |> listMapAndCombineOk interfaceToType)
-
-                Nothing ->
-                    Err "invalid reference"
+                )
+                (argumentInterfaces |> listMapAndCombineOk interfaceToType)
 
         Elm.Type.Record fieldInterfaces Nothing ->
             Result.map
@@ -15102,27 +15102,41 @@ interfaceToType typeInterface =
 splitIntoBeforeAndAfterLastDot :
     String
     ->
-        Maybe
-            { beforeLastDot : String
-            , afterLastDot : String
-            }
+        { beforeLastDot : String
+        , afterLastDot : String
+        }
 splitIntoBeforeAndAfterLastDot string =
-    -- TODO optimize
-    case string |> String.split "." |> List.reverse of
-        referenceName :: referenceModulePartLast :: referenceModulePartBeforeLastDown ->
-            Just
-                { beforeLastDot =
-                    (referenceModulePartLast :: referenceModulePartBeforeLastDown)
-                        |> List.reverse
-                        |> String.join "."
-                , afterLastDot = referenceName
-                }
+    let
+        lastDotIndex : Int
+        lastDotIndex =
+            string
+                |> String.foldl
+                    (\char soFar ->
+                        { lastDotIndex =
+                            case char of
+                                '.' ->
+                                    soFar.currentIndex
 
-        [ _ ] ->
-            Nothing
+                                _ ->
+                                    soFar.lastDotIndex
+                        , currentIndex = soFar.currentIndex + 1
+                        }
+                    )
+                    lastDotIndex0CurrentIndex0
+                |> .lastDotIndex
+    in
+    { beforeLastDot =
+        string |> String.slice 0 lastDotIndex
+    , afterLastDot =
+        string |> String.slice (lastDotIndex + 1) (string |> String.length)
+    }
 
-        [] ->
-            Nothing
+
+lastDotIndex0CurrentIndex0 : { currentIndex : Int, lastDotIndex : Int }
+lastDotIndex0CurrentIndex0 =
+    { lastDotIndex = 0
+    , currentIndex = 0
+    }
 
 
 okTypeUnit : Result error_ Type
