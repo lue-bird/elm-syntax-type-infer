@@ -14,6 +14,7 @@
 - a bit faster
 
 optimization ideas
+- when substituting the record variable in a record extension type, apply all new substitutions directly and do not bubble them up (if possible in all cases, this could be massive)
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - specialized Set instead of DictBy... () to avoid extra memory for unit fields
 
