@@ -1511,6 +1511,79 @@ two = \\first second -> Both first second
                             )
                         )
             )
+        , Test.test "pattern of locally declared variant with multiple values whose types influence each other, one known"
+            (\() ->
+                """module A exposing (..)
+type Both a = Both a a
+two =
+    \\both ->
+        case both of
+            Both "" second ->
+                second
+            
+            Both _ second ->
+                second
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = "A"
+                                                , name = "Both"
+                                                , arguments = [ typeString ]
+                                                }
+                                            )
+                                    , output = typeString
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "pattern of locally declared variant with multiple values whose types influence each other, none known"
+            (\() ->
+                """module A exposing (..)
+type Both a = Both a a
+two =
+    \\(Both first second) -> ( first, second )
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeConstruct
+                                                { moduleOrigin = "A"
+                                                , name = "Both"
+                                                , arguments =
+                                                    [ ElmSyntaxTypeInfer.TypeVariable
+                                                        { name = "a", useRange = { end = { column = 24, row = 4 }, start = { column = 7, row = 4 } } }
+                                                    ]
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { name = "a", useRange = { end = { column = 24, row = 4 }, start = { column = 7, row = 4 } } }
+                                                , part1 =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { name = "a", useRange = { end = { column = 24, row = 4 }, start = { column = 7, row = 4 } } }
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "pattern of locally declared variant with multiple values: type Two = Two String Float ; two = \\(Two string float) -> string"
             (\() ->
                 Elm.Syntax.Expression.LambdaExpression
