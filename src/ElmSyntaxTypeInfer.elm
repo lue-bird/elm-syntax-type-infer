@@ -7681,16 +7681,15 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                 , moduleOriginLookup = context.moduleOriginLookup
                                 , locallyIntroducedDeclarationTypes =
                                     context.locallyIntroducedDeclarationTypes
-                                        |> -- elm declarations do not allow "polymorphic recursion"
-                                           -- https://github.com/elm/compiler/issues/2275
-                                           -- so instead of putting it in partiallyInferredDeclarationTypes
-                                           -- we treat it as an introduced variable (sharing the same type variables)
-                                           FastDict.remove name
                                 , locallyIntroducedExpressionVariables =
                                     FastDict.union
                                         parametersInferred.introducedExpressionVariables
                                         context.locallyIntroducedExpressionVariables
-                                        |> FastDict.insert name
+                                        |> -- elm declarations do not allow "polymorphic recursion"
+                                           -- https://github.com/elm/compiler/issues/2275
+                                           -- so instead of putting it in locallyIntroducedDeclarationTypes
+                                           -- we treat it as an introduced variable (sharing the same type variables)
+                                           FastDict.insert name
                                             (TypeVariable
                                                 { useRange =
                                                     letValueOrFunction
@@ -7755,8 +7754,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                 fullSubstitutions
                                                         )
                                                         (typeUnifiedWithAnnotation.type_
-                                                            |> typeApplyVariableSubstitutions
-                                                                typeContext
+                                                            |> typeApplyVariableSubstitutions typeContext
                                                                 fullSubstitutions
                                                         )
                                                 )
@@ -7800,16 +7798,15 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                         , moduleOriginLookup = context.moduleOriginLookup
                                         , locallyIntroducedDeclarationTypes =
                                             context.locallyIntroducedDeclarationTypes
-                                                |> -- elm declarations do not allow "polymorphic recursion"
-                                                   -- https://github.com/elm/compiler/issues/2275
-                                                   -- so instead of putting it in partiallyInferredDeclarationTypes
-                                                   -- we treat it as an introduced variable (sharing the same type variables)
-                                                   FastDict.remove name
                                         , locallyIntroducedExpressionVariables =
                                             FastDict.union
                                                 context.locallyIntroducedExpressionVariables
                                                 parametersInferred.introducedExpressionVariables
-                                                |> FastDict.insert name
+                                                |> -- elm declarations do not allow "polymorphic recursion"
+                                                   -- https://github.com/elm/compiler/issues/2275
+                                                   -- so instead of putting it in locallyIntroducedDeclarationTypes
+                                                   -- we treat it as an introduced variable (sharing the same type variables)
+                                                   FastDict.insert name
                                                     annotationAsType
                                         }
                                 )
@@ -9041,21 +9038,20 @@ moduleLevelValueOrFunctionDeclarationTypeInfer context acrossValueAndFunctionDec
                         (implementation.expression
                             |> expressionTypeInfer
                                 { declarationTypes = context.declarationTypes
+                                , locallyIntroducedDeclarationTypes =
+                                    acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
                                 , locallyIntroducedExpressionVariables =
-                                    -- elm declarations do not allow "polymorphic recursion"
-                                    -- https://github.com/elm/compiler/issues/2275
-                                    -- so instead of putting it in partiallyInferredDeclarationTypes
-                                    -- we treat it as an introduced variable (sharing the same type variables)
                                     parametersInferred.introducedExpressionVariables
-                                        |> FastDict.insert name
+                                        |> -- elm declarations do not allow "polymorphic recursion"
+                                           -- https://github.com/elm/compiler/issues/2275
+                                           -- so instead of putting it in locallyIntroducedDeclarationTypes
+                                           -- we treat it as an introduced variable (sharing the same type variables)
+                                           FastDict.insert name
                                             (TypeVariable
                                                 { useRange = valueOrFunctionDeclarationToInferRange
                                                 , name = name
                                                 }
                                             )
-                                , locallyIntroducedDeclarationTypes =
-                                    acrossValueAndFunctionDeclarationsToInfer.unannotatedInferredDeclarationTypes
-                                        |> FastDict.remove name
                                 , moduleOriginLookup = context.moduleOriginLookup
                                 }
                         )
