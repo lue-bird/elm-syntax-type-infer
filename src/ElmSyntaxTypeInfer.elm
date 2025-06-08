@@ -8799,16 +8799,6 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
         |> listFoldlWhileOkFrom
             []
             (\valueOrFunctionDeclarationToInfer soFar ->
-                let
-                    implementation : Elm.Syntax.Expression.FunctionImplementation
-                    implementation =
-                        valueOrFunctionDeclarationToInfer.declaration
-                            |> Elm.Syntax.Node.value
-
-                    name : String
-                    name =
-                        implementation.name |> Elm.Syntax.Node.value
-                in
                 case
                     moduleLevelValueOrFunctionDeclarationTypeInfer
                         declarationTypeInferContext
@@ -8821,7 +8811,11 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
                     Err inferError ->
                         Err
                             ("inferring the value/function declaration "
-                                ++ name
+                                ++ ((valueOrFunctionDeclarationToInfer.declaration
+                                        |> Elm.Syntax.Node.value
+                                    ).name
+                                        |> Elm.Syntax.Node.value
+                                   )
                                 ++ ", "
                                 ++ inferError
                             )
