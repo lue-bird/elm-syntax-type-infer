@@ -3664,6 +3664,129 @@ typeUnify context a b =
                         bTypeNotVariable
 
 
+typeUnifyWithFunction :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ProjectModuleDeclaredTypes
+    }
+    -> { input : Type, output : Type }
+    -> Type
+    ->
+        Result
+            String
+            { type_ : Type
+            , substitutions : VariableSubstitutions
+            }
+typeUnifyWithFunction context aFunction b =
+    case b of
+        TypeVariable bVariableName ->
+            let
+                aTypeNotVariable : TypeNotVariable
+                aTypeNotVariable =
+                    TypeFunction aFunction
+            in
+            variableSubstitutionsFromVariableToTypeNotVariableWithType
+                (TypeNotVariable aTypeNotVariable)
+                context.declarationTypes
+                bVariableName
+                aTypeNotVariable
+
+        TypeNotVariable bTypeNotVariable ->
+            case bTypeNotVariable of
+                TypeFunction bFunction ->
+                    resultAndThen2
+                        (\inputABUnified outputABUnified ->
+                            Result.map
+                                (\substitutionsABMerged ->
+                                    { type_ =
+                                        TypeNotVariable
+                                            (TypeFunction
+                                                { input = inputABUnified.type_
+                                                , output = outputABUnified.type_
+                                                }
+                                            )
+                                    , substitutions = substitutionsABMerged
+                                    }
+                                )
+                                (variableSubstitutionsMerge context
+                                    inputABUnified.substitutions
+                                    outputABUnified.substitutions
+                                )
+                        )
+                        (typeUnify context aFunction.input bFunction.input)
+                        (typeUnify context aFunction.output bFunction.output)
+
+                TypeUnit ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeUnit |> typeNotVariableToInfoString)
+                        )
+
+                TypeConstruct bTypeConstruct ->
+                    case typeUnifyWithTryToExpandTypeConstruct context bTypeConstruct (TypeFunction aFunction) of
+                        Just result ->
+                            result
+
+                        Nothing ->
+                            Err
+                                ("("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ "function "
+                                    ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                                    ++ " cannot be unified with types other than function: "
+                                    ++ (TypeConstruct bTypeConstruct |> typeNotVariableToInfoString)
+                                )
+
+                TypeTuple bTypeTuple ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeTuple bTypeTuple |> typeNotVariableToInfoString)
+                        )
+
+                TypeTriple bTypeTriple ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeTriple bTypeTriple |> typeNotVariableToInfoString)
+                        )
+
+                TypeRecord bTypeRecord ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeRecord bTypeRecord |> typeNotVariableToInfoString)
+                        )
+
+                TypeRecordExtension bTypeRecordExtension ->
+                    Err
+                        ("("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ "function "
+                            ++ (TypeFunction aFunction |> typeNotVariableToInfoString)
+                            ++ " cannot be unified with types other than function: "
+                            ++ (TypeRecordExtension bTypeRecordExtension |> typeNotVariableToInfoString)
+                        )
+
+
 typeNotVariableUnifyWithType :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ProjectModuleDeclaredTypes
@@ -6482,28 +6605,24 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                             context.declarationTypes
                                             callTypeUnified.substitutions
                                 )
-                                (typeUnify
+                                (typeUnifyWithFunction
                                     { declarationTypes = context.declarationTypes
                                     , range = fullRange
                                     }
-                                    (TypeNotVariable
-                                        (TypeFunction
-                                            { input = argument0Inferred.type_
-                                            , output =
-                                                argument1UpInferred
-                                                    |> List.foldr
-                                                        (\argumentInferred output ->
-                                                            TypeNotVariable
-                                                                (TypeFunction
-                                                                    { input = argumentInferred.type_
-                                                                    , output = output
-                                                                    }
-                                                                )
+                                    { input = argument0Inferred.type_
+                                    , output =
+                                        argument1UpInferred
+                                            |> List.foldr
+                                                (\argumentInferred output ->
+                                                    TypeNotVariable
+                                                        (TypeFunction
+                                                            { input = argumentInferred.type_
+                                                            , output = output
+                                                            }
                                                         )
-                                                        introducedResultTypeVariable
-                                            }
-                                        )
-                                    )
+                                                )
+                                                introducedResultTypeVariable
+                                    }
                                     calledInferred.type_
                                 )
                         )
