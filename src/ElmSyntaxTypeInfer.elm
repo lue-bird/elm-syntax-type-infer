@@ -3215,7 +3215,6 @@ variableSubstitutionsMerge :
     -> Result String VariableSubstitutions
 variableSubstitutionsMerge context a b =
     -- IGNORE TCO
-    -- TODO inline to get rid of Result.maps
     if a.variableToType |> DictByTypeVariableFromContext.isEmpty then
         case a.equivalentVariables of
             [] ->
@@ -3637,22 +3636,14 @@ typeUnify :
             , substitutions : VariableSubstitutions
             }
 typeUnify context a b =
-    -- TODO optimize away Result.maps
     case a of
         TypeNotVariable aTypeNotVariable ->
             case b of
                 TypeVariable bVariableName ->
-                    Result.map
-                        (\substitutions ->
-                            { type_ = a
-                            , substitutions = substitutions
-                            }
-                        )
-                        (variableSubstitutionsFromVariableToTypeNotVariableOrError
-                            context.declarationTypes
-                            bVariableName
-                            aTypeNotVariable
-                        )
+                    variableSubstitutionsFromVariableToTypeNotVariableWithType a
+                        context.declarationTypes
+                        bVariableName
+                        aTypeNotVariable
 
                 TypeNotVariable bTypeNotVariable ->
                     typeNotVariableUnify context
@@ -3662,30 +3653,15 @@ typeUnify context a b =
         TypeVariable aVariable ->
             case b of
                 TypeVariable bVariable ->
-                    Result.map
-                        (\abEquivalentVariablesSubstitutions ->
-                            { type_ = a
-                            , substitutions =
-                                abEquivalentVariablesSubstitutions
-                            }
-                        )
-                        (variableSubstitutionsFrom2EquivalentVariables
-                            aVariable
-                            bVariable
-                        )
+                    variableSubstitutionsFrom2EquivalentVariablesWithType a
+                        aVariable
+                        bVariable
 
                 TypeNotVariable bTypeNotVariable ->
-                    Result.map
-                        (\substitutions ->
-                            { type_ = b
-                            , substitutions = substitutions
-                            }
-                        )
-                        (variableSubstitutionsFromVariableToTypeNotVariableOrError
-                            context.declarationTypes
-                            aVariable
-                            bTypeNotVariable
-                        )
+                    variableSubstitutionsFromVariableToTypeNotVariableWithType b
+                        context.declarationTypes
+                        aVariable
+                        bTypeNotVariable
 
 
 typeNotVariableUnifyWithType :
@@ -3703,17 +3679,11 @@ typeNotVariableUnifyWithType :
 typeNotVariableUnifyWithType context aTypeNotVariable b =
     case b of
         TypeVariable bVariableName ->
-            Result.map
-                (\substitutions ->
-                    { type_ = TypeNotVariable aTypeNotVariable
-                    , substitutions = substitutions
-                    }
-                )
-                (variableSubstitutionsFromVariableToTypeNotVariableOrError
-                    context.declarationTypes
-                    bVariableName
-                    aTypeNotVariable
-                )
+            variableSubstitutionsFromVariableToTypeNotVariableWithType
+                (TypeNotVariable aTypeNotVariable)
+                context.declarationTypes
+                bVariableName
+                aTypeNotVariable
 
         TypeNotVariable bTypeNotVariable ->
             typeNotVariableUnify context
@@ -3751,18 +3721,11 @@ typeUnifyWithTypeConstruct context a bTypeConstruct =
                 bTypeNotVariable =
                     TypeConstruct bTypeConstruct
             in
-            -- TODO inline to avoid Result.map
-            Result.map
-                (\substitutions ->
-                    { type_ = TypeNotVariable bTypeNotVariable
-                    , substitutions = substitutions
-                    }
-                )
-                (variableSubstitutionsFromVariableToTypeNotVariableOrError
-                    context.declarationTypes
-                    aVariable
-                    bTypeNotVariable
-                )
+            variableSubstitutionsFromVariableToTypeNotVariableWithType
+                (TypeNotVariable bTypeNotVariable)
+                context.declarationTypes
+                aVariable
+                bTypeNotVariable
 
 
 typeUnifyWithBasicsBool :
@@ -4097,6 +4060,42 @@ variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes repla
             , variableToType =
                 DictByTypeVariableFromContext.singleton replacementVariable
                     replacementTypeNotVariable
+            }
+
+
+variableSubstitutionsFromVariableToTypeNotVariableWithType :
+    Type
+    -> ProjectModuleDeclaredTypes
+    -> TypeVariableFromContext
+    -> TypeNotVariable
+    -> Result String { type_ : Type, substitutions : VariableSubstitutions }
+variableSubstitutionsFromVariableToTypeNotVariableWithType type_ declarationTypes replacementVariable replacementTypeNotVariable =
+    if replacementTypeNotVariable |> typeNotVariableContainsVariable replacementVariable then
+        if replacementTypeNotVariable |> typeNotVariableIsEquivalentToTypeVariable declarationTypes then
+            -- is ok when type is an identity type alias
+            Ok
+                { type_ = type_
+                , substitutions = variableSubstitutionsNone
+                }
+
+        else
+            Err
+                ("cannot unify the variable "
+                    ++ (replacementVariable |> typeVariableFromContextToInfoString)
+                    ++ " with the type "
+                    ++ (replacementTypeNotVariable |> typeNotVariableToInfoString)
+                    ++ " because that type contains the type variable itself."
+                )
+
+    else
+        Ok
+            { type_ = type_
+            , substitutions =
+                { equivalentVariables = []
+                , variableToType =
+                    DictByTypeVariableFromContext.singleton replacementVariable
+                        replacementTypeNotVariable
+                }
             }
 
 
@@ -9513,32 +9512,51 @@ variableSubstitutionsFrom2EquivalentVariables aVariable bVariable =
             )
 
 
+variableSubstitutionsFrom2EquivalentVariablesWithType :
+    Type
+    -> TypeVariableFromContext
+    -> TypeVariableFromContext
+    ->
+        Result
+            String
+            { type_ : Type
+            , substitutions : VariableSubstitutions
+            }
+variableSubstitutionsFrom2EquivalentVariablesWithType type_ aVariable bVariable =
+    if TypeVariableFromContext.equals aVariable bVariable then
+        Ok
+            { type_ = type_
+            , substitutions = variableSubstitutionsNone
+            }
+
+    else
+        Result.map
+            (\abConstraint ->
+                { type_ = type_
+                , substitutions =
+                    { variableToType = DictByTypeVariableFromContext.empty
+                    , equivalentVariables =
+                        [ { variables =
+                                DictByTypeVariableFromContext.twoDistinct aVariable () bVariable ()
+                          , constraint = abConstraint
+                          , overarchingUseRange =
+                                rangeOverarching
+                                    aVariable.useRange
+                                    bVariable.useRange
+                          }
+                        ]
+                    }
+                }
+            )
+            (maybeTypeVariableConstraintMerge
+                (aVariable.name |> typeVariableConstraint)
+                (bVariable.name |> typeVariableConstraint)
+            )
+
+
 type alias ValueOrFunctionDeclaration =
     { name : String
     , nameRange : Elm.Syntax.Range.Range
-    , documentation :
-        Maybe
-            { content : String
-            , range : Elm.Syntax.Range.Range
-            }
-    , signature :
-        Maybe
-            { range : Elm.Syntax.Range.Range
-            , nameRange : Elm.Syntax.Range.Range
-            , -- variables names in here might not correspond
-              -- with those in .type_
-              annotationType : Elm.Syntax.TypeAnnotation.TypeAnnotation
-            , annotationTypeRange : Elm.Syntax.Range.Range
-            }
-    , parameters :
-        List (TypedNode Pattern)
-    , result : TypedNode Expression
-    , type_ : Type
-    }
-
-
-type alias ValueOrFunctionDeclarationInfo =
-    { nameRange : Elm.Syntax.Range.Range
     , documentation :
         Maybe
             { content : String
@@ -11190,24 +11208,6 @@ valueAndFunctionDeclarationsGetPartiallyInferred valueAndFunctionDeclarationsSoF
 
 valueOrFunctionDeclarationRange : ValueOrFunctionDeclaration -> Elm.Syntax.Range.Range
 valueOrFunctionDeclarationRange valueOrFunctionDeclarationInfo =
-    { start =
-        case valueOrFunctionDeclarationInfo.documentation of
-            Just documentation ->
-                documentation.range.start
-
-            Nothing ->
-                case valueOrFunctionDeclarationInfo.signature of
-                    Just signature ->
-                        signature.range.start
-
-                    Nothing ->
-                        valueOrFunctionDeclarationInfo.nameRange.start
-    , end = valueOrFunctionDeclarationInfo.result.range.end
-    }
-
-
-valueOrFunctionDeclarationInfoRange : ValueOrFunctionDeclarationInfo -> Elm.Syntax.Range.Range
-valueOrFunctionDeclarationInfoRange valueOrFunctionDeclarationInfo =
     { start =
         case valueOrFunctionDeclarationInfo.documentation of
             Just documentation ->
