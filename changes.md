@@ -13,9 +13,6 @@
 - correct very rare edge cases where type variables that should be the same were independent
 - a bit faster
 
-TODO
-- for substituting let value/function declaration parameters with uses, introduce letValueOrFunctionDeclarationApplyVariableSubstitutions
-
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - special-case declarations without parameters

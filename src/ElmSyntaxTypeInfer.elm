@@ -1724,6 +1724,162 @@ annotatedValueOrFunctionDeclarationApplyVariableSubstitutions context substituti
                                                                 }
 
 
+annotatedLetValueOrFunctionDeclarationApplyVariableSubstitutions :
+    { range : Elm.Syntax.Range.Range
+    , declarationTypes : ProjectModuleDeclaredTypes
+    }
+    -> VariableSubstitutions
+    ->
+        { name : String
+        , nameRange : Elm.Syntax.Range.Range
+        , signature :
+            Maybe
+                { range : Elm.Syntax.Range.Range
+                , nameRange : Elm.Syntax.Range.Range
+                , annotationType :
+                    -- variables names in here might not correspond
+                    -- with those in .type_
+                    Elm.Syntax.TypeAnnotation.TypeAnnotation
+                , annotationTypeRange : Elm.Syntax.Range.Range
+                }
+        , parameters : List (TypedNode Pattern)
+        , result : TypedNode Expression
+        , type_ : Type
+        }
+    ->
+        Result
+            String
+            { name : String
+            , nameRange : Elm.Syntax.Range.Range
+            , signature :
+                Maybe
+                    { range : Elm.Syntax.Range.Range
+                    , nameRange : Elm.Syntax.Range.Range
+                    , annotationType :
+                        -- variables names in here might not correspond
+                        -- with those in .type_
+                        Elm.Syntax.TypeAnnotation.TypeAnnotation
+                    , annotationTypeRange : Elm.Syntax.Range.Range
+                    }
+            , parameters : List (TypedNode Pattern)
+            , result : TypedNode Expression
+            , type_ : Type
+            }
+annotatedLetValueOrFunctionDeclarationApplyVariableSubstitutions context substitutionsToApply valueOrFunctionDeclarationInfoOriginal =
+    if substitutionsToApply |> variableSubstitutionsIsNone then
+        Ok valueOrFunctionDeclarationInfoOriginal
+
+    else
+        case
+            createBatchOfSubstitutionsToApply context
+                substitutionsToApply
+        of
+            Err error ->
+                Err error
+
+            Ok batchOfSubstitutionsToApply ->
+                case
+                    valueOrFunctionDeclarationInfoOriginal.type_
+                        |> typeSubstituteVariableByType context
+                            batchOfSubstitutionsToApply.substituteVariableByType
+                of
+                    Err error ->
+                        Err error
+
+                    Ok typeSubstituted ->
+                        case
+                            valueOrFunctionDeclarationInfoOriginal.result
+                                |> expressionTypedNodeSubstituteVariableByType context.declarationTypes
+                                    batchOfSubstitutionsToApply.substituteVariableByType
+                        of
+                            Err error ->
+                                Err error
+
+                            Ok resultSubstituted ->
+                                case
+                                    valueOrFunctionDeclarationInfoOriginal.parameters
+                                        |> listFoldrWhileOkFrom
+                                            substitutionsNoneNodesEmptyAllUnchangedTrue
+                                            (\parameterInferred parametersSubstitutedSoFar ->
+                                                Result.andThen
+                                                    (\parameterSubstituted ->
+                                                        if parameterSubstituted.unchanged then
+                                                            Ok
+                                                                { nodes =
+                                                                    parameterSubstituted.node
+                                                                        :: parametersSubstitutedSoFar.nodes
+                                                                , allUnchanged =
+                                                                    parametersSubstitutedSoFar.allUnchanged
+                                                                , substitutions =
+                                                                    parametersSubstitutedSoFar.substitutions
+                                                                }
+
+                                                        else
+                                                            Result.map
+                                                                (\substitutionsSoFarWithParameter ->
+                                                                    { nodes =
+                                                                        parameterSubstituted.node
+                                                                            :: parametersSubstitutedSoFar.nodes
+                                                                    , allUnchanged = False
+                                                                    , substitutions =
+                                                                        substitutionsSoFarWithParameter
+                                                                    }
+                                                                )
+                                                                (variableSubstitutionsMerge context
+                                                                    parametersSubstitutedSoFar.substitutions
+                                                                    parameterSubstituted.substitutions
+                                                                )
+                                                    )
+                                                    (parameterInferred
+                                                        |> patternTypedNodeSubstituteVariableByType context.declarationTypes
+                                                            batchOfSubstitutionsToApply.substituteVariableByType
+                                                    )
+                                            )
+                                of
+                                    Err error ->
+                                        Err error
+
+                                    Ok parametersSubstituted ->
+                                        if
+                                            resultSubstituted.unchanged
+                                                && typeSubstituted.unchanged
+                                                && parametersSubstituted.allUnchanged
+                                        then
+                                            Ok valueOrFunctionDeclarationInfoOriginal
+
+                                        else
+                                            case
+                                                -- typeSubstituted.substitutions
+                                                -- should be empty if the annotation is strict enough
+                                                variableSubstitutionsMerge context
+                                                    resultSubstituted.substitutions
+                                                    parametersSubstituted.substitutions
+                                            of
+                                                Err error ->
+                                                    Err error
+
+                                                Ok newResultParametersSubstitutions ->
+                                                    case
+                                                        equivalentVariableSetMergeIntoVariableSubstitutionsWithVariableToType
+                                                            newResultParametersSubstitutions.variableToType
+                                                            newResultParametersSubstitutions.equivalentVariables
+                                                            batchOfSubstitutionsToApply.newEquivalentVariables
+                                                    of
+                                                        Err error ->
+                                                            Err error
+
+                                                        Ok newSubstitutions ->
+                                                            annotatedLetValueOrFunctionDeclarationApplyVariableSubstitutions context
+                                                                newSubstitutions
+                                                                { name = valueOrFunctionDeclarationInfoOriginal.name
+                                                                , nameRange = valueOrFunctionDeclarationInfoOriginal.nameRange
+                                                                , signature = valueOrFunctionDeclarationInfoOriginal.signature
+                                                                , result = resultSubstituted.node
+                                                                , type_ = typeSubstituted.type_
+                                                                , parameters = parametersSubstituted.nodes
+                                                                }
+
+
 typeApplyVariableSubstitutions :
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ProjectModuleDeclaredTypes
@@ -5050,7 +5206,9 @@ type LetDeclaration
         , expression : TypedNode Expression
         }
     | LetValueOrFunctionDeclaration
-        { signature :
+        { name : String
+        , nameRange : Elm.Syntax.Range.Range
+        , signature :
             Maybe
                 { range : Elm.Syntax.Range.Range
                 , nameRange : Elm.Syntax.Range.Range
@@ -5060,8 +5218,6 @@ type LetDeclaration
                     Elm.Syntax.TypeAnnotation.TypeAnnotation
                 , annotationTypeRange : Elm.Syntax.Range.Range
                 }
-        , nameRange : Elm.Syntax.Range.Range
-        , name : String
         , parameters : List (TypedNode Pattern)
         , result : TypedNode Expression
         , type_ : Type
@@ -7711,50 +7867,34 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                             -- throw an error: annotation too loose
                                             Result.andThen
                                                 (\fullSubstitutions ->
-                                                    Result.map3
-                                                        (\parametersSubstituted resultSubstituted typeSubstituted ->
+                                                    Result.map
+                                                        (\letValueOrFunctionSubstituted ->
                                                             { range = letDeclarationRange
                                                             , declaration =
                                                                 LetValueOrFunctionDeclaration
-                                                                    { signature =
-                                                                        Just
-                                                                            { range = signatureRange
-                                                                            , nameRange =
-                                                                                letValueOrFunctionSignature.name |> Elm.Syntax.Node.range
-                                                                            , annotationType =
-                                                                                letValueOrFunctionSignature.typeAnnotation
-                                                                                    |> Elm.Syntax.Node.value
-                                                                            , annotationTypeRange =
-                                                                                letValueOrFunctionSignature.typeAnnotation
-                                                                                    |> Elm.Syntax.Node.range
-                                                                            }
-                                                                    , nameRange = implementation.name |> Elm.Syntax.Node.range
-                                                                    , name = name
-                                                                    , parameters = parametersSubstituted
-                                                                    , result = resultSubstituted
-                                                                    , type_ = typeSubstituted
-                                                                    }
+                                                                    letValueOrFunctionSubstituted
                                                             }
                                                         )
-                                                        (parametersInferred.nodes
-                                                            |> listFoldrWhileOkFrom []
-                                                                (\parameter soFar ->
-                                                                    Result.map
-                                                                        (\parameterInferredSubstituted ->
-                                                                            parameterInferredSubstituted :: soFar
-                                                                        )
-                                                                        (parameter
-                                                                            |> patternTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                                                fullSubstitutions
-                                                                        )
-                                                                )
-                                                        )
-                                                        (resultInferred
-                                                            |> expressionTypedNodeApplyVariableSubstitutions context.declarationTypes
-                                                                fullSubstitutions
-                                                        )
-                                                        (typeUnifiedWithAnnotation.type_
-                                                            |> typeApplyVariableSubstitutions typeContext
+                                                        ({ signature =
+                                                            Just
+                                                                { range = signatureRange
+                                                                , nameRange =
+                                                                    letValueOrFunctionSignature.name |> Elm.Syntax.Node.range
+                                                                , annotationType =
+                                                                    letValueOrFunctionSignature.typeAnnotation
+                                                                        |> Elm.Syntax.Node.value
+                                                                , annotationTypeRange =
+                                                                    letValueOrFunctionSignature.typeAnnotation
+                                                                        |> Elm.Syntax.Node.range
+                                                                }
+                                                         , nameRange = implementation.name |> Elm.Syntax.Node.range
+                                                         , name = name
+                                                         , parameters = parametersInferred.nodes
+                                                         , result = resultInferred
+                                                         , type_ = annotationAsType
+                                                         }
+                                                            |> annotatedLetValueOrFunctionDeclarationApplyVariableSubstitutions
+                                                                typeContext
                                                                 fullSubstitutions
                                                         )
                                                 )
@@ -7769,8 +7909,7 @@ letFunctionOrValueDeclarationTypeInfer context (Elm.Syntax.Node.Node letDeclarat
                                                                     parameterVariablesWithUsesUnification.substitutions
                                                                     typeUnifiedWithAnnotation.substitutions
                                                             )
-                                                            (expressionTypedNodeUnifyUsesOfLocalReferences
-                                                                typeContext
+                                                            (expressionTypedNodeUnifyUsesOfLocalReferences typeContext
                                                                 parametersInferred.introducedExpressionVariables
                                                                 resultInferred
                                                             )
