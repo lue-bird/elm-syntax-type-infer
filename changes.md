@@ -14,7 +14,6 @@
 - a bit faster
 
 optimization ideas
-- when substituting extended record type variable, still check for unchanged
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
 - specialized Set instead of DictBy... () to avoid extra memory for unit fields
 
