@@ -8918,11 +8918,15 @@ valueAndFunctionDeclarations context syntaxValueAndFunctionDeclarations =
         |> Result.map
             (\fullySubstitutedDeclarationsTypedWithContext ->
                 fullySubstitutedDeclarationsTypedWithContext
-                    |> List.map
-                        (\declaration ->
-                            declaration
+                    |> -- the first inference pass reverses the list, so we need to un-reverse it
+                       List.foldl
+                        (\declaration soFar ->
+                            (declaration
                                 |> declarationValueOrFunctionDisambiguateTypeVariables
+                            )
+                                :: soFar
                         )
+                        []
             )
 
 
@@ -11144,7 +11148,7 @@ valueAndFunctionDeclarationsSubstituteVariableByType :
             }
 valueAndFunctionDeclarationsSubstituteVariableByType declarationTypes substitutionToApply valueAndFunctionDeclarationsToApplySubstitutionTo =
     valueAndFunctionDeclarationsToApplySubstitutionTo
-        |> listFoldlWhileOkFrom
+        |> listFoldrWhileOkFrom
             substitutionsNoneDeclarationsListEmptyUnchangedDeclarationsSetEmpty
             (\declarationToSubstituteIn soFar ->
                 Result.andThen
