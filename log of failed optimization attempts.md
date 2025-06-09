@@ -9,3 +9,4 @@
 - change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (Dict String value)` (roughly equal)
 - change `DictByTypeVariableFromContext value`'s internal representation to `DictByRange (List { name : String, value : value })` (about 50% slower)
 - make ropeFoldlWhileOkFrom TCO (pretty much equal, just maybe a tiny bit slower)
+- specialized Set instead of DictBy... () to avoid extra memory for unit fields (no detectible performance change but less code reuse)

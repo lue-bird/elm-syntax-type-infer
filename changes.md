@@ -15,7 +15,6 @@
 
 optimization ideas
 - for annotated let and top-level declarations, unify parameters and annotation types _before_
-- specialized Set instead of DictBy... () to avoid extra memory for unit fields
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration

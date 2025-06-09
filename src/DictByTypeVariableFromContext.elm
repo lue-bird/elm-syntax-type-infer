@@ -534,6 +534,7 @@ insertHelpNoReplace :
     -> InnerDictByTypeVariableFromContext v
     -> Maybe (InnerDictByTypeVariableFromContext v)
 insertHelpNoReplace key value dict =
+    -- IGNORE TCO
     case dict of
         Leaf ->
             -- New nodes are always red. If it violates the rules, it will be fixed
