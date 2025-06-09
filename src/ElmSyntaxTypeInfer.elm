@@ -13731,7 +13731,6 @@ substitutionsVariableToTypeApplyOverItself context variableToTypeInitial =
 
 
 typeNotVariableFullyApplyVariableToTypeSubstitutions :
-    -- TODO do new substitutions need be tracked?
     { range : Elm.Syntax.Range.Range
     , declarationTypes : ProjectModuleDeclaredTypes
     }
@@ -13743,7 +13742,6 @@ typeNotVariableFullyApplyVariableToTypeSubstitutions :
     -> Result String TypeNotVariable
 typeNotVariableFullyApplyVariableToTypeSubstitutions context substitutionsToApply typeNotVariable =
     case
-        -- TODO optimize by not tracking new substitutions
         typeNotVariable
             |> typeNotVariableSubstituteVariableByType context
                 substitutionsToApply
