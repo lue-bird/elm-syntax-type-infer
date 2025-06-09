@@ -1637,7 +1637,7 @@ annotatedValueOrFunctionDeclarationApplyVariableSubstitutions context substituti
                                                         if parameterSubstituted.unchanged then
                                                             Ok
                                                                 { nodes =
-                                                                    parameterSubstituted.node
+                                                                    parameterInferred
                                                                         :: parametersSubstitutedSoFar.nodes
                                                                 , allUnchanged =
                                                                     parametersSubstitutedSoFar.allUnchanged
@@ -1794,7 +1794,7 @@ annotatedLetValueOrFunctionDeclarationApplyVariableSubstitutions context substit
                                                         if parameterSubstituted.unchanged then
                                                             Ok
                                                                 { nodes =
-                                                                    parameterSubstituted.node
+                                                                    parameterInferred
                                                                         :: parametersSubstitutedSoFar.nodes
                                                                 , allUnchanged =
                                                                     parametersSubstitutedSoFar.allUnchanged
@@ -2286,15 +2286,23 @@ typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
                 )
                 (typeRecordFields
                     |> fastDictFoldlWhileOkFrom
-                        typesDictEmptyAllUnchangedTrue
+                        { allUnchanged = True
+                        , types = typeRecordFields
+                        }
                         (\fieldName fieldValue soFar ->
                             Result.map
                                 (\valueSubstituted ->
-                                    { allUnchanged = soFar.allUnchanged && valueSubstituted.unchanged
-                                    , types =
-                                        soFar.types
-                                            |> FastDict.insert fieldName valueSubstituted.type_
-                                    }
+                                    if valueSubstituted.unchanged then
+                                        { allUnchanged = soFar.allUnchanged
+                                        , types = soFar.types
+                                        }
+
+                                    else
+                                        { allUnchanged = False
+                                        , types =
+                                            soFar.types
+                                                |> FastDict.insert fieldName valueSubstituted.type_
+                                        }
                                 )
                                 (fieldValue
                                     |> typeSubstituteVariableByType context
@@ -2404,15 +2412,15 @@ typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
                 )
                 (typeRecordExtension.fields
                     |> fastDictFoldlWhileOkFrom
-                        typesDictEmptyAllUnchangedTrue
+                        { allUnchanged = True
+                        , types = typeRecordExtension.fields
+                        }
                         (\fieldName fieldValue soFar ->
                             Result.map
                                 (\valueSubstituted ->
                                     if valueSubstituted.unchanged then
                                         { allUnchanged = soFar.allUnchanged
-                                        , types =
-                                            soFar.types
-                                                |> FastDict.insert fieldName fieldValue
+                                        , types = soFar.types
                                         }
 
                                     else
@@ -13806,17 +13814,17 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
         PatternIgnored ->
             Result.map
-                (\substituted ->
-                    { unchanged = substituted.unchanged
+                (\typeSubstituted ->
+                    { unchanged = typeSubstituted.unchanged
                     , substitutions = variableSubstitutionsNone
                     , node =
-                        if substituted.unchanged then
+                        if typeSubstituted.unchanged then
                             patternTypedNode
 
                         else
                             { range = patternTypedNode.range
                             , value = PatternIgnored
-                            , type_ = substituted.type_
+                            , type_ = typeSubstituted.type_
                             }
                     }
                 )
@@ -13881,8 +13889,8 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
         PatternAs patternAs ->
             Result.map
-                (\inParensSubstituted ->
-                    if inParensSubstituted.unchanged then
+                (\aliasedPatternSubstituted ->
+                    if aliasedPatternSubstituted.unchanged then
                         { unchanged = True
                         , node = patternTypedNode
                         , substitutions = variableSubstitutionsNone
@@ -13890,19 +13898,19 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
 
                     else
                         { unchanged = False
-                        , substitutions = inParensSubstituted.substitutions
+                        , substitutions = aliasedPatternSubstituted.substitutions
                         , node =
                             { range = patternTypedNode.range
                             , value =
                                 PatternAs
-                                    { pattern = inParensSubstituted.node
+                                    { pattern = aliasedPatternSubstituted.node
                                     , variable =
                                         { range = patternAs.variable.range
                                         , value = patternAs.variable.value
-                                        , type_ = inParensSubstituted.node.type_
+                                        , type_ = aliasedPatternSubstituted.node.type_
                                         }
                                     }
-                            , type_ = inParensSubstituted.node.type_
+                            , type_ = aliasedPatternSubstituted.node.type_
                             }
                         }
                 )
