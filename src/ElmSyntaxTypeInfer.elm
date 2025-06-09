@@ -2464,16 +2464,6 @@ typeNotVariableSubstituteVariableByType context replacement typeNotVariable =
                 )
 
 
-typesDictEmptyAllUnchangedTrue :
-    { allUnchanged : Bool
-    , types : FastDict.Dict String Type
-    }
-typesDictEmptyAllUnchangedTrue =
-    { allUnchanged = True
-    , types = FastDict.empty
-    }
-
-
 typeIsNumber :
     ProjectModuleDeclaredTypes
     -> Type
@@ -14542,22 +14532,24 @@ patternTypedNodeMapTypes typeChange patternTypedNode =
 
 equivalentVariablesCreateCondensedVariable : EquivalentTypeVariableSet -> Result String TypeVariableFromContext
 equivalentVariablesCreateCondensedVariable set =
-    -- TODO figure out why getMaxKey for example doesn't work. Makes no sense to me
-    case set.variables |> DictByTypeVariableFromContext.getMinKey of
-        Nothing ->
-            Err "implementation bug: equivalent variable set is empty"
-
-        Just variable0 ->
+    case set.constraint of
+        Just unifiedConstraint ->
             Ok
                 { useRange = set.overarchingUseRange
-                , name =
-                    case set.constraint of
-                        Nothing ->
-                            variable0.name
-
-                        Just unifiedConstraint ->
-                            unifiedConstraint |> typeVariableConstraintToString
+                , name = unifiedConstraint |> typeVariableConstraintToString
                 }
+
+        Nothing ->
+            -- TODO figure out why getMaxKey for example doesn't work. Makes no sense to me
+            case set.variables |> DictByTypeVariableFromContext.getMinKey of
+                Nothing ->
+                    Err "implementation bug: equivalent variable set is empty"
+
+                Just variable0 ->
+                    Ok
+                        { useRange = set.overarchingUseRange
+                        , name = variable0.name
+                        }
 
 
 maybeTypeVariableConstraintToString : Maybe TypeVariableConstraint -> String
@@ -14885,13 +14877,13 @@ interfaceToType typeInterface =
                     Err "too many tuple parts"
 
         Elm.Type.Type reference argumentInterfaces ->
-            let
-                beforeAndAfterLastDot : { beforeLastDot : String, afterLastDot : String }
-                beforeAndAfterLastDot =
-                    reference |> splitIntoBeforeAndAfterLastDot
-            in
             Result.map
                 (\arguments ->
+                    let
+                        beforeAndAfterLastDot : { beforeLastDot : String, afterLastDot : String }
+                        beforeAndAfterLastDot =
+                            reference |> splitIntoBeforeAndAfterLastDot
+                    in
                     TypeNotVariable
                         (TypeConstruct
                             { moduleOrigin = beforeAndAfterLastDot.beforeLastDot
