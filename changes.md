@@ -11,10 +11,7 @@
 - keep use ranges at resulting type variables for the output
   to determine which variables are introduced by a let
 - correct very rare edge cases where type variables that should be the same were independent
-- a bit faster
-
-optimization ideas
-- for annotated let and top-level declarations, unify parameters and annotation types _before_
+- faster
 
 #### 1.0.10
 - update top-level unannotated declaration instances across more than one other declaration
