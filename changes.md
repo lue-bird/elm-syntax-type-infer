@@ -1,4 +1,4 @@
-## 2.0.0 (unreleased)
+## 2.0.0
 - do not parameterize type variables and types, just use regular Type for everything
 - represent module name as plain string instead of `ELm.Syntax.ModuleName.ModuleName`
 - split `ExpressionReference` into `ExpressionReferenceVariant`, `ExpressionReferenceRecordTypeAliasConstructorFunction` and `ExpressionReference`
