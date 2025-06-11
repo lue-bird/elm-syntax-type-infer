@@ -1,3 +1,6 @@
+#### 2.0.1
+- correct how the module origin is looked up when an import alias and alias/module name of other imports overlap
+
 ## 2.0.0
 - do not parameterize type variables and types, just use regular Type for everything
 - represent module name as plain string instead of `ELm.Syntax.ModuleName.ModuleName`

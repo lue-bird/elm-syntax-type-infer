@@ -870,44 +870,48 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 )
                                             |> Just
                                     )
-                                |> FastDict.insert moduleAliasOrFullName
-                                    (moduleTypes.choiceTypes
-                                        |> FastDict.foldl
-                                            (\_ choiceType variantNamesSoFar ->
-                                                choiceType.variants
+                                |> FastDict.update moduleAliasOrFullName
+                                    (\soFarReferencesWithSameModuleNameOrAlias ->
+                                        moduleTypes.choiceTypes
+                                            |> FastDict.foldl
+                                                (\_ choiceType variantNamesSoFar ->
+                                                    choiceType.variants
+                                                        |> FastDict.foldl
+                                                            (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
+                                                                soFarAndVariantNamesOfCurrentChoiceType
+                                                                    |> FastDict.insert
+                                                                        variantName
+                                                                        syntaxImport.moduleName
+                                                            )
+                                                            variantNamesSoFar
+                                                )
+                                                (moduleTypes.signatures
                                                     |> FastDict.foldl
-                                                        (\variantName _ soFarAndVariantNamesOfCurrentChoiceType ->
-                                                            soFarAndVariantNamesOfCurrentChoiceType
+                                                        (\reference _ referenceNamesSoFar ->
+                                                            referenceNamesSoFar
                                                                 |> FastDict.insert
-                                                                    variantName
+                                                                    reference
                                                                     syntaxImport.moduleName
                                                         )
-                                                        variantNamesSoFar
-                                            )
-                                            (moduleTypes.signatures
-                                                |> FastDict.foldl
-                                                    (\reference _ referenceNamesSoFar ->
-                                                        referenceNamesSoFar
-                                                            |> FastDict.insert
-                                                                reference
-                                                                syntaxImport.moduleName
-                                                    )
-                                                    (moduleTypes.typeAliases
-                                                        |> FastDict.foldl
-                                                            (\typeAliasName typeAliasInfo recordTypeALiasNamesSoFar ->
-                                                                case typeAliasInfo.recordFieldOrder of
-                                                                    Nothing ->
-                                                                        recordTypeALiasNamesSoFar
+                                                        (moduleTypes.typeAliases
+                                                            |> FastDict.foldl
+                                                                (\typeAliasName typeAliasInfo recordTypeALiasNamesSoFar ->
+                                                                    case typeAliasInfo.recordFieldOrder of
+                                                                        Nothing ->
+                                                                            recordTypeALiasNamesSoFar
 
-                                                                    Just _ ->
-                                                                        recordTypeALiasNamesSoFar
-                                                                            |> FastDict.insert
-                                                                                typeAliasName
-                                                                                syntaxImport.moduleName
-                                                            )
-                                                            FastDict.empty
-                                                    )
-                                            )
+                                                                        Just _ ->
+                                                                            recordTypeALiasNamesSoFar
+                                                                                |> FastDict.insert
+                                                                                    typeAliasName
+                                                                                    syntaxImport.moduleName
+                                                                )
+                                                                (soFarReferencesWithSameModuleNameOrAlias
+                                                                    |> Maybe.withDefault FastDict.empty
+                                                                )
+                                                        )
+                                                )
+                                            |> Just
                                     )
                         , typeConstructs =
                             soFar.typeConstructs
@@ -925,25 +929,29 @@ importsToModuleOriginLookup modulesTypes imports =
                                                 )
                                             |> Just
                                     )
-                                |> FastDict.insert moduleAliasOrFullName
-                                    (moduleTypes.choiceTypes
-                                        |> FastDict.foldl
-                                            (\choiceTypeName _ variantNamesSoFar ->
-                                                variantNamesSoFar
-                                                    |> FastDict.insert
-                                                        choiceTypeName
-                                                        syntaxImport.moduleName
-                                            )
-                                            (moduleTypes.typeAliases
-                                                |> FastDict.foldl
-                                                    (\typeAliasName _ referenceNamesSoFar ->
-                                                        referenceNamesSoFar
-                                                            |> FastDict.insert
-                                                                typeAliasName
-                                                                syntaxImport.moduleName
-                                                    )
-                                                    FastDict.empty
-                                            )
+                                |> FastDict.update moduleAliasOrFullName
+                                    (\soFarTypeConstructsWithSameModuleNameOrAlias ->
+                                        moduleTypes.choiceTypes
+                                            |> FastDict.foldl
+                                                (\choiceTypeName _ variantNamesSoFar ->
+                                                    variantNamesSoFar
+                                                        |> FastDict.insert
+                                                            choiceTypeName
+                                                            syntaxImport.moduleName
+                                                )
+                                                (moduleTypes.typeAliases
+                                                    |> FastDict.foldl
+                                                        (\typeAliasName _ referenceNamesSoFar ->
+                                                            referenceNamesSoFar
+                                                                |> FastDict.insert
+                                                                    typeAliasName
+                                                                    syntaxImport.moduleName
+                                                        )
+                                                        (soFarTypeConstructsWithSameModuleNameOrAlias
+                                                            |> Maybe.withDefault FastDict.empty
+                                                        )
+                                                )
+                                            |> Just
                                     )
                         }
             )

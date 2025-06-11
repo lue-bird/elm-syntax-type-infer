@@ -5742,6 +5742,97 @@ waste a =
                             )
                         )
             )
+        , Test.test "import alias"
+            (\() ->
+                """module A exposing (..)
+import Array as Arr
+waste =
+    Arr.empty
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = "Array"
+                                    , name = "Array"
+                                    , arguments =
+                                        [ ElmSyntaxTypeInfer.TypeVariable
+                                            { name = "a"
+                                            , useRange = { end = { column = 14, row = 4 }, start = { column = 5, row = 4 } }
+                                            }
+                                        ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "import alias equal to actual module name of explicit import of by default implicitly imported module"
+            (\() ->
+                """module A exposing (..)
+import String
+import Char as String
+waste =
+    String.isAlpha
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeChar
+                                    , output = typeBool
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "import alias equal to actual module name"
+            (\() ->
+                """module A exposing (..)
+import Array
+import List as Array
+waste =
+    Array.fromList [ "" ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = "Array"
+                                    , name = "Array"
+                                    , arguments = [ typeString ]
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "import alias equal to import alias of a different import"
+            (\() ->
+                """module A exposing (..)
+import Set as Array
+import List as Array
+waste =
+    Array.fromList [ "" ]
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeConstruct
+                                    { moduleOrigin = "Set"
+                                    , name = "Set"
+                                    , arguments = [ typeString ]
+                                    }
+                                )
+                            )
+                        )
+            )
         ]
 
 
@@ -5817,6 +5908,17 @@ typeString =
         (ElmSyntaxTypeInfer.TypeConstruct
             { moduleOrigin = "String"
             , name = "String"
+            , arguments = []
+            }
+        )
+
+
+typeChar : ElmSyntaxTypeInfer.Type
+typeChar =
+    ElmSyntaxTypeInfer.TypeNotVariable
+        (ElmSyntaxTypeInfer.TypeConstruct
+            { moduleOrigin = "Char"
+            , name = "Char"
             , arguments = []
             }
         )
