@@ -3,7 +3,7 @@
     "name": "lue-bird/elm-syntax-type-infer",
     "summary": "add types to elm-syntax",
     "license": "BSD-3-Clause",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "exposed-modules": [
         "ElmSyntaxTypeInfer"
     ],
