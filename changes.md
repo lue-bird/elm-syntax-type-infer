@@ -1,3 +1,6 @@
+#### 2.0.2
+- correct edge case where third part in a triple was incorrectly set to the second part
+
 #### 2.0.1
 - correct how the module origin is looked up when an import alias and alias/module name of other imports overlap
 

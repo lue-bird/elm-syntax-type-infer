@@ -4208,7 +4208,7 @@ typeNotVariableUnify context a bNotVariable =
                         )
                         (typeUnify context aTriple.part0 bTriple.part0)
                         (typeUnify context aTriple.part1 bTriple.part1)
-                        (typeUnify context aTriple.part1 bTriple.part1)
+                        (typeUnify context aTriple.part2 bTriple.part2)
 
                 TypeUnit ->
                     Err
