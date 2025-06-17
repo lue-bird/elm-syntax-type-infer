@@ -506,6 +506,116 @@ onePointOne = (\\{ a } -> a) ({ a = 1.1, b = "" })
                     |> Expect.equal
                         (Ok typeFloat)
             )
+        , Test.test "directly applied lambda with inexhaustive record pattern, unifying from the other side: { a = 1.1, b = \"\" } |> (\\{ a } -> a)"
+            (\() ->
+                """module A exposing (..)
+onePointOne = { a = 1.1, b = "" } |> (\\{ a } -> a)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeFloat)
+            )
+        , Test.test "directly applied lambda with inexhaustive record pattern of field not present in the record is invalid: (\\{ c } -> c) ({ a = 1.1, b = \"\" })"
+            (\() ->
+                """module A exposing (..)
+onePointOne = (\\{ c } -> c) ({ a = 1.1, b = "" })
+"""
+                    |> typeInferModuleFromSource
+                    |> Expect.err
+            )
+        , Test.test "fully applied function with inexhaustive record pattern: toStringWithRecord (\\{ b } -> b)"
+            (\() ->
+                """module A exposing (..)
+toStringWithRecord : ({ a: Float, b : String } -> String) -> String
+toStringWithRecord recordToString =
+    recordToString { a = 1.1, b = "" }
+
+stringEmpty = toStringWithRecord (\\{ b } -> b)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeString)
+            )
+        , Test.test "fully applied function unifying type alias record with inexhaustive record pattern: toStringWithRecord (\\{ b } -> b)"
+            (\() ->
+                """module A exposing (..)
+type alias AB = { a: Float, b : String }
+toStringWithRecord : (AB -> String) -> String
+toStringWithRecord recordToString =
+    recordToString { a = 1.1, b = "" }
+
+stringEmpty = toStringWithRecord (\\{ b } -> b)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeString)
+            )
+        , Test.test "fully applied 3-parameter function unifying type alias record with inexhaustive record pattern"
+            (\() ->
+                """module A exposing (..)
+type alias Match =
+    { match : String
+    , index : Int
+    , number : Int
+    , submatches : List (Maybe String)
+    }
+
+replace : String -> (Match -> String) -> String -> String
+replace _ matchToReplacement _ =
+    matchToReplacement
+        { match = ""
+        , index = 0
+        , number = 0
+        , submatches = []
+        }
+
+stringEmpty string =
+    replace ""
+        (\\{ submatches } ->
+            ""
+        )
+        string
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input = typeString
+                                    , output = typeString
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "induce record pattern substitution by applying function unifying type alias record with inexhaustive record pattern and pattern matching on the pattern variable"
+            (\() ->
+                """module A exposing (..)
+
+replace : ({ a : String, b : List (Maybe String) } -> String) -> String
+replace matchToReplacement = ""
+
+stringEmpty =
+    replace
+        (\\{ b } ->
+            case b of
+                (Just match) :: _ -> ""
+                _ -> ""
+        )
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeString)
+            )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->
                 """module A exposing (..)
