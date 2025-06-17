@@ -1,3 +1,6 @@
+### 2.0.3
+- correct edge case where inexhaustive record pattern type was incorrectly inferred as a record instead of record extension
+
 #### 2.0.2
 - correct edge case where third part in a triple was incorrectly set to the second part
 

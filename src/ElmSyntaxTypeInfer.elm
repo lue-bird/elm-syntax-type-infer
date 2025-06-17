@@ -14091,21 +14091,8 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
                         , node =
                             { range = patternTypedNode.range
                             , value =
-                                PatternRecord
-                                    fieldsSubstituted.nodes
-                            , type_ =
-                                TypeNotVariable
-                                    (TypeRecord
-                                        (fieldsSubstituted.nodes
-                                            |> List.foldl
-                                                (\fieldSubstituted soFar ->
-                                                    soFar
-                                                        |> FastDict.insert fieldSubstituted.value
-                                                            fieldSubstituted.type_
-                                                )
-                                                FastDict.empty
-                                        )
-                                    )
+                                PatternRecord fieldsSubstituted.nodes
+                            , type_ = typeSubstituted.type_
                             }
                         }
                 )
