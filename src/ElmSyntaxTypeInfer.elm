@@ -2012,7 +2012,7 @@ typeSubstituteVariableByType context replacement type_ =
                                                     ("("
                                                         ++ (context.range |> rangeToInfoString)
                                                         ++ ") "
-                                                        ++ "cannot unify comparable type variable with types other than Int/Float/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
+                                                        ++ "cannot unify comparable type variable with types other than Int/Float/Char/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
                                                     )
 
                                         TypeVariableConstraintCompappend ->
@@ -2689,6 +2689,14 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
                 "String" ->
                     case variableReplacementTypeConstruct.name of
                         "String" ->
+                            True
+
+                        _ ->
+                            False
+
+                "Char" ->
+                    case variableReplacementTypeConstruct.name of
+                        "Char" ->
                             True
 
                         _ ->

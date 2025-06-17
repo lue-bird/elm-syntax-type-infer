@@ -2336,6 +2336,18 @@ two =
                             )
                         )
             )
+        , Test.test "Char considered comparable 'a' < 'b'"
+            (\() ->
+                """module A exposing (..)
+true = 'a' < 'b'
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeBool
+                        )
+            )
         , Test.test "local type alias used as comparable: type alias L = List String ; lt : L -> Bool ; lt l = l < l"
             (\() ->
                 [ { declaration =

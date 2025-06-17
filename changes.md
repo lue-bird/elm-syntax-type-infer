@@ -1,4 +1,7 @@
-### 2.0.3
+#### 2.0.4
+- correct `Char.Char` not being regarded as comparable
+
+#### 2.0.3
 - correct edge case where inexhaustive record pattern type was incorrectly inferred as a record instead of record extension
 
 #### 2.0.2
