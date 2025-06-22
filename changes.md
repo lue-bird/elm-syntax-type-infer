@@ -2,7 +2,6 @@
 TODO
 - try avoid creating callResult when possible because it leads to bad error messages.
   Instead unroll called type and unify parameter types then + remaining type is the result type
-- think about if directly applying substitutions from narrowing a let type instead of bubbling them up when substituting in expression
 
 #### 2.0.4
 - correct `Char.Char` not being regarded as comparable
