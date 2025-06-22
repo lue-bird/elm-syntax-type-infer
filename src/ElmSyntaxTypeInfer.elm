@@ -3439,6 +3439,13 @@ typeUnify context a b =
                         context.declarationTypes
                         bVariableName
                         aTypeNotVariable
+                        |> Result.mapError
+                            (\error ->
+                                "("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ error
+                            )
 
                 TypeNotVariable bTypeNotVariable ->
                     typeNotVariableUnify context
@@ -3457,6 +3464,13 @@ typeUnify context a b =
                         context.declarationTypes
                         aVariable
                         bTypeNotVariable
+                        |> Result.mapError
+                            (\error ->
+                                "("
+                                    ++ (context.range |> rangeToInfoString)
+                                    ++ ") "
+                                    ++ error
+                            )
 
 
 typeUnifyWithFunction :
@@ -3746,6 +3760,13 @@ typeUnifyWithBasicsBool context a =
                 context.declarationTypes
                 aVariable
                 typeNotVariableBasicsBool
+                |> Result.mapError
+                    (\error ->
+                        "("
+                            ++ (context.range |> rangeToInfoString)
+                            ++ ") "
+                            ++ error
+                    )
 
 
 typeNotVariableUnifyWithTypeConstruct :
