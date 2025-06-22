@@ -11577,7 +11577,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                 , substitutions = variableSubstitutionsNone
                 }
 
-        ExpressionInteger integer ->
+        ExpressionInteger _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11591,7 +11591,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionInteger integer
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -11604,7 +11604,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
-        ExpressionReferenceRecordTypeAliasConstructorFunction reference ->
+        ExpressionReferenceRecordTypeAliasConstructorFunction _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11618,7 +11618,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionReferenceRecordTypeAliasConstructorFunction reference
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -11631,7 +11631,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
-        ExpressionReferenceVariant reference ->
+        ExpressionReferenceVariant _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11645,7 +11645,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionReferenceVariant reference
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -11658,7 +11658,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
-        ExpressionReference reference ->
+        ExpressionReference _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11672,7 +11672,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionReference reference
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -11685,7 +11685,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
-        ExpressionOperatorFunction symbol ->
+        ExpressionOperatorFunction _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11699,7 +11699,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionOperatorFunction symbol
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
@@ -11712,7 +11712,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         replacement
                 )
 
-        ExpressionRecordAccessFunction field ->
+        ExpressionRecordAccessFunction _ ->
             Result.map
                 (\typeSubstituted ->
                     if typeSubstituted.unchanged then
@@ -11726,7 +11726,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                         , substitutions = variableSubstitutionsNone
                         , node =
                             { range = expressionTypedNode.range
-                            , value = ExpressionRecordAccessFunction field
+                            , value = expressionTypedNode.value
                             , type_ = typeSubstituted.type_
                             }
                         }
