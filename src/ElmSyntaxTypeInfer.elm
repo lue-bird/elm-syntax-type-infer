@@ -6766,8 +6766,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                                             , resultType = resultTypeUnifiedWithCaseResult.type_
                                                             }
                                                         )
-                                                        (variableSubstitutionsMerge3
-                                                            typeContext
+                                                        (variableSubstitutionsMerge3 typeContext
                                                             soFar.substitutions
                                                             matchedTypeUnifiedWithCasePattern.substitutions
                                                             resultTypeUnifiedWithCaseResult.substitutions
@@ -6939,8 +6938,7 @@ expressionLetInTypeInfer context syntaxExpressionLetIn =
                         )
                         (resultAndThen2
                             (\destructuringUseUnification declarationUseUnificationSubstitutions ->
-                                variableSubstitutionsMerge
-                                    typeContext
+                                variableSubstitutionsMerge typeContext
                                     destructuringUseUnification.substitutions
                                     declarationUseUnificationSubstitutions
                             )
@@ -7984,8 +7982,7 @@ expressionInfixOperationTypeInfer context infixOperation =
                                     context.declarationTypes
                                     leftRightAndUnificationSubstitutions
                         )
-                        (variableSubstitutionsMerge
-                            typeContext
+                        (variableSubstitutionsMerge typeContext
                             unifiedLeftType.substitutions
                             unifiedRightType.substitutions
                         )
@@ -12106,10 +12103,9 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
-                                                elementSubstituted.substitutions
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
+                                                elementSubstituted.substitutions
                                             )
                                 )
                                 (elementNode
@@ -12153,16 +12149,14 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                     }
                                 }
                             )
-                            (variableSubstitutionsMerge3
-                                typeContext
+                            (variableSubstitutionsMerge3 typeContext
                                 calledSubstituted.substitutions
                                 argument0Substituted.substitutions
                                 argument1UpSubstituted.substitutions
                             )
                 )
                 (expressionTypedNode.type_
-                    |> typeSubstituteVariableByType
-                        typeContext
+                    |> typeSubstituteVariableByType typeContext
                         replacement
                 )
                 (expressionCall.called
@@ -12197,10 +12191,9 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
-                                                argumentSubstituted.substitutions
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
+                                                argumentSubstituted.substitutions
                                             )
                                 )
                                 (argumentNode
@@ -12276,10 +12269,9 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
-                                                fieldValueSubstituted.substitutions
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
+                                                fieldValueSubstituted.substitutions
                                             )
                                 )
                                 (fieldNode.value
@@ -12333,8 +12325,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                             )
                 )
                 (expressionTypedNode.type_
-                    |> typeSubstituteVariableByType
-                        typeContext
+                    |> typeSubstituteVariableByType typeContext
                         replacement
                 )
                 (Result.map
@@ -12388,10 +12379,9 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
-                                                fieldValueSubstituted.substitutions
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
+                                                fieldValueSubstituted.substitutions
                                             )
                                 )
                                 (fieldNode.value
@@ -12452,8 +12442,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                     }
                                 }
                             )
-                            (variableSubstitutionsMerge3
-                                typeContext
+                            (variableSubstitutionsMerge3 typeContext
                                 parameter0Substituted.substitutions
                                 parameter1UpSubstituted.substitutions
                                 resultSubstituted.substitutions
@@ -12761,8 +12750,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                             )
                             (Result.andThen
                                 (\variableSubstitutionsForUnifyingWithUpdatedValueOrFunctionTypes ->
-                                    variableSubstitutionsMerge4
-                                        typeContext
+                                    variableSubstitutionsMerge4 typeContext
                                         declaration0Substituted.substitutions
                                         declaration1UpSubstituted.substitutions
                                         resultSubstituted.substitutions
@@ -12812,8 +12800,7 @@ expressionTypedNodeSubstituteVariableByType declarationTypes replacement express
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
                                                 declarationSubstituted.substitutions
                                             )
@@ -13002,8 +12989,7 @@ letDeclarationSubstituteVariableByType declarationTypes replacement letDeclarati
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
                                                 parameterSubstituted.substitutions
                                             )
@@ -14234,10 +14220,9 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
-                                                fieldSubstituted.substitutions
+                                            (variableSubstitutionsMerge typeContext
                                                 soFar.substitutions
+                                                fieldSubstituted.substitutions
                                             )
                                 )
                                 (elementNode
@@ -14281,8 +14266,7 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
                         }
                 )
                 (patternTypedNode.type_
-                    |> typeSubstituteVariableByType
-                        typeContext
+                    |> typeSubstituteVariableByType typeContext
                         replacement
                 )
                 (patternVariant.values
@@ -14309,8 +14293,7 @@ patternTypedNodeSubstituteVariableByType declarationTypes replacement patternTyp
                                                         :: soFar.nodes
                                                 }
                                             )
-                                            (variableSubstitutionsMerge
-                                                typeContext
+                                            (variableSubstitutionsMerge typeContext
                                                 valueSubstituted.substitutions
                                                 soFar.substitutions
                                             )
