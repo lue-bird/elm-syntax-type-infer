@@ -3144,6 +3144,122 @@ allTheSame =
                             )
                         )
             )
+        , Test.test "self-recursive un-annotated let function declaration (single parameter)"
+            (\() ->
+                """module A exposing (..)
+zero : Int -> Float
+zero fullLength =
+    let
+        countdown index =
+            if index < 0 then
+                0.0
+
+            else
+                countdown (index - 1)
+    in
+    countdown (fullLength - 1)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+        , Test.test "self-recursive un-annotated let function declaration (multiple parameters, simplified)"
+            (\() ->
+                """module A exposing (..)
+listInitialize : Int -> (Int -> a) -> List a
+listInitialize fullLength indexToElement =
+    let
+        step index soFar =
+            if index < 0 then
+                soFar
+
+            else
+                step (index - 1) soFar
+    in
+    step (fullLength - 1) []
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+        , Test.test "self-recursive un-annotated let function declaration (multiple parameters) not used"
+            (\() ->
+                """module A exposing (..)
+listInitialize : ()
+listInitialize =
+    let
+        step index soFar =
+            if index < 0 then
+                soFar
+
+            else
+                step (index - 1) (index :: soFar)
+    in
+    ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+        , Test.test "self-recursive un-annotated let function declaration (multiple parameters)"
+            (\() ->
+                """module A exposing (..)
+listInitialize : Int -> List Int
+listInitialize fullLength =
+    let
+        step index soFar =
+            if index < 0 then
+                soFar
+
+            else
+                step (index - 1) (index :: soFar)
+    in
+    step (fullLength - 1) []
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+        , Test.test "self-recursive annotated let function declaration (multiple parameters, using function from outer context)"
+            (\() ->
+                """module A exposing (..)
+listInitialize : Int -> (Int -> a) -> List a
+listInitialize fullLength indexToElement =
+    let
+        step : Int -> List a -> List a
+        step index soFar =
+            if index < 0 then
+                soFar
+
+            else
+                step (index - 1) (indexToElement index :: soFar)
+    in
+    step (fullLength - 1) []
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+        , Test.test "self-recursive un-annotated let function declaration (multiple parameters, using function from outer context)"
+            (\() ->
+                """module A exposing (..)
+listInitialize : Int -> (Int -> a) -> List a
+listInitialize fullLength indexToElement =
+    let
+        step index soFar =
+            if index < 0 then
+                soFar
+
+            else
+                step (index - 1) (indexToElement index :: soFar)
+    in
+    step (fullLength - 1) []
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.ok
+            )
+            |> Test.skip
         , Test.test "single incorrectly annotated let declaration let a : Int ; a = 2.2 in a"
             (\() ->
                 """module A exposing (..)
