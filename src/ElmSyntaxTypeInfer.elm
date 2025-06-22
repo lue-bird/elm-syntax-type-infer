@@ -3431,6 +3431,19 @@ typeUnify :
             , substitutions : VariableSubstitutions
             }
 typeUnify context a b =
+    let
+        _ =
+            if a == b then
+                ""
+
+            else
+                Debug.log
+                    (typeToInfoString a
+                        ++ " = "
+                        ++ typeToInfoString b
+                    )
+                    ""
+    in
     case a of
         TypeNotVariable aTypeNotVariable ->
             case b of
@@ -4735,12 +4748,16 @@ typeRecordExtensionUnifyWithRecord :
 typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
     Result.andThen
         (\fieldsUnified ->
+            let
+                unifiedTypeNotVariable : TypeNotVariable
+                unifiedTypeNotVariable =
+                    TypeRecord fieldsUnified.fieldsUnified
+            in
             Result.map
                 (\fullSubstitutions ->
                     { substitutions = fullSubstitutions
                     , type_ =
-                        TypeNotVariable
-                            (TypeRecord fieldsUnified.fieldsUnified)
+                        TypeNotVariable unifiedTypeNotVariable
                     }
                 )
                 (variableSubstitutionsMerge context
@@ -4749,7 +4766,7 @@ typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
                     , variableToType =
                         DictByTypeVariableFromContext.singleton
                             recordExtension.recordVariable
-                            (TypeRecord fieldsUnified.fieldsUnified)
+                            unifiedTypeNotVariable
                     }
                 )
         )
