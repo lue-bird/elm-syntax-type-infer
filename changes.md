@@ -1,3 +1,8 @@
+#### 2.0.5
+TODO
+- try avoid creating callResult when possible because it leads to bad error messages.
+  Instead unroll called type and unify parameter types then + remaining type is the result type
+
 #### 2.0.4
 - correct `Char.Char` not being regarded as comparable
 
