@@ -6074,14 +6074,17 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                 fieldName =
                     dotFieldName |> String.dropLeft 1
 
+                nameStartLocation : Elm.Syntax.Range.Location
+                nameStartLocation =
+                    { row = fullRange.start.row
+                    , column = fullRange.start.column + 1
+                    }
+
                 fieldValueType : Type
                 fieldValueType =
                     TypeVariable
                         { useRange =
-                            { start =
-                                { row = fullRange.start.row
-                                , column = fullRange.start.column + 1
-                                }
+                            { start = nameStartLocation
                             , end = fullRange.end
                             }
                         , name = fieldName
@@ -6098,7 +6101,11 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                 TypeNotVariable
                                     (TypeRecordExtension
                                         { recordVariable =
-                                            { useRange = fullRange
+                                            { useRange =
+                                                -- the dot
+                                                { start = fullRange.start
+                                                , end = nameStartLocation
+                                                }
                                             , name = "record"
                                             }
                                         , fields =
@@ -6436,7 +6443,9 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     }
                                         |> expressionTypedNodeApplyVariableSubstitutions
                                             context.declarationTypes
-                                            callTypeUnified.substitutions
+                                            (callTypeUnified.substitutions
+                                                |> Debug.log "callTypeUnified.substitutions"
+                                            )
                                 )
                                 (typeUnifyWithFunction
                                     { declarationTypes = context.declarationTypes
