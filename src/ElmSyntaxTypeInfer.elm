@@ -6179,7 +6179,14 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                             }
                             (TypeRecordExtension
                                 { recordVariable =
-                                    { useRange = fullRange
+                                    { useRange =
+                                        -- the dot
+                                        { start =
+                                            { row = fieldRange.start.row
+                                            , column = fieldRange.start.column - 1
+                                            }
+                                        , end = fieldRange.start
+                                        }
                                     , name = "record"
                                     }
                                 , fields =
