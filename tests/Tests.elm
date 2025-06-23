@@ -2466,6 +2466,98 @@ true = 'a' < 'b'
                             typeBool
                         )
             )
+        , Test.test "variable is being made comparable: \\left right -> left < right"
+            (\() ->
+                """module A exposing (..)
+lt = \\left right -> left < right
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable { name = "comparable", useRange = { end = { column = 27, row = 2 }, start = { column = 7, row = 2 } } }
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input = ElmSyntaxTypeInfer.TypeVariable { name = "comparable", useRange = { end = { column = 27, row = 2 }, start = { column = 7, row = 2 } } }
+                                                , output = typeBool
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "variable as part of a tuple is being made comparable: \\right leftFirst -> ( leftFirst, \"\" ) < right"
+            (\() ->
+                """module A exposing (..)
+withEmptyIsLessThan = \\right leftFirst -> ( leftFirst, "" ) < right 
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 =
+                                                    ElmSyntaxTypeInfer.TypeVariable { name = "comparable", useRange = { end = { column = 39, row = 2 }, start = { column = 30, row = 2 } } }
+                                                , part1 = typeString
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input = ElmSyntaxTypeInfer.TypeVariable { name = "comparable", useRange = { end = { column = 39, row = 2 }, start = { column = 30, row = 2 } } }
+                                                , output = typeBool
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "variable as part of a tuple is being made compappend: \\right leftFirstLeft leftFirstRight -> ( leftFirstLeft ++ leftFirstRight, \"\" ) < right"
+            (\() ->
+                """module A exposing (..)
+withEmptyIsLessThan = \\right leftFirstLeft leftFirstRight -> ( leftFirstLeft ++ leftFirstRight, "" ) < right
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeTuple
+                                                { part0 = ElmSyntaxTypeInfer.TypeVariable { name = "compappend", useRange = { end = { column = 80, row = 2 }, start = { column = 30, row = 2 } } }
+                                                , part1 = typeString
+                                                }
+                                            )
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input = ElmSyntaxTypeInfer.TypeVariable { name = "compappend", useRange = { end = { column = 80, row = 2 }, start = { column = 30, row = 2 } } }
+                                                , output =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                            { input = ElmSyntaxTypeInfer.TypeVariable { name = "compappend", useRange = { end = { column = 80, row = 2 }, start = { column = 30, row = 2 } } }
+                                                            , output = typeBool
+                                                            }
+                                                        )
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "local type alias used as comparable: type alias L = List String ; lt : L -> Bool ; lt l = l < l"
             (\() ->
                 [ { declaration =

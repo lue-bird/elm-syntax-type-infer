@@ -1998,22 +1998,12 @@ typeSubstituteVariableByType context replacement type_ =
                                                     )
 
                                         TypeVariableConstraintComparable ->
-                                            if
-                                                replacementTypeNotVariable
-                                                    |> typeNotVariableIsComparable context.declarationTypes
-                                            then
-                                                Ok
-                                                    { unchanged = False
-                                                    , type_ = replacementType
-                                                    }
-
-                                            else
-                                                Err
-                                                    ("("
-                                                        ++ (context.range |> rangeToInfoString)
-                                                        ++ ") "
-                                                        ++ "cannot unify comparable type variable with types other than Int/Float/Char/String/Time.Posix/List of comparable/tuple of comparables/triple of comparable"
-                                                    )
+                                            -- compatibility is already checked when constructing
+                                            -- the substitutions
+                                            Ok
+                                                { unchanged = False
+                                                , type_ = replacementType
+                                                }
 
                                         TypeVariableConstraintCompappend ->
                                             if
@@ -2687,20 +2677,12 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
         TypeConstruct variableReplacementTypeConstruct ->
             case variableReplacementTypeConstruct.moduleOrigin of
                 "String" ->
-                    case variableReplacementTypeConstruct.name of
-                        "String" ->
-                            True
-
-                        _ ->
-                            False
+                    -- there's only the String type in module String
+                    True
 
                 "Char" ->
-                    case variableReplacementTypeConstruct.name of
-                        "Char" ->
-                            True
-
-                        _ ->
-                            False
+                    -- there's only the Char type in module Char
+                    True
 
                 "Basics" ->
                     case variableReplacementTypeConstruct.name of
@@ -2722,17 +2704,13 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
                             False
 
                 "List" ->
-                    case variableReplacementTypeConstruct.name of
-                        "List" ->
-                            variableReplacementTypeConstruct.arguments
-                                |> List.all
-                                    (\argument ->
-                                        argument
-                                            |> typeIsComparable declarationTypes
-                                    )
-
-                        _ ->
-                            False
+                    -- there's only the List type in module List
+                    variableReplacementTypeConstruct.arguments
+                        |> List.all
+                            (\argument ->
+                                argument
+                                    |> typeIsComparable declarationTypes
+                            )
 
                 _ ->
                     case
@@ -2771,6 +2749,183 @@ typeNotVariableIsComparable declarationTypes typeNotVariable =
 
         TypeFunction _ ->
             False
+
+
+typeMakeComparable :
+    ProjectModuleDeclaredTypes
+    -> Type
+    -> Result String (List EquivalentTypeVariableSet)
+typeMakeComparable declarationTypes type_ =
+    case type_ of
+        TypeVariable typeVariable ->
+            case typeVariable.name |> typeVariableConstraint of
+                Nothing ->
+                    Ok
+                        [ { constraint = justTypeVariableConstraintComparable
+                          , overarchingUseRange = typeVariable.useRange
+                          , variables =
+                                DictByTypeVariableFromContext.twoDistinct
+                                    typeVariable
+                                    ()
+                                    { useRange = typeVariable.useRange
+                                    , name =
+                                        "comparable"
+                                            ++ (typeVariable.name
+                                                    |> stringFirstCharToUpper
+                                               )
+                                    }
+                                    ()
+                          }
+                        ]
+
+                Just constraint ->
+                    case constraint of
+                        TypeVariableConstraintAppendable ->
+                            Ok
+                                [ { constraint = justTypeVariableConstraintCompappend
+                                  , overarchingUseRange = typeVariable.useRange
+                                  , variables =
+                                        DictByTypeVariableFromContext.twoDistinct
+                                            typeVariable
+                                            ()
+                                            { useRange = typeVariable.useRange
+                                            , name =
+                                                "compappend"
+                                                    ++ (typeVariable.name
+                                                            |> String.dropLeft
+                                                                -- ("appendable" |> String.length)
+                                                                10
+                                                       )
+                                            }
+                                            ()
+                                  }
+                                ]
+
+                        TypeVariableConstraintCompappend ->
+                            okListEmpty
+
+                        TypeVariableConstraintComparable ->
+                            okListEmpty
+
+                        TypeVariableConstraintNumber ->
+                            okListEmpty
+
+        TypeNotVariable typeNotVariable ->
+            typeNotVariableMakeComparable declarationTypes
+                typeNotVariable
+
+
+okListEmpty : Result error_ (List element_)
+okListEmpty =
+    Ok []
+
+
+typeNotVariableMakeComparable :
+    ProjectModuleDeclaredTypes
+    -> TypeNotVariable
+    -> Result String (List EquivalentTypeVariableSet)
+typeNotVariableMakeComparable declarationTypes typeNotVariable =
+    -- IGNORE TCO
+    case typeNotVariable of
+        TypeConstruct variableReplacementTypeConstruct ->
+            case variableReplacementTypeConstruct.moduleOrigin of
+                "String" ->
+                    -- there's only the String type in module String
+                    okListEmpty
+
+                "Char" ->
+                    -- there's only the Char type in module Char
+                    okListEmpty
+
+                "Basics" ->
+                    case variableReplacementTypeConstruct.name of
+                        "Int" ->
+                            okListEmpty
+
+                        "Float" ->
+                            okListEmpty
+
+                        variableReplacementTypeConstructNameNotIntOrFloat ->
+                            Err
+                                ("Basics."
+                                    ++ variableReplacementTypeConstructNameNotIntOrFloat
+                                    ++ " is not comparable"
+                                )
+
+                "Time" ->
+                    case variableReplacementTypeConstruct.name of
+                        "Posix" ->
+                            okListEmpty
+
+                        variableReplacementTypeConstructNameNotPosix ->
+                            Err
+                                ("Time."
+                                    ++ variableReplacementTypeConstructNameNotPosix
+                                    ++ " is not comparable"
+                                )
+
+                "List" ->
+                    -- there's only the List type in module List
+                    variableReplacementTypeConstruct.arguments
+                        |> listFoldlWhileOkFrom []
+                            (\argument _ ->
+                                -- there is always exactly 1 argument so we can ignore what's before
+                                argument
+                                    |> typeMakeComparable declarationTypes
+                            )
+
+                moduleOriginNotBasicsStringCharTimeList ->
+                    case
+                        typeConstructFullyExpandIfAlias
+                            { declarationTypes = declarationTypes
+                            , range =
+                                -- dummy
+                                Elm.Syntax.Range.empty
+                            }
+                            variableReplacementTypeConstruct
+                    of
+                        Nothing ->
+                            Err
+                                (moduleOriginNotBasicsStringCharTimeList
+                                    ++ "."
+                                    ++ variableReplacementTypeConstruct.name
+                                    ++ " is not comparable"
+                                )
+
+                        Just deAliasedTypeConstruct ->
+                            typeMakeComparable declarationTypes
+                                deAliasedTypeConstruct
+
+        TypeTuple typeTuple ->
+            Result.map2
+                (\fromPart0 fromPart1 ->
+                    fromPart0 |> listAppendFastButInReverseOrder fromPart1
+                )
+                (typeTuple.part0 |> typeMakeComparable declarationTypes)
+                (typeTuple.part1 |> typeMakeComparable declarationTypes)
+
+        TypeTriple typeTriple ->
+            Result.map3
+                (\fromPart0 fromPart1 fromPart2 ->
+                    fromPart0
+                        |> listAppendFastButInReverseOrder fromPart1
+                        |> listAppendFastButInReverseOrder fromPart2
+                )
+                (typeTriple.part0 |> typeMakeComparable declarationTypes)
+                (typeTriple.part1 |> typeMakeComparable declarationTypes)
+                (typeTriple.part2 |> typeMakeComparable declarationTypes)
+
+        TypeUnit ->
+            Err "unit (`()`) is not comparable"
+
+        TypeRecord _ ->
+            Err "record is not comparable"
+
+        TypeRecordExtension _ ->
+            Err "record extension is not comparable"
+
+        TypeFunction _ ->
+            Err "function is not comparable"
 
 
 typeIsCompappend :
@@ -2812,13 +2967,9 @@ typeNotVariableIsCompappend declarationTypes type_ =
     case type_ of
         TypeConstruct variableReplacementTypeConstruct ->
             case variableReplacementTypeConstruct.moduleOrigin of
-                "Basics" ->
-                    case variableReplacementTypeConstruct.name of
-                        "String" ->
-                            True
-
-                        _ ->
-                            False
+                "String" ->
+                    -- there's only the String type in module String
+                    True
 
                 "List" ->
                     case variableReplacementTypeConstruct.name of
@@ -4064,6 +4215,19 @@ variableSubstitutionsFromVariableToTypeNotVariableOrError declarationTypes repla
                     ++ " because that type contains the type variable itself."
                 )
 
+    else if replacementVariable.name |> String.startsWith "comparable" then
+        Result.map
+            (\makeReplacementTypeNotVariableComparable ->
+                { equivalentVariables = makeReplacementTypeNotVariableComparable
+                , variableToType =
+                    DictByTypeVariableFromContext.singleton replacementVariable
+                        replacementTypeNotVariable
+                }
+            )
+            (typeNotVariableMakeComparable declarationTypes
+                replacementTypeNotVariable
+            )
+
     else
         Ok
             { equivalentVariables = []
@@ -4096,6 +4260,22 @@ variableSubstitutionsFromVariableToTypeNotVariableWithType type_ declarationType
                     ++ (replacementTypeNotVariable |> typeNotVariableToInfoString)
                     ++ " because that type contains the type variable itself."
                 )
+
+    else if replacementVariable.name |> String.startsWith "comparable" then
+        Result.map
+            (\makeReplacementTypeNotVariableComparable ->
+                { type_ = type_
+                , substitutions =
+                    { equivalentVariables = makeReplacementTypeNotVariableComparable
+                    , variableToType =
+                        DictByTypeVariableFromContext.singleton replacementVariable
+                            replacementTypeNotVariable
+                    }
+                }
+            )
+            (typeNotVariableMakeComparable declarationTypes
+                replacementTypeNotVariable
+            )
 
     else
         Ok
