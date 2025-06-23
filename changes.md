@@ -1,4 +1,6 @@
 #### 2.0.5
+- correct edge case where using a record type variable in multiple places could prevent it from being inferred to a more concrete type
+
 TODO
 - try avoid creating callResult when possible because it leads to bad error messages.
   Instead unroll called type and unify parameter types then + remaining type is the result type

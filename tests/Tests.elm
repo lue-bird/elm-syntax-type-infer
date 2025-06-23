@@ -152,7 +152,7 @@ accessors = [ .a, .b ]
                                                               )
                                                             ]
                                                     , recordVariable =
-                                                        { useRange = { end = { column = 21, row = 2 }, start = { column = 15, row = 2 } }
+                                                        { useRange = { end = { column = 20, row = 2 }, start = { column = 15, row = 2 } }
                                                         , name = "record"
                                                         }
                                                     }
@@ -474,7 +474,7 @@ recordAccessField = \\a -> a.field
                                         ElmSyntaxTypeInfer.TypeNotVariable
                                             (ElmSyntaxTypeInfer.TypeRecordExtension
                                                 { recordVariable =
-                                                    { useRange = { end = { column = 34, row = 2 }, start = { column = 27, row = 2 } }
+                                                    { useRange = { end = { column = 29, row = 2 }, start = { column = 28, row = 2 } }
                                                     , name = "record"
                                                     }
                                                 , fields =
@@ -615,6 +615,124 @@ stringEmpty =
                     |> Result.andThen toSingleInferredDeclaration
                     |> Expect.equal
                         (Ok typeString)
+            )
+        , Test.test "fully applied function unifying type alias record with usage of only one of it's fields"
+            (\() ->
+                """module A exposing (..)
+type alias AB = { a: Float, b : String }
+toStringWithRecord : (AB -> String) -> String
+toStringWithRecord recordToString =
+    recordToString { a = 1.1, b = "" }
+
+stringEmpty = toStringWithRecord (\\rec -> rec.b)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok typeString)
+            )
+        , Test.test "fully applied function unifying type alias record with usage of only some of it's fields"
+            (\() ->
+                """module A exposing (..)
+type alias AB = { a: Float, b : String, c : String }
+toStringWithRecord : (AB -> x) -> x
+toStringWithRecord recordToX =
+    recordToX { a = 1.1, b = "", c = "" }
+
+stringEmpty = toStringWithRecord (\\rec -> ( rec.b, rec.a ))
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeTuple
+                                    { part0 = typeString
+                                    , part1 = typeFloat
+                                    }
+                                )
+                            )
+                        )
+            )
+        , Test.test "fully applied function unifying type alias record with usage of only one of it's fields, input record unified with a variable used as output and input"
+            (\() ->
+                """module A exposing (..)
+type alias AB = { a: Float, b : String, c : String }
+toStringWithRecord : (AB -> x) -> (x -> y) -> y
+toStringWithRecord recordToX xToY =
+    xToY (recordToX { a = 1.1, b = "", c = "" })
+
+stringEmpty = toStringWithRecord (\\rec -> rec) .b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeString
+                        )
+            )
+        , Test.test "fully applied function unifying record with usage of only some of it's fields"
+            (\() ->
+                """module A exposing (..)
+toStringWithRecord : ({ a: Bool, b : String, c : String } -> x) -> x
+toStringWithRecord recordToX =
+    recordToX { a = True, b = "", c = "" }
+
+stringEmpty = toStringWithRecord (\\rec -> if rec.a then rec else rec)
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeRecord
+                                    (FastDict.fromList
+                                        [ ( "b", typeString )
+                                        , ( "a", typeBool )
+                                        , ( "c", typeString )
+                                        ]
+                                    )
+                                )
+                            )
+                        )
+            )
+        , Test.test "fully applied function unifying record with usage of only some of it's fields, input record unified with a variable used as output and input"
+            (\() ->
+                """module A exposing (..)
+toStringWithRecord : ({ a: Bool, b : String, c : String } -> x) -> (x -> y) -> y
+toStringWithRecord = Debug.todo ""
+
+stringEmpty = toStringWithRecord (\\rec -> if rec.a then rec else rec) .b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeString
+                        )
+            )
+        , Test.test "fully applied function unifying type alias record with usage of only some of it's fields, input record unified with a variable used as output and input"
+            (\() ->
+                """module A exposing (..)
+type alias AB = { a: Bool, b : String, c : String }
+toStringWithRecord : (AB -> x) -> (x -> y) -> y
+toStringWithRecord recordToX xToY =
+    xToY (recordToX { a = True, b = "", c = "" })
+
+stringEmpty = toStringWithRecord (\\rec -> if rec.a then rec else rec) .b
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.map (List.drop 1)
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            typeString
+                        )
             )
         , Test.test "argument pattern variable equivalent to number variable \\(a) -> [ a, 1 ]"
             (\() ->

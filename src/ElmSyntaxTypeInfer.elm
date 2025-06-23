@@ -3035,14 +3035,38 @@ variableSubstitutionsMerge context a b =
     else
         DictByTypeVariableFromContext.merge
             (\variable aType soFarOrError ->
-                Result.map
+                Result.andThen
                     (\soFar ->
-                        { variableToType =
+                        case
                             soFar.variableToType
-                                |> DictByTypeVariableFromContext.insertNoReplace variable aType
-                        , equivalentVariables =
-                            soFar.equivalentVariables
-                        }
+                                |> DictByTypeVariableFromContext.get variable
+                        of
+                            Nothing ->
+                                Ok
+                                    { variableToType =
+                                        soFar.variableToType
+                                            |> DictByTypeVariableFromContext.insertNoReplace variable aType
+                                    , equivalentVariables =
+                                        soFar.equivalentVariables
+                                    }
+
+                            Just soFarReplacementTypeForVariable ->
+                                Result.andThen
+                                    (\aTypeUnifiedWithSoFarReplacementTypeForVariable ->
+                                        variableSubstitutionsMerge context
+                                            { equivalentVariables = soFar.equivalentVariables
+                                            , variableToType =
+                                                soFar.variableToType
+                                                    |> DictByTypeVariableFromContext.insertNoReplace
+                                                        variable
+                                                        aType
+                                            }
+                                            aTypeUnifiedWithSoFarReplacementTypeForVariable.substitutions
+                                    )
+                                    (typeNotVariableUnify context
+                                        aType
+                                        soFarReplacementTypeForVariable
+                                    )
                     )
                     soFarOrError
             )
@@ -3069,12 +3093,35 @@ variableSubstitutionsMerge context a b =
                                                     )
 
                                             TypeNotVariable abUnifiedNotVariable ->
-                                                Ok
-                                                    { equivalentVariables = substitutionsWithAB.equivalentVariables
-                                                    , variableToType =
-                                                        substitutionsWithAB.variableToType
-                                                            |> DictByTypeVariableFromContext.insertNoReplace variable abUnifiedNotVariable
-                                                    }
+                                                case
+                                                    substitutionsWithAB.variableToType
+                                                        |> DictByTypeVariableFromContext.get variable
+                                                of
+                                                    Nothing ->
+                                                        Ok
+                                                            { equivalentVariables = substitutionsWithAB.equivalentVariables
+                                                            , variableToType =
+                                                                substitutionsWithAB.variableToType
+                                                                    |> DictByTypeVariableFromContext.insertNoReplace variable abUnifiedNotVariable
+                                                            }
+
+                                                    Just substitutionWithABFromVariable ->
+                                                        Result.andThen
+                                                            (\abUnifiedNotVariableUnifiedWithSubstitutionWithABFromVariable ->
+                                                                variableSubstitutionsMerge context
+                                                                    { equivalentVariables = substitutionsWithAB.equivalentVariables
+                                                                    , variableToType =
+                                                                        substitutionsWithAB.variableToType
+                                                                            |> DictByTypeVariableFromContext.insertNoReplace
+                                                                                variable
+                                                                                abUnifiedNotVariable
+                                                                    }
+                                                                    abUnifiedNotVariableUnifiedWithSubstitutionWithABFromVariable.substitutions
+                                                            )
+                                                            (typeNotVariableUnify context
+                                                                abUnifiedNotVariable
+                                                                substitutionWithABFromVariable
+                                                            )
                                     )
                                     (variableSubstitutionsMerge context
                                         soFar
@@ -3086,14 +3133,38 @@ variableSubstitutionsMerge context a b =
                     soFarOrError
             )
             (\variable bType soFarOrError ->
-                Result.map
+                Result.andThen
                     (\soFar ->
-                        { variableToType =
+                        case
                             soFar.variableToType
-                                |> DictByTypeVariableFromContext.insertNoReplace variable bType
-                        , equivalentVariables =
-                            soFar.equivalentVariables
-                        }
+                                |> DictByTypeVariableFromContext.get variable
+                        of
+                            Nothing ->
+                                Ok
+                                    { variableToType =
+                                        soFar.variableToType
+                                            |> DictByTypeVariableFromContext.insertNoReplace variable bType
+                                    , equivalentVariables =
+                                        soFar.equivalentVariables
+                                    }
+
+                            Just soFarReplacementTypeForVariable ->
+                                Result.andThen
+                                    (\bTypeUnifiedWithSoFarReplacementTypeForVariable ->
+                                        variableSubstitutionsMerge context
+                                            { equivalentVariables = soFar.equivalentVariables
+                                            , variableToType =
+                                                soFar.variableToType
+                                                    |> DictByTypeVariableFromContext.insertNoReplace
+                                                        variable
+                                                        bType
+                                            }
+                                            bTypeUnifiedWithSoFarReplacementTypeForVariable.substitutions
+                                    )
+                                    (typeNotVariableUnify context
+                                        bType
+                                        soFarReplacementTypeForVariable
+                                    )
                     )
                     soFarOrError
             )
@@ -3431,19 +3502,6 @@ typeUnify :
             , substitutions : VariableSubstitutions
             }
 typeUnify context a b =
-    let
-        _ =
-            if a == b then
-                ""
-
-            else
-                Debug.log
-                    (typeToInfoString a
-                        ++ " = "
-                        ++ typeToInfoString b
-                    )
-                    ""
-    in
     case a of
         TypeNotVariable aTypeNotVariable ->
             case b of
@@ -4602,6 +4660,8 @@ typeUnifyWithTryToExpandTypeConstruct context aTypeConstructToExpand b =
                     Nothing
 
                 Just aOriginAliasDeclaration ->
+                    -- TODO simplify this process,
+                    -- all of these parameter variables will be fully and cleanly substituted anyway
                     let
                         prefix : String
                         prefix =
@@ -4760,14 +4820,17 @@ typeRecordExtensionUnifyWithRecord context recordExtension recordFields =
                         TypeNotVariable unifiedTypeNotVariable
                     }
                 )
-                (variableSubstitutionsMerge context
-                    fieldsUnified.substitutions
-                    { equivalentVariables = []
-                    , variableToType =
-                        DictByTypeVariableFromContext.singleton
-                            recordExtension.recordVariable
-                            unifiedTypeNotVariable
-                    }
+                (Result.andThen
+                    (\recordVariableToUnifiedSubstitutions ->
+                        variableSubstitutionsMerge context
+                            fieldsUnified.substitutions
+                            recordVariableToUnifiedSubstitutions
+                    )
+                    (variableSubstitutionsFromVariableToTypeNotVariableOrError
+                        context.declarationTypes
+                        recordExtension.recordVariable
+                        unifiedTypeNotVariable
+                    )
                 )
         )
         (FastDict.merge
@@ -4851,17 +4914,19 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             bRecordExtension.recordVariable.useRange
                     , name = aRecordExtension.recordVariable.name
                     }
+
+                unifiedRecordExtension : TypeNotVariable
+                unifiedRecordExtension =
+                    TypeRecordExtension
+                        { recordVariable = newBaseVariable
+                        , fields = forFields.fieldsUnified
+                        }
             in
             Result.map
                 (\fullSubstitutions ->
                     { substitutions = fullSubstitutions
                     , type_ =
-                        TypeNotVariable
-                            (TypeRecordExtension
-                                { recordVariable = newBaseVariable
-                                , fields = forFields.fieldsUnified
-                                }
-                            )
+                        TypeNotVariable unifiedRecordExtension
                     }
                 )
                 (resultAndThen2
@@ -4877,13 +4942,10 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             newBaseVariable
 
                      else
-                        variableSubstitutionsFromVariableToTypeNotVariableOrError context.declarationTypes
+                        variableSubstitutionsFromVariableToTypeNotVariableOrError
+                            context.declarationTypes
                             aRecordExtension.recordVariable
-                            (TypeRecordExtension
-                                { recordVariable = newBaseVariable
-                                , fields = forFields.bOnly
-                                }
-                            )
+                            unifiedRecordExtension
                     )
                     (if forFields.aOnly |> FastDict.isEmpty then
                         variableSubstitutionsFrom2EquivalentVariables
@@ -4891,13 +4953,10 @@ typeRecordExtensionUnifyWithRecordExtension context aRecordExtension bRecordExte
                             newBaseVariable
 
                      else
-                        variableSubstitutionsFromVariableToTypeNotVariableOrError context.declarationTypes
+                        variableSubstitutionsFromVariableToTypeNotVariableOrError
+                            context.declarationTypes
                             bRecordExtension.recordVariable
-                            (TypeRecordExtension
-                                { recordVariable = newBaseVariable
-                                , fields = forFields.aOnly
-                                }
-                            )
+                            unifiedRecordExtension
                     )
                 )
         )
@@ -6443,9 +6502,7 @@ expressionTypeInfer context (Elm.Syntax.Node.Node fullRange expression) =
                                     }
                                         |> expressionTypedNodeApplyVariableSubstitutions
                                             context.declarationTypes
-                                            (callTypeUnified.substitutions
-                                                |> Debug.log "callTypeUnified.substitutions"
-                                            )
+                                            callTypeUnified.substitutions
                                 )
                                 (typeUnifyWithFunction
                                     { declarationTypes = context.declarationTypes
