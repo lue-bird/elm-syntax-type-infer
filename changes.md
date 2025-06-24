@@ -3,7 +3,7 @@ TODO
 - try avoid creating callResult when possible because it leads to bad error messages.
   Instead unroll called type and unify parameter types then + remaining type is the result type
 
-#### 2.0.6 (unreleased)
+#### 2.0.6
 - correct List, tuple and triple parts not being inferred as compappend/comparable when type variables are appendable/have no constraint and the whole thing is unified with a comparable. In these cases, there should be a substitution created with the combined constraint
 - correct `String.String` not being seen as `compappend`
 
