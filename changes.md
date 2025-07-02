@@ -3,7 +3,7 @@ TODO
 - try avoid creating callResult when possible because it leads to bad error messages.
   Instead unroll called type and unify parameter types then + remaining type is the result type
 
-#### 2.0.7 (unreleased)
+#### 2.0.7
 - correct pattern variables that start with number-/comparable-/compappend-/appendable- being incorrectly inferred as constrained type variables
 
 #### 2.0.6
