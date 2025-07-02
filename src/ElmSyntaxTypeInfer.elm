@@ -157,6 +157,27 @@ typeVariableConstraint variableName =
                 Nothing
 
 
+{-| Prefer `typeVariableConstraint` unless performance is important
+-}
+typeVariableIsConstrained : String -> Bool
+typeVariableIsConstrained variableName =
+    (variableName |> String.startsWith "number")
+        || -- small optimization because they are all equal in length
+           (case variableName |> String.slice 0 10 of
+                "appendable" ->
+                    True
+
+                "comparable" ->
+                    True
+
+                "compappend" ->
+                    True
+
+                _ ->
+                    False
+           )
+
+
 justTypeVariableConstraintCompappend : Maybe TypeVariableConstraint
 justTypeVariableConstraintCompappend =
     Just TypeVariableConstraintCompappend
@@ -5712,7 +5733,16 @@ patternTypeInfer context (Elm.Syntax.Node.Node fullRange pattern) =
             Ok
                 { range = fullRange
                 , value = PatternVariable variableName
-                , type_ = TypeVariable { useRange = fullRange, name = variableName }
+                , type_ =
+                    TypeVariable
+                        { useRange = fullRange
+                        , name =
+                            if variableName |> typeVariableIsConstrained then
+                                "incoming" ++ (variableName |> stringFirstCharToUpper)
+
+                            else
+                                variableName
+                        }
                 }
 
         Elm.Syntax.Pattern.ParenthesizedPattern parenthesizedInParens ->

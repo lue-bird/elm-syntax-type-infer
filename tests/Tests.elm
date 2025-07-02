@@ -347,6 +347,58 @@ alwaysSomeFloats = \\(a) -> [ 1, 2.2 ]
                             )
                         )
             )
+        , Test.test "argument pattern variable that start as if they are constrained type variables do not result in constrained type variables"
+            (\() ->
+                """module A exposing (..)
+feast = \\number comparable compappend appendable -> ()
+"""
+                    |> typeInferModuleFromSource
+                    |> Result.andThen toSingleInferredDeclaration
+                    |> Expect.equal
+                        (Ok
+                            (ElmSyntaxTypeInfer.TypeNotVariable
+                                (ElmSyntaxTypeInfer.TypeFunction
+                                    { input =
+                                        ElmSyntaxTypeInfer.TypeVariable
+                                            { name = "incomingNumber"
+                                            , useRange = { end = { column = 16, row = 2 }, start = { column = 10, row = 2 } }
+                                            }
+                                    , output =
+                                        ElmSyntaxTypeInfer.TypeNotVariable
+                                            (ElmSyntaxTypeInfer.TypeFunction
+                                                { input =
+                                                    ElmSyntaxTypeInfer.TypeVariable
+                                                        { name = "incomingComparable"
+                                                        , useRange = { end = { column = 27, row = 2 }, start = { column = 17, row = 2 } }
+                                                        }
+                                                , output =
+                                                    ElmSyntaxTypeInfer.TypeNotVariable
+                                                        (ElmSyntaxTypeInfer.TypeFunction
+                                                            { input =
+                                                                ElmSyntaxTypeInfer.TypeVariable
+                                                                    { name = "incomingCompappend"
+                                                                    , useRange = { end = { column = 38, row = 2 }, start = { column = 28, row = 2 } }
+                                                                    }
+                                                            , output =
+                                                                ElmSyntaxTypeInfer.TypeNotVariable
+                                                                    (ElmSyntaxTypeInfer.TypeFunction
+                                                                        { input =
+                                                                            ElmSyntaxTypeInfer.TypeVariable
+                                                                                { name = "incomingAppendable"
+                                                                                , useRange = { end = { column = 49, row = 2 }, start = { column = 39, row = 2 } }
+                                                                                }
+                                                                        , output = ElmSyntaxTypeInfer.TypeNotVariable ElmSyntaxTypeInfer.TypeUnit
+                                                                        }
+                                                                    )
+                                                            }
+                                                        )
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            )
         , Test.test "argument pattern variable unified with Float \\(a) -> [ a, 2.2 ]"
             (\() ->
                 """module A exposing (..)
