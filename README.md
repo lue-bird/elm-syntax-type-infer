@@ -1,3 +1,5 @@
+> **Obsolete**! Use the faster, more maintained, probably more correct [Janiczek/elm-syntax-type-inference](https://package.elm-lang.org/packages/Janiczek/elm-syntax-type-inference/latest/)
+
 Add type information to the nodes
 of an [elm-syntax](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) tree.
 
